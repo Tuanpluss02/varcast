@@ -11,6 +11,8 @@ import {
   sanitize,
   sanitizeIdentifier,
 } from '../sanitize';
+import type { Manifest } from '../manifest';
+import { resolveStableCollectionName, resolveStableName } from '../manifest';
 
 // PreparedIR — the IR with all Dart identifiers finalised and a flat var index
 // for cross-collection alias lookup. Generators consume this, never raw IR.
@@ -79,10 +81,11 @@ export interface PreparedIR {
   effectStyles: PreparedEffectStyle[];
   textStyles: PreparedTextStyle[];
   varIndex: Map<string, VarRef>;
+  nextManifest: Manifest;
 }
 
-export function prepareIR(ir: IR): PreparedIR {
-  const collections = ir.collections.map(prepareCollection);
+export function prepareIR(ir: IR, manifest: Manifest | null = null): PreparedIR {
+  const collections = ir.collections.map((c) => prepareCollection(c, manifest));
   const varIndex = new Map<string, VarRef>();
   for (const col of collections) {
     for (const v of col.variables) {
@@ -108,18 +111,21 @@ export function prepareIR(ir: IR): PreparedIR {
     (s) => `${s.groupName}`,
   );
 
-  return { collections, paintStyles, effectStyles, textStyles, varIndex };
+  const nextManifest = buildNextManifest(ir, collections);
+
+  return { collections, paintStyles, effectStyles, textStyles, varIndex, nextManifest };
 }
 
 // Disallow collisions with Flutter/Dart SDK symbols that show up in generated
 // files (e.g. `FontWeight`, `Color`). Keep this list small and additive.
 const DISALLOWED_COLLECTION_CLASS_NAMES = new Set(['FontWeight', 'Color']);
 
-function prepareCollection(col: IRCollection): PreparedCollection {
+function prepareCollection(col: IRCollection, manifest: Manifest | null): PreparedCollection {
   let className = sanitizeIdentifier(col.name, 'pascal');
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
     className = `${className}Tokens`;
   }
+  className = resolveStableCollectionName(col.id, className, manifest);
   const accessor = lowerFirst(className);
   const modes: PreparedMode[] = col.modes.map((m) => ({
     id: m.id,
@@ -133,11 +139,12 @@ function prepareCollection(col: IRCollection): PreparedCollection {
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
     const { groupPath, leafName } = sanitize(v.groupPath, ctx);
+    const stableLeaf = resolveStableName(v.id, leafName, manifest);
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
       groupPath,
-      leafName,
+      leafName: stableLeaf,
       dartType: dartTypeOf(v.type),
       valuesByMode: v.valuesByMode,
       emitToPublic: v.emitToPublic,
@@ -152,6 +159,40 @@ function prepareCollection(col: IRCollection): PreparedCollection {
     modes,
     variables,
     fileBaseName: pascalToSnake(className),
+  };
+}
+
+function buildNextManifest(ir: IR, cols: PreparedCollection[]): Manifest {
+  const variables: Record<string, string> = {};
+  const collections: Record<string, string> = {};
+  const figmaVar: Record<string, string> = {};
+  const figmaCol: Record<string, string> = {};
+
+  for (const c of cols) {
+    collections[c.id] = c.className;
+  }
+  for (const c of ir.collections) {
+    figmaCol[c.id] = c.name;
+    for (const v of c.variables) {
+      figmaVar[v.id] = v.figmaName;
+    }
+  }
+  for (const c of cols) {
+    for (const v of c.variables) {
+      variables[v.id] = v.leafName;
+    }
+  }
+
+  return {
+    version: '1.0',
+    fileKey: ir.fileKey,
+    lastExportedAt: new Date().toISOString(),
+    variables,
+    collections,
+    figmaNames: {
+      variables: figmaVar,
+      collections: figmaCol,
+    },
   };
 }
 

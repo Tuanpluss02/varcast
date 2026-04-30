@@ -1,6 +1,6 @@
 {
-  "name": "Figma → Flutter Design System",
-  "id": "figma-flutter-ds",
+  "name": "Varcast",
+  "id": "varcast",
   "api": "1.0.0",
   "editorType": ["dev", "figma"],
   "capabilities": ["inspect"],

@@ -15,16 +15,16 @@ export async function readVariables(): Promise<IRCollection[]> {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   const variables = await figma.variables.getLocalVariablesAsync();
 
-  return collections.map((col) => {
-    const colVars = variables.filter((v) => v.variableCollectionId === col.id);
+  return collections.map((col: any) => {
+    const colVars = variables.filter((v: any) => v.variableCollectionId === col.id);
 
-    const modes: IRMode[] = col.modes.map((m) => ({
+    const modes: IRMode[] = col.modes.map((m: any) => ({
       id: m.modeId,
       name: m.name,
       dartName: m.name,
     }));
 
-    const irVars: IRVariable[] = colVars.map((v) => {
+    const irVars: IRVariable[] = colVars.map((v: any) => {
       const valuesByMode: Record<string, IRValue> = {};
       for (const mode of modes) {
         const raw = v.valuesByMode[mode.id];
@@ -35,7 +35,7 @@ export async function readVariables(): Promise<IRCollection[]> {
         id: v.id,
         figmaName: v.name,
         dartName: v.name,
-        groupPath: v.name.split('/').map((s) => s.trim()),
+        groupPath: v.name.split('/').map((s: any) => String(s).trim()),
         type: v.resolvedType as IRVariable['type'],
         scopes: ((v.scopes ?? []) as unknown) as VariableScope[],
         hiddenFromPublishing: v.hiddenFromPublishing,

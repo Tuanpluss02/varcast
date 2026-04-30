@@ -1,5 +1,5 @@
 {
-  "name": "varcast-plugin",
+  "name": "varcast",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,10 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@figma/plugin-typings": "^1.100.0",
+    "@figma/plugin-typings": "^1.125.0",
     "@types/node": "^25.6.0",
     "esbuild": "^0.20.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2"
   }
 }

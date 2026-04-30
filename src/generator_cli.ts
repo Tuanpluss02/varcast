@@ -11,6 +11,9 @@ import * as path from 'path';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
 import { emitPackage, writePackage } from './generator';
+import { diffManifest } from './manifest';
+import { loadManifest, saveManifest } from './manifest_node';
+import { generateChangelog } from './generator/changelog';
 
 interface Args {
   ir: string;
@@ -60,9 +63,20 @@ function main() {
     );
   }
 
-  const files = emitPackage(ir, args.name ?? 'design_system');
+  const oldManifest = loadManifest(outDir);
+  const { files, nextManifest } = emitPackage(
+    ir,
+    args.name ?? 'design_system',
+    oldManifest,
+  );
+  const diff = diffManifest(oldManifest, nextManifest);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
+  saveManifest(outDir, nextManifest);
+  fs.writeFileSync(
+    path.join(outDir, 'CHANGELOG.md'),
+    generateChangelog(diff) + '\n',
+  );
 
   console.log(
     `✓ Wrote ${files.length} files to ${outDir} (${ir.collections.length} collections, ${ir.composites.paintStyles.length} paints, ${ir.composites.effectStyles.length} effects, ${ir.composites.textStyles.length} text styles)`,

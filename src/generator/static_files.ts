@@ -136,3 +136,16 @@ AppTheme.setColorTokenMode(ColorTokenMode.lightMode);
 \`\`\`
 `;
 }
+
+export function smokeTestDartFile(packageName = 'design_system'): string {
+  return `import 'package:flutter_test/flutter_test.dart';
+import 'package:${packageName}/${packageName}.dart';
+
+void main() {
+  test('design system package loads', () {
+    // Access something to ensure generated symbols exist.
+    expect(AppTheme, isNotNull);
+  });
+}
+`;
+}

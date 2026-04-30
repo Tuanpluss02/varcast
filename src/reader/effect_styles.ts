@@ -20,7 +20,7 @@ function buildEffect(style: EffectStyle, effect: Effect): IREffectStyle | null {
     id: style.id,
     figmaName: style.name,
     dartName: style.name,
-    groupPath: style.name.split('/').map((s) => s.trim()),
+    groupPath: style.name.split('/').map((s: any) => String(s).trim()),
   };
 
   switch (effect.type) {

@@ -2,21 +2,32 @@
 // design-system package. This module must stay browser-safe (no fs/path).
 
 import type { IR } from '../ir/types';
+import type { Manifest } from '../manifest';
 import { prepareIR } from './prepare';
 import { emitCollection } from './collection';
 import { emitColorStyles, emitShadows, emitTextStyles } from './composites';
 import { emitController, collectionDir } from './controller';
 import { emitTheme } from './theme';
 import { emitBarrel } from './barrel';
-import { lerpDartFile, wrapperDartFile, pubspecYaml, readmeMd } from './static_files';
+import {
+  lerpDartFile,
+  wrapperDartFile,
+  pubspecYaml,
+  readmeMd,
+  smokeTestDartFile,
+} from './static_files';
 
 export interface EmittedFile {
   path: string; // relative to package root
   contents: string;
 }
 
-export function emitPackage(ir: IR, packageName = 'design_system'): EmittedFile[] {
-  const prepared = prepareIR(ir);
+export function emitPackage(
+  ir: IR,
+  packageName = 'design_system',
+  manifest: Manifest | null = null,
+): { files: EmittedFile[]; nextManifest: Manifest } {
+  const prepared = prepareIR(ir, manifest);
 
   // Drop empty collections — they would emit invalid Dart (zero-arm switch).
   const collections = prepared.collections.filter(
@@ -84,7 +95,11 @@ export function emitPackage(ir: IR, packageName = 'design_system'): EmittedFile[
   // Package metadata
   files.push({ path: 'pubspec.yaml', contents: pubspecYaml(packageName) });
   files.push({ path: 'README.md', contents: readmeMd(packageName) });
+  files.push({
+    path: 'test/smoke_test.dart',
+    contents: smokeTestDartFile(packageName),
+  });
 
-  return files;
+  return { files, nextManifest: prepared.nextManifest };
 }
 

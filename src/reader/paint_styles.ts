@@ -29,7 +29,7 @@ function buildPaintStyle(style: PaintStyle): IRPaintStyle | null {
     id: style.id,
     figmaName: style.name,
     dartName: style.name,
-    groupPath: style.name.split('/').map((s) => s.trim()),
+    groupPath: style.name.split('/').map((s: any) => String(s).trim()),
   };
 
   switch (fill.type) {
@@ -110,8 +110,8 @@ function solidColorValue(fill: SolidPaint): IRColorValue {
   };
 }
 
-function toRGBA(c: RGBA | RGB): RGBA {
-  return { r: c.r, g: c.g, b: c.b, a: 'a' in c ? c.a : 1 };
+function toRGBA(c: any): RGBA {
+  return { r: c.r, g: c.g, b: c.b, a: c.a ?? 1 };
 }
 
 function imageAssetName(figmaName: string): string {
