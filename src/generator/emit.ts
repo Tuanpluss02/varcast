@@ -4,6 +4,8 @@
 import type { IR } from '../ir/types';
 import type { Manifest } from '../manifest';
 import { prepareIR } from './prepare';
+import type { ExportOptions } from './options';
+import { DEFAULT_EXPORT_OPTIONS } from './options';
 import { emitCollection } from './collection';
 import { emitColorStyles, emitShadows, emitTextStyles } from './composites';
 import { emitController, collectionDir } from './controller';
@@ -25,15 +27,19 @@ export interface EmittedFile {
 
 export function emitPackage(
   ir: IR,
-  packageName = 'design_system',
   manifest: Manifest | null = null,
+  options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): { files: EmittedFile[]; nextManifest: Manifest } {
-  const prepared = prepareIR(ir, manifest);
+  const prepared = prepareIR(ir, manifest, options);
+  const packageName = options.packageName;
 
   // Drop empty collections — they would emit invalid Dart (zero-arm switch).
-  const collections = prepared.collections.filter(
-    (c) => c.variables.length > 0 && c.modes.length > 0,
-  );
+  const collections = prepared.collections.filter((c) => {
+    if (c.variables.length === 0 || c.modes.length === 0) return false;
+    if (c.kind === 'primitive' && !options.include.primitives) return false;
+    if (c.kind === 'token' && !options.include.tokens) return false;
+    return true;
+  });
 
   const files: EmittedFile[] = [];
 
@@ -47,9 +53,12 @@ export function emitPackage(
   }
 
   // Composite files (skip when no styles)
-  const hasPaint = prepared.paintStyles.length > 0;
-  const hasEffect = prepared.effectStyles.length > 0;
-  const hasText = prepared.textStyles.length > 0;
+  const hasPaint =
+    options.include.composites.colorStyles && prepared.paintStyles.length > 0;
+  const hasEffect =
+    options.include.composites.shadows && prepared.effectStyles.length > 0;
+  const hasText =
+    options.include.composites.textStyles && prepared.textStyles.length > 0;
   if (hasPaint) {
     files.push({
       path: 'lib/src/composites/color_styles.dart',
@@ -97,10 +106,12 @@ export function emitPackage(
   // Package metadata
   files.push({ path: 'pubspec.yaml', contents: pubspecYaml(packageName) });
   files.push({ path: 'README.md', contents: readmeMd(packageName) });
-  files.push({
-    path: 'test/smoke_test.dart',
-    contents: smokeTestDartFile(packageName),
-  });
+  if (options.include.smokeTest) {
+    files.push({
+      path: 'test/smoke_test.dart',
+      contents: smokeTestDartFile(packageName),
+    });
+  }
 
   return { files, nextManifest: prepared.nextManifest };
 }

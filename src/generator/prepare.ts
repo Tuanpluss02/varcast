@@ -13,6 +13,8 @@ import {
 } from '../sanitize';
 import type { Manifest } from '../manifest';
 import { resolveStableCollectionName, resolveStableName } from '../manifest';
+import type { ExportOptions } from './options';
+import { applyLeafAffixes, DEFAULT_EXPORT_OPTIONS } from './options';
 
 // PreparedIR — the IR with all Dart identifiers finalised and a flat var index
 // for cross-collection alias lookup. Generators consume this, never raw IR.
@@ -29,7 +31,8 @@ export interface PreparedVariable {
   id: string;
   figmaName: string;
   groupPath: string[]; // PascalCase segments, leading group classes
-  leafName: string; // camelCase getter
+  leafName: string; // emitted camelCase getter
+  stableLeafName: string; // persisted in manifest (no prefix/suffix)
   dartType: DartType;
   valuesByMode: Record<string, IRValue>;
   emitToPublic: boolean;
@@ -39,6 +42,7 @@ export interface PreparedCollection {
   id: string;
   className: string; // PascalCase, e.g. "ColorBasic"
   accessor: string; // camelCase, e.g. "colorBasic"
+  kind: 'primitive' | 'token';
   defaultModeIndex: number;
   modes: PreparedMode[];
   variables: PreparedVariable[];
@@ -84,8 +88,12 @@ export interface PreparedIR {
   nextManifest: Manifest;
 }
 
-export function prepareIR(ir: IR, manifest: Manifest | null = null): PreparedIR {
-  const collections = ir.collections.map((c) => prepareCollection(c, manifest));
+export function prepareIR(
+  ir: IR,
+  manifest: Manifest | null = null,
+  options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
+): PreparedIR {
+  const collections = ir.collections.map((c) => prepareCollection(c, manifest, options));
   const varIndex = new Map<string, VarRef>();
   for (const col of collections) {
     for (const v of col.variables) {
@@ -120,7 +128,11 @@ export function prepareIR(ir: IR, manifest: Manifest | null = null): PreparedIR 
 // files (e.g. `FontWeight`, `Color`). Keep this list small and additive.
 const DISALLOWED_COLLECTION_CLASS_NAMES = new Set(['FontWeight', 'Color']);
 
-function prepareCollection(col: IRCollection, manifest: Manifest | null): PreparedCollection {
+function prepareCollection(
+  col: IRCollection,
+  manifest: Manifest | null,
+  options: ExportOptions,
+): PreparedCollection {
   let className = sanitizeIdentifier(col.name, 'pascal');
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
     className = `${className}Tokens`;
@@ -142,11 +154,17 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
     const { groupPath, leafName } = sanitize(v.groupPath, ctx);
     let stableLeaf = resolveStableName(v.id, leafName, manifest);
     stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
+    const emittedLeaf = applyLeafAffixes(
+      stableLeaf,
+      options.naming.leafPrefix,
+      options.naming.leafSuffix,
+    );
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
       groupPath,
-      leafName: stableLeaf,
+      leafName: emittedLeaf,
+      stableLeafName: stableLeaf,
       dartType: dartTypeOf(v.type),
       valuesByMode: v.valuesByMode,
       emitToPublic: v.emitToPublic,
@@ -157,6 +175,7 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
     id: col.id,
     className,
     accessor,
+    kind: col.kind,
     defaultModeIndex: 0,
     modes,
     variables,
@@ -202,7 +221,7 @@ function buildNextManifest(ir: IR, cols: PreparedCollection[]): Manifest {
   }
   for (const c of cols) {
     for (const v of c.variables) {
-      variables[v.id] = v.leafName;
+      variables[v.id] = v.stableLeafName;
     }
   }
 

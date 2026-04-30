@@ -14,6 +14,7 @@ import { emitPackage, writePackage } from './generator';
 import { diffManifest } from './manifest';
 import { loadManifest, saveManifest } from './manifest_node';
 import { generateChangelog } from './generator/changelog';
+import { DEFAULT_EXPORT_OPTIONS } from './generator/options';
 
 interface Args {
   ir: string;
@@ -66,8 +67,8 @@ function main() {
   const oldManifest = loadManifest(outDir);
   const { files, nextManifest } = emitPackage(
     ir,
-    args.name ?? 'design_system',
     oldManifest,
+    { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' },
   );
   const diff = diffManifest(oldManifest, nextManifest);
   fs.mkdirSync(outDir, { recursive: true });

@@ -9,6 +9,7 @@ import type { Manifest } from './manifest';
 import { diffManifest } from './manifest';
 import { generateChangelog } from './generator/changelog';
 import { buildZip } from './zip';
+import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './generator/options';
 
 figma.showUI(__html__, { width: 400, height: 300 });
 
@@ -21,6 +22,7 @@ type PendingExport = {
   diff: ReturnType<typeof diffManifest>;
   files: { path: string; contents: string }[];
   changelog: string;
+  options: ReturnType<typeof normalizeExportOptions>;
 };
 
 let pending: PendingExport | null = null;
@@ -30,6 +32,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
     try {
       pending = null;
       figma.ui.postMessage({ type: 'validating' });
+      const options = normalizeExportOptions((msg as any).options ?? DEFAULT_EXPORT_OPTIONS);
       const ir: IR = {
         version: '1.0',
         fileKey: figma.fileKey ?? 'unknown',
@@ -64,11 +67,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       const oldManifest = (await figma.clientStorage.getAsync(
         'manifest_v1',
       )) as Manifest | null;
-      const { files, nextManifest } = emitPackage(
-        ir,
-        'design_system',
-        oldManifest,
-      );
+      const { files, nextManifest } = emitPackage(ir, oldManifest, options);
       const diff = diffManifest(oldManifest, nextManifest);
 
       const changelog = generateChangelog(diff);
@@ -81,6 +80,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         diff,
         files,
         changelog,
+        options,
       };
 
       // If warnings exist, show warning screen before allowing export.
@@ -88,7 +88,12 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         figma.ui.postMessage({ type: 'validation-warnings', warnings: result.warnings, diff });
         return;
       }
-      figma.ui.postMessage({ type: 'ready', diff, summary: summarize(ir, files) });
+      figma.ui.postMessage({
+        type: 'ready',
+        diff,
+        summary: summarize(ir, files),
+        options,
+      });
     } catch (err) {
       console.error('Export failed:', err);
       figma.ui.postMessage({
@@ -108,7 +113,11 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       figma.ui.postMessage({ type: 'error', message: 'No pending export.' });
       return;
     }
-    figma.ui.postMessage({ type: 'ready', diff: pending.diff, summary: summarize(pending.ir, pending.files) });
+    figma.ui.postMessage({
+      type: 'ready',
+      diff: pending.diff,
+      summary: summarize(pending.ir, pending.files),
+    });
   }
 
   if (msg.type === 'download-zip') {
@@ -132,7 +141,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
 
     figma.ui.postMessage({
       type: 'zip-ready',
-      filename: 'design_system.zip',
+      filename: `${pending.options.packageName}.zip`,
       bytes: zipBytes,
       changelog: pending.changelog,
       diff: pending.diff,

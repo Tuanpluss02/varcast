@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./ui.css" />
+  </head>
+  <body>
+    <div class="top">
+      <div class="brand">
+        <h1>Varcast</h1>
+        <div class="sub">Figma → Flutter design system exporter</div>
+      </div>
+      <div class="pill" id="pillStatus">Full export · defaults</div>
+    </div>
+
+    <div id="screen-home" class="clay col">
+      <div class="col">
+        <div class="row" style="justify-content: space-between">
+          <label>Package name</label>
+          <span class="pill">ZIP download</span>
+        </div>
+        <input id="packageName" type="text" placeholder="design_system" value="design_system" />
+      </div>
+
+      <div class="clay col" style="padding: 10px; border-radius: 16px">
+        <div style="font-weight: 800; margin-bottom: 2px">Export</div>
+        <div class="toggle" id="tPrimitives" data-on="true">
+          <div>
+            <div style="font-weight: 700">Primitives</div>
+            <div style="font-size: 11px; color: var(--muted)">ColorBasic, NumberBasic…</div>
+          </div>
+          <div class="switch"></div>
+        </div>
+        <div class="toggle" id="tTokens" data-on="true">
+          <div>
+            <div style="font-weight: 700">Tokens</div>
+            <div style="font-size: 11px; color: var(--muted)">ColorToken, TextToken…</div>
+          </div>
+          <div class="switch"></div>
+        </div>
+        <div class="toggle" id="tColorStyles" data-on="true">
+          <div>
+            <div style="font-weight: 700">Color styles</div>
+            <div style="font-size: 11px; color: var(--muted)">Paint styles composites</div>
+          </div>
+          <div class="switch"></div>
+        </div>
+        <div class="toggle" id="tShadows" data-on="true">
+          <div>
+            <div style="font-weight: 700">Shadows</div>
+            <div style="font-size: 11px; color: var(--muted)">Effect styles composites</div>
+          </div>
+          <div class="switch"></div>
+        </div>
+        <div class="toggle" id="tTextStyles" data-on="true">
+          <div>
+            <div style="font-weight: 700">Text styles</div>
+            <div style="font-size: 11px; color: var(--muted)">Text styles composites</div>
+          </div>
+          <div class="switch"></div>
+        </div>
+        <div class="toggle" id="tSmokeTest" data-on="true">
+          <div>
+            <div style="font-weight: 700">Smoke test</div>
+            <div style="font-size: 11px; color: var(--muted)">test/smoke_test.dart</div>
+          </div>
+          <div class="switch"></div>
+        </div>
+      </div>
+
+      <div class="clay col" style="padding: 10px; border-radius: 16px">
+        <div style="font-weight: 800; margin-bottom: 2px">Naming</div>
+        <label>Leaf prefix (camelCase)</label>
+        <input id="leafPrefix" type="text" placeholder="ds" />
+        <label>Leaf suffix (PascalCase)</label>
+        <input id="leafSuffix" type="text" placeholder="Token" />
+      </div>
+
+      <div class="row" style="justify-content: space-between">
+        <button class="btn" id="reset">Reset</button>
+        <div class="row">
+          <button class="btn" id="regen">Re-generate</button>
+          <button class="btn primary" id="export">Export</button>
+        </div>
+      </div>
+
+      <div id="status" class="mono"></div>
+    </div>
+
+    <div id="screen-validating" class="clay col hidden">
+      <div style="font-weight: 900">Validating…</div>
+      <div style="color: var(--muted)">Reading tokens and styles from Figma.</div>
+    </div>
+
+    <div id="screen-errors" class="clay col hidden">
+      <div style="font-weight: 900; color: var(--danger)" id="errTitle">✗ Errors</div>
+      <div class="mono" id="errList"></div>
+      <div class="row" style="justify-content: flex-end">
+        <button class="btn danger" id="closeErrors">Close</button>
+      </div>
+    </div>
+
+    <div id="screen-warnings" class="clay col hidden">
+      <div style="font-weight: 900">⚠ Warnings (auto-fixed)</div>
+      <div class="mono" id="warnList"></div>
+      <div class="row" style="justify-content: space-between">
+        <button class="btn" id="cancelWarnings">Cancel</button>
+        <button class="btn primary" id="continueWarnings">Continue</button>
+      </div>
+    </div>
+
+    <div id="screen-ready" class="clay col hidden">
+      <div style="font-weight: 900">Ready</div>
+      <div class="mono" id="summary"></div>
+      <div class="mono" id="diffSummary"></div>
+      <div class="row" style="justify-content: space-between">
+        <button class="btn" id="viewChangelog">Changelog</button>
+        <button class="btn primary" id="downloadZip">Download ZIP</button>
+      </div>
+    </div>
+
+    <div id="screen-exporting" class="clay col hidden">
+      <div style="font-weight: 900">Exporting…</div>
+      <div style="color: var(--muted)">Packing a fluffy zip file.</div>
+    </div>
+
+    <div id="screen-done" class="clay col hidden">
+      <div style="font-weight: 900">✓ Export complete</div>
+      <div class="mono" id="doneSummary"></div>
+      <div class="row" style="justify-content: space-between">
+        <button class="btn" id="viewChangelogDone">Changelog</button>
+        <button class="btn primary" id="downloadZipAgain">Download ZIP</button>
+      </div>
+    </div>
+
+    <div id="modalBackdrop" class="modal-backdrop">
+      <div class="modal clay">
+        <header>
+          <div class="title">Changelog</div>
+          <button class="btn" id="closeModal">Close</button>
+        </header>
+        <pre id="changelogText" class="mono" style="margin: 0"></pre>
+      </div>
+    </div>
+    <script src="./ui.js"></script>
+  </body>
+</html>
