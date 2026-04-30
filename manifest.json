@@ -1,0 +1,11 @@
+{
+  "name": "Figma → Flutter Design System",
+  "id": "figma-flutter-ds",
+  "api": "1.0.0",
+  "editorType": ["dev", "figma"],
+  "capabilities": ["inspect"],
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "permissions": ["currentuser"],
+  "documentAccess": "dynamic-page"
+}
