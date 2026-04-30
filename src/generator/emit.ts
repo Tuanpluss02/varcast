@@ -12,6 +12,7 @@ import { emitBarrel } from './barrel';
 import {
   lerpDartFile,
   wrapperDartFile,
+  publicApiDartFile,
   pubspecYaml,
   readmeMd,
   smokeTestDartFile,
@@ -83,6 +84,7 @@ export function emitPackage(
     }),
   });
   files.push({ path: 'lib/src/wrapper.dart', contents: wrapperDartFile() });
+  files.push({ path: 'lib/src/design_system.dart', contents: publicApiDartFile() });
   files.push({
     path: `lib/${packageName}.dart`,
     contents: emitBarrel(collections, {

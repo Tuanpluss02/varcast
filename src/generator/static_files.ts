@@ -38,14 +38,18 @@ export function wrapperDartFile(): string {
 import '_internal/controller.dart';
 
 /// Place once near the root of your widget tree, above [MaterialApp].
+///
+/// This widget attaches vsync for animated mode transitions and sets the
+/// animation duration. It does NOT force a subtree reset.
 class DesignSystemWrapper extends StatefulWidget {
   const DesignSystemWrapper({
     super.key,
-    required this.child,
+    required this.builder,
     this.duration = const Duration(milliseconds: 300),
   });
 
-  final Widget child;
+  /// A builder callback that is re-evaluated when modes change.
+  final WidgetBuilder builder;
   final Duration duration;
 
   @override
@@ -80,8 +84,26 @@ class _DesignSystemWrapperState extends State<DesignSystemWrapper>
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: DesignSystemController.instance,
-      builder: (_, __) => widget.child,
+      builder: (context, _) => widget.builder(context),
     );
+  }
+}
+`
+  );
+}
+
+export function publicApiDartFile(): string {
+  return (
+    FILE_HEADER +
+    `import '_internal/controller.dart';
+
+/// Public helpers for tests and tooling.
+class DesignSystem {
+  DesignSystem._();
+
+  /// Test-only: resets the singleton controller to defaults.
+  static void resetForTest() {
+    DesignSystemController.instance.resetForTest();
   }
 }
 `
@@ -124,7 +146,7 @@ Generated Flutter design system. Do not edit by hand.
 import 'package:${packageName}/${packageName}.dart';
 
 void main() {
-  runApp(const DesignSystemWrapper(child: MyApp()));
+  runApp(DesignSystemWrapper(builder: (_) => MyApp()));
 }
 
 // Read tokens from anywhere — no BuildContext needed.
@@ -134,6 +156,12 @@ final r  = AppTheme.numberBasic.spacing.n16;
 // Switch mode at runtime.
 AppTheme.setColorTokenMode(ColorTokenMode.lightMode);
 \`\`\`
+
+## Rebuild on mode changes
+
+Tokens are context-less (\`AppTheme.*\`). Flutter only updates the UI when widgets
+rebuild, and \`DesignSystemWrapper\` provides the official rebuild bridge via its
+\`builder\` callback.
 `;
 }
 

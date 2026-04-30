@@ -62,10 +62,9 @@ export function emitController(collections: PreparedCollection[]): string {
   out += `      return;\n`;
   out += `    }\n`;
   out += `    anim.forward(from: 0);\n`;
-  out += `    notifyListeners();\n`;
   out += `  }\n\n`;
 
-  out += `  @visibleForTesting\n`;
+  out += `  /// Test-only: resets the singleton controller to defaults.\n`;
   out += `  void resetForTest() {\n`;
   out += `    _detachControllers();\n`;
   out += `    _vsyncAttached = false;\n`;

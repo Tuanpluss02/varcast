@@ -13,6 +13,7 @@ export function emitBarrel(
   out += `library design_system;\n\n`;
   out += `${FILE_HEADER}`;
   out += `export 'src/wrapper.dart' show DesignSystemWrapper;\n`;
+  out += `export 'src/design_system.dart' show DesignSystem;\n`;
   out += `export 'src/theme.dart' show AppTheme;\n\n`;
 
   for (const col of collections) {
