@@ -277,14 +277,8 @@ function buildTree(variables: PreparedVariable[]): GroupNode {
   };
   for (const v of variables) {
     let node = root;
-    if (v.groupPath.length === 0) {
-      // Root-level leaf — synthesise into a "Main" group so the root class
-      // structure stays uniform (all leaves live under at least one class).
-      node = ensureChild(root, 'Main');
-    } else {
-      for (const seg of v.groupPath) {
-        node = ensureChild(node, seg);
-      }
+    for (const seg of v.groupPath) {
+      node = ensureChild(node, seg);
     }
     node.leaves.push(v);
   }

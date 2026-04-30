@@ -95,17 +95,31 @@ export function prepareIR(ir: IR): PreparedIR {
     }
   }
 
-  return {
-    collections,
-    paintStyles: ir.composites.paintStyles.map((s) => preparePaint(s)),
-    effectStyles: ir.composites.effectStyles.map((s) => prepareEffect(s)),
-    textStyles: ir.composites.textStyles.map((s) => prepareText(s)),
-    varIndex,
-  };
+  const paintStyles = dedupCompositeGetters(
+    ir.composites.paintStyles.map((s) => preparePaint(s)),
+    (s) => `${s.groupName}`,
+  );
+  const effectStyles = dedupCompositeGetters(
+    ir.composites.effectStyles.map((s) => prepareEffect(s)),
+    (s) => `${s.groupName}`,
+  );
+  const textStyles = dedupCompositeGetters(
+    ir.composites.textStyles.map((s) => prepareText(s)),
+    (s) => `${s.groupName}`,
+  );
+
+  return { collections, paintStyles, effectStyles, textStyles, varIndex };
 }
 
+// Disallow collisions with Flutter/Dart SDK symbols that show up in generated
+// files (e.g. `FontWeight`, `Color`). Keep this list small and additive.
+const DISALLOWED_COLLECTION_CLASS_NAMES = new Set(['FontWeight', 'Color']);
+
 function prepareCollection(col: IRCollection): PreparedCollection {
-  const className = sanitizeIdentifier(col.name, 'pascal');
+  let className = sanitizeIdentifier(col.name, 'pascal');
+  if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
+    className = `${className}Tokens`;
+  }
   const accessor = lowerFirst(className);
   const modes: PreparedMode[] = col.modes.map((m) => ({
     id: m.id,
@@ -211,6 +225,26 @@ function splitFigmaNameForComposite(
   const segments = figmaName.split('/').map((s) => s.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
   return { groupName, getterName: sanitizeIdentifier(getter, 'camel') };
+}
+
+function dedupCompositeGetters<T extends { getterName: string }>(
+  items: T[],
+  bucketKey: (item: T) => string,
+): T[] {
+  const used = new Map<string, number>();
+  for (const it of items) {
+    const base = it.getterName;
+    const key = `${bucketKey(it)}::${base}`;
+    const n = used.get(key);
+    if (n === undefined) {
+      used.set(key, 1);
+      continue;
+    }
+    const next = n + 1;
+    used.set(key, next);
+    it.getterName = `${base}_${next}`;
+  }
+  return items;
 }
 
 function dartTypeOf(t: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN'): DartType {
