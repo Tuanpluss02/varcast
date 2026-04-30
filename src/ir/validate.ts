@@ -170,7 +170,7 @@ function fixKeywords(
 //
 // Two variables collide only when their full groupPath is identical — siblings
 // like `Background/primary` and `Action/primary` are distinct accessors after
-// nesting. First occurrence keeps the name; subsequent ones get `_2`, `_3`, …
+// nesting. First occurrence keeps the name; subsequent ones get `2`, `3`, …
 // applied to the leaf segment.
 
 function fixDuplicates(
@@ -185,7 +185,7 @@ function fixDuplicates(
     if (count > 0) {
       const lastIdx = v.groupPath.length - 1;
       const leaf = v.groupPath[lastIdx];
-      const fixed = `${leaf}_${count + 1}`;
+      const fixed = `${leaf}${count + 1}`;
       warnings.push({
         type: 'DUPLICATE_DART_NAME',
         variableId: v.id,

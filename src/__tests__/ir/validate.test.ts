@@ -163,7 +163,7 @@ describe('keyword conflict', () => {
 // ── Rule 4: duplicate dartName ────────────────────────────────────────────
 
 describe('duplicate dartName', () => {
-  it('renames second/third occurrence with same full path to _2 / _3', () => {
+  it('renames second/third occurrence with same full path to 2 / 3 suffix', () => {
     const ir = makeIR({
       collections: [
         makeCol('col:1', [M1], [
@@ -184,8 +184,8 @@ describe('duplicate dartName', () => {
     const dups = result.warnings.filter((w) => w.type === 'DUPLICATE_DART_NAME');
     expect(dups).toHaveLength(2);
     expect(ir.collections[0].variables[0].groupPath[1]).toBe('primary');
-    expect(ir.collections[0].variables[1].groupPath[1]).toBe('primary_2');
-    expect(ir.collections[0].variables[2].groupPath[1]).toBe('primary_3');
+    expect(ir.collections[0].variables[1].groupPath[1]).toBe('primary2');
+    expect(ir.collections[0].variables[2].groupPath[1]).toBe('primary3');
   });
 
   it('siblings with same leaf in different parent groups are NOT duplicates', () => {

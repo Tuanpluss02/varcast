@@ -135,11 +135,13 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
 
   // Sanitize each variable's path. Dedup is per-collection (a fresh ctx).
   const ctx = newSanitizeContext();
+  const finalNamesByParent = new Map<string, Set<string>>();
   const variables: PreparedVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
     const { groupPath, leafName } = sanitize(v.groupPath, ctx);
-    const stableLeaf = resolveStableName(v.id, leafName, manifest);
+    let stableLeaf = resolveStableName(v.id, leafName, manifest);
+    stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
@@ -160,6 +162,27 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
     variables,
     fileBaseName: pascalToSnake(className),
   };
+}
+
+function dedupLeafName(
+  usedByParent: Map<string, Set<string>>,
+  parentKey: string,
+  leaf: string,
+): string {
+  let used = usedByParent.get(parentKey);
+  if (!used) {
+    used = new Set();
+    usedByParent.set(parentKey, used);
+  }
+  if (!used.has(leaf)) {
+    used.add(leaf);
+    return leaf;
+  }
+  let i = 2;
+  while (used.has(`${leaf}${i}`)) i++;
+  const next = `${leaf}${i}`;
+  used.add(next);
+  return next;
 }
 
 function buildNextManifest(ir: IR, cols: PreparedCollection[]): Manifest {

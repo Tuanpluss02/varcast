@@ -30,7 +30,9 @@ export function resolveStableName(
   derivedLeafName: string,
   manifest: Manifest | null,
 ): string {
-  return manifest?.variables?.[variableId] ?? derivedLeafName;
+  const raw = manifest?.variables?.[variableId];
+  if (!raw) return derivedLeafName;
+  return normalizeLegacyLeafName(raw);
 }
 
 export function resolveStableCollectionName(
@@ -39,6 +41,20 @@ export function resolveStableCollectionName(
   manifest: Manifest | null,
 ): string {
   return manifest?.collections?.[collectionId] ?? derivedClassName;
+}
+
+function normalizeLegacyLeafName(name: string): string {
+  // Migration: older generators used `_2`, `_3` suffixes for dedup. Dart public
+  // members should be lowerCamelCase without underscores. Convert `foo_2`→`foo2`.
+  //
+  // Do NOT touch keyword fix-ups like `default_`.
+  const m = /^(.+)_([0-9]+)$/.exec(name);
+  if (!m) return name;
+  const base = m[1];
+  const n = m[2];
+  // If base already ends with '_' it's likely a keyword fix; keep as-is.
+  if (base.endsWith('_')) return name;
+  return `${base}${n}`;
 }
 
 export function diffManifest(old: Manifest | null, next: Manifest): ManifestDiff {

@@ -55,8 +55,8 @@ export function sanitize(
   }
   if (used.has(leafName)) {
     let i = 2;
-    while (used.has(`${leafName}_${i}`)) i++;
-    leafName = `${leafName}_${i}`;
+    while (used.has(`${leafName}${i}`)) i++;
+    leafName = `${leafName}${i}`;
   }
   used.add(leafName);
 

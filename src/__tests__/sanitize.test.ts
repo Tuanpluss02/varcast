@@ -49,8 +49,8 @@ describe('sanitize', () => {
     const b = sanitize(['Background', 'primary'], ctx);
     const c = sanitize(['Background', 'primary'], ctx);
     expect(a.leafName).toBe('primary');
-    expect(b.leafName).toBe('primary_2');
-    expect(c.leafName).toBe('primary_3');
+    expect(b.leafName).toBe('primary2');
+    expect(c.leafName).toBe('primary3');
   });
 
   it('dedup is scoped per parent — siblings under different groups OK', () => {
