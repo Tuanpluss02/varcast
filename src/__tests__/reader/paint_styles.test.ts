@@ -180,7 +180,7 @@ describe('readPaintStyles', () => {
     });
   });
 
-  it('IMAGE → assetName derived from style name', async () => {
+  it('IMAGE styles are skipped (no asset export)', async () => {
     installPaintStylesMock([
       {
         id: 'S:7',
@@ -190,10 +190,7 @@ describe('readPaintStyles', () => {
     ]);
 
     const result = await readPaintStyles();
-    expect(result[0]).toMatchObject({
-      type: 'IMAGE',
-      assetName: 'backgrounds_hero_image.jpg',
-    });
+    expect(result).toEqual([]);
   });
 
   it('style with empty paints array → skipped', async () => {

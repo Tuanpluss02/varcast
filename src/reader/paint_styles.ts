@@ -75,11 +75,9 @@ function buildPaintStyle(style: PaintStyle): IRPaintStyle | null {
       };
 
     case 'IMAGE':
-      return {
-        ...base,
-        type: 'IMAGE',
-        assetName: imageAssetName(style.name),
-      };
+      // Intentionally skipped: the plugin does not export binary assets yet.
+      // If needed later, we can add an assets/ pipeline + pubspec.yaml entries.
+      return null;
 
     default:
       return null;

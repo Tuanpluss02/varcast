@@ -52,13 +52,6 @@ export function validate(ir: IR): ValidationResult {
     if (style.type === 'GRADIENT_DIAMOND') {
       warnings.push({ type: 'DIAMOND_APPROXIMATED', styleId: style.id });
     }
-    if (style.type === 'IMAGE') {
-      warnings.push({
-        type: 'IMAGE_ASSET_REQUIRED',
-        styleId: style.id,
-        assetName: style.assetName,
-      });
-    }
   }
 
   return { errors, warnings };

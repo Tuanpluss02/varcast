@@ -305,22 +305,5 @@ describe('composite warnings', () => {
     expect(result.warnings.some((w) => w.type === 'DIAMOND_APPROXIMATED')).toBe(true);
   });
 
-  it('IMAGE → IMAGE_ASSET_REQUIRED warning', () => {
-    const style: IRPaintStyle = {
-      id: 'S:i',
-      figmaName: 'Hero',
-      dartName: 'Hero',
-      groupPath: ['Hero'],
-      type: 'IMAGE',
-      assetName: 'hero.jpg',
-    };
-    const ir = makeIR({
-      composites: { paintStyles: [style], effectStyles: [], textStyles: [] },
-    });
-
-    const result = validate(ir);
-    const w = result.warnings.find((w) => w.type === 'IMAGE_ASSET_REQUIRED');
-    expect(w).toBeDefined();
-    expect((w as { assetName: string }).assetName).toBe('hero.jpg');
-  });
+  // IMAGE paint styles are skipped at read-time; no validation warning emitted.
 });
