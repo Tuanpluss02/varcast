@@ -39,6 +39,7 @@ const diffSummary = byId<HTMLDivElement>('diffSummary');
 const doneSummary = byId<HTMLDivElement>('doneSummary');
 
 const packageName = byId<HTMLInputElement>('packageName');
+const targetId = byId<HTMLSelectElement>('targetId');
 const leafPrefix = byId<HTMLInputElement>('leafPrefix');
 const leafSuffix = byId<HTMLInputElement>('leafSuffix');
 
@@ -58,7 +59,7 @@ const modal = setupModal({
 });
 
 function updatePill() {
-  const o = collectOptions({ packageName, leafPrefix, leafSuffix, toggles });
+  const o = collectOptions({ targetId, packageName, leafPrefix, leafSuffix, toggles });
   pillStatus.textContent = pillText(o);
 }
 
@@ -79,7 +80,7 @@ function startExport() {
   regenBtn.disabled = true;
   status.textContent = '';
   showScreen(screens, 'validating');
-  const options = collectOptions({ packageName, leafPrefix, leafSuffix, toggles });
+  const options = collectOptions({ targetId, packageName, leafPrefix, leafSuffix, toggles });
   postToPlugin({ type: 'export', options });
 }
 
@@ -93,7 +94,10 @@ Object.values(toggles).forEach((el) => {
   });
 });
 
+targetId.addEventListener('change', updatePill);
+
 byId<HTMLButtonElement>('reset').addEventListener('click', () => {
+  targetId.value = 'flutter';
   packageName.value = 'design_system';
   leafPrefix.value = '';
   leafSuffix.value = '';

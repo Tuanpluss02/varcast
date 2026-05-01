@@ -91,10 +91,12 @@ function sanitizePascalAffix(s: string): string {
 
 function sanitizePackageName(name: string): string {
   // Dart pub package naming: lowercase_with_underscores
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'design_system';
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'design_system'
+  );
 }
 

@@ -1,4 +1,4 @@
-import type { IRValue } from '../ir/types';
+import type { IRValue } from '../../../ir/types';
 import {
   FILE_HEADER,
   colorLiteral,
@@ -8,27 +8,14 @@ import {
 } from './emit_helpers';
 import type {
   PreparedCollection,
-  PreparedMode,
   PreparedVariable,
   VarRef,
   DartType,
 } from './prepare';
 
-// Tree-builder + collection-file emitter.
-//
-// Each Figma variable contributes one leaf. Variables under the same
-// PascalCase prefix share a group node. A node either:
-//   • has child group nodes (intermediate group), OR
-//   • has only leaves (terminal group).
-// A node may have BOTH only when leaves and groups share the same parent in
-// Figma — that case is rare; we emit them mixed on the same Dart group class.
-
 interface GroupNode {
-  // Path from collection root, PascalCase, e.g. ["Status", "Success"].
   path: string[];
-  // Map of childName → child GroupNode. Iteration order = insertion order.
   children: Map<string, GroupNode>;
-  // Direct-leaf variables under this group.
   leaves: PreparedVariable[];
 }
 
@@ -40,7 +27,6 @@ export function emitCollection(
   const usesColor = collectionUsesColor(col);
   const usesAlias = collectionUsesAlias(col);
 
-  // Identifier helpers are closed over `col` so they read tighter below.
   const cn = col.className;
   const groupClass = (path: string[]) => cn + path.join('');
 
@@ -56,15 +42,11 @@ export function emitCollection(
   }
   out += '\n';
 
-  // Mode enum
   out += `enum ${cn}Mode { ${col.modes.map((m) => m.camel).join(', ')} }\n\n`;
 
-  // Bottom-up emit so child classes are declared before parents reference them.
   emitNode(root, true);
 
   return out;
-
-  // ── nested helpers (closure over `out`, `col`, etc.) ──────────────────────
 
   function emitNode(node: GroupNode, isRoot: boolean) {
     for (const child of node.children.values()) emitNode(child, false);
@@ -81,9 +63,7 @@ export function emitCollection(
     const fieldName = (childPath: string[]) =>
       camelOfPascal(childPath[childPath.length - 1]);
 
-    // Abstract group class -----------------------------------------------------
     out += `abstract class ${className} {\n`;
-    // Always const: abstract groups never allocate child objects.
     out += `  const ${className}();\n`;
     for (const [, child] of childGroupEntries) {
       const childCls = groupClass(child.path);
@@ -92,7 +72,6 @@ export function emitCollection(
     for (const leaf of node.leaves) {
       out += `  ${leaf.dartType} get ${leaf.leafName};\n`;
     }
-    // lerp
     out += `\n  static ${className} lerp(${className} a, ${className} b, double t) =>\n`;
     out += `      _Lerped${className}(\n`;
     for (const [, child] of childGroupEntries) {
@@ -106,32 +85,26 @@ export function emitCollection(
     out += `      );\n`;
     out += `}\n\n`;
 
-    // Per-mode concrete classes ------------------------------------------------
     for (const mode of col.modes) {
       const concreteName = `${className}${mode.pascal}`;
       const isConst = constMap.get(node) === true;
-      // If this node has child groups, keep ctor non-const (matches skeleton).
       const ctorPrefix = isConst && childGroupEntries.length === 0 ? 'const ' : '';
       out += `class ${concreteName} extends ${className} {\n`;
       if (childGroupEntries.length > 0) {
-        // init list
         out += `  ${ctorPrefix}${concreteName}()\n      : `;
         const inits = childGroupEntries.map(([, child]) => {
           const childCls = groupClass(child.path);
-          const childConst =
-            constMap.get(child) === true ? 'const ' : '';
+          const childConst = constMap.get(child) === true ? 'const ' : '';
           return `${fieldName(child.path)} = ${childConst}${childCls}${mode.pascal}()`;
         });
         out += inits.join(',\n        ') + ';\n';
       } else {
         out += `  ${ctorPrefix}${concreteName}();\n`;
       }
-      // child group fields
       for (const [, child] of childGroupEntries) {
         const childCls = groupClass(child.path);
         out += `  @override final ${childCls} ${fieldName(child.path)};\n`;
       }
-      // leaves
       for (const leaf of node.leaves) {
         const expr = emitValueExpr(leaf, mode.id);
         out += `  @override ${leaf.dartType} get ${leaf.leafName} => ${expr};\n`;
@@ -139,26 +112,19 @@ export function emitCollection(
       out += `}\n\n`;
     }
 
-    // _Lerped class -----------------------------------------------------------
     const lerpedName = `_Lerped${className}`;
     const childFields = childGroupEntries.map(([, child]) => ({
       type: groupClass(child.path),
       name: fieldName(child.path),
     }));
-    const leafFields = node.leaves.map((l) => ({
-      type: l.dartType,
-      name: l.leafName,
-    }));
+    const leafFields = node.leaves.map((l) => ({ type: l.dartType, name: l.leafName }));
     const allFields = [...childFields, ...leafFields];
     out += `class ${lerpedName} extends ${className} {\n`;
     if (allFields.length > 0) {
-      // _Lerped is const-friendly: no initialiser logic, only `final` fields.
       out += `  const ${lerpedName}({\n`;
       for (const f of allFields) out += `    required this.${f.name},\n`;
       out += `  });\n`;
-      for (const f of allFields) {
-        out += `  @override final ${f.type} ${f.name};\n`;
-      }
+      for (const f of allFields) out += `  @override final ${f.type} ${f.name};\n`;
     } else {
       out += `  const ${lerpedName}();\n`;
     }
@@ -171,7 +137,6 @@ export function emitCollection(
     const fieldName = (childPath: string[]) =>
       camelOfPascal(childPath[childPath.length - 1]);
 
-    // Root abstract
     const ctor = childGroupEntries.length > 0 ? '' : 'const ';
     out += `abstract class ${className} {\n`;
     out += `  ${ctor}${className}();\n`;
@@ -194,7 +159,6 @@ export function emitCollection(
     }
     out += `      );\n}\n\n`;
 
-    // Per-mode root concrete
     for (const mode of col.modes) {
       const concreteName = `${className}${mode.pascal}`;
       out += `class ${concreteName} extends ${className} {\n`;
@@ -202,8 +166,7 @@ export function emitCollection(
         out += `  ${concreteName}()\n      : `;
         const inits = childGroupEntries.map(([, child]) => {
           const childCls = groupClass(child.path);
-          const childConst =
-            constMap.get(child) === true ? 'const ' : '';
+          const childConst = constMap.get(child) === true ? 'const ' : '';
           return `${fieldName(child.path)} = ${childConst}${childCls}${mode.pascal}()`;
         });
         out += inits.join(',\n        ') + ';\n';
@@ -221,25 +184,19 @@ export function emitCollection(
       out += `}\n\n`;
     }
 
-    // Root _Lerped
     const lerpedName = `_Lerped${className}`;
     const childFields = childGroupEntries.map(([, child]) => ({
       type: groupClass(child.path),
       name: fieldName(child.path),
     }));
-    const leafFields = node.leaves.map((l) => ({
-      type: l.dartType,
-      name: l.leafName,
-    }));
+    const leafFields = node.leaves.map((l) => ({ type: l.dartType, name: l.leafName }));
     const allFields = [...childFields, ...leafFields];
     out += `class ${lerpedName} extends ${className} {\n`;
     if (allFields.length > 0) {
       out += `  ${lerpedName}({\n`;
       for (const f of allFields) out += `    required this.${f.name},\n`;
       out += `  });\n`;
-      for (const f of allFields) {
-        out += `  @override final ${f.type} ${f.name};\n`;
-      }
+      for (const f of allFields) out += `  @override final ${f.type} ${f.name};\n`;
     } else {
       out += `  ${lerpedName}();\n`;
     }
@@ -248,10 +205,7 @@ export function emitCollection(
 
   function emitValueExpr(v: PreparedVariable, modeId: string): string {
     const val = v.valuesByMode[modeId];
-    if (!val) {
-      // Variable not defined in this mode — fall back to a sane default.
-      return defaultExprFor(v.dartType);
-    }
+    if (!val) return defaultExprFor(v.dartType);
     if (val.kind === 'alias') {
       const ref = varIndex.get(val.targetVariableId);
       if (!ref) return defaultExprFor(v.dartType);
@@ -267,19 +221,11 @@ export function emitCollection(
   }
 }
 
-// ── Tree construction ──────────────────────────────────────────────────────
-
 function buildTree(variables: PreparedVariable[]): GroupNode {
-  const root: GroupNode = {
-    path: [],
-    children: new Map(),
-    leaves: [],
-  };
+  const root: GroupNode = { path: [], children: new Map(), leaves: [] };
   for (const v of variables) {
     let node = root;
-    for (const seg of v.groupPath) {
-      node = ensureChild(node, seg);
-    }
+    for (const seg of v.groupPath) node = ensureChild(node, seg);
     node.leaves.push(v);
   }
   return root;
@@ -297,31 +243,17 @@ function ensureChild(parent: GroupNode, name: string): GroupNode {
   return child;
 }
 
-// ── const-constructible map ────────────────────────────────────────────────
-//
-// A group concrete is const IFF all its children are const. Leaves don't
-// affect constness (they're getter overrides — no fields). A group with NO
-// children is therefore always const.
-
-function computeConstMap(
-  root: GroupNode,
-  usesAlias: boolean,
-): Map<GroupNode, boolean> {
+function computeConstMap(root: GroupNode, usesAlias: boolean): Map<GroupNode, boolean> {
   const map = new Map<GroupNode, boolean>();
   function walk(node: GroupNode) {
-    // For token collections (any alias anywhere), never use const constructors.
-    // For primitives: only leaf-only groups are const-constructible.
     const isConst = !usesAlias && node.children.size === 0;
     map.set(node, isConst);
     for (const child of node.children.values()) walk(child);
   }
   walk(root);
-  // Root concrete is non-const by convention (it allocates child objects).
   if (root.children.size > 0) map.set(root, false);
   return map;
 }
-
-// ── helpers ────────────────────────────────────────────────────────────────
 
 function camelOfPascal(s: string): string {
   if (!s) return s;
@@ -364,3 +296,4 @@ function collectionUsesAlias(col: PreparedCollection): boolean {
     Object.values(v.valuesByMode).some((val) => val.kind === 'alias'),
   );
 }
+

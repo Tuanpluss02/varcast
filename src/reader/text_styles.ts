@@ -32,7 +32,6 @@ function buildTextStyle(style: TextStyle): IRTextStyle {
   return {
     id: style.id,
     figmaName: style.name,
-    dartName: style.name,
     groupPath: style.name.split('/').map((s: any) => String(s).trim()),
     fontFamily: textVal<string>(bv, 'fontFamily', style.fontName.family),
     fontSize: textVal<number>(bv, 'fontSize', style.fontSize),

@@ -10,16 +10,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
-import { emitPackage, writePackage } from './generator';
 import { diffManifest } from './manifest';
 import { loadManifest, saveManifest } from './manifest_node';
-import { generateChangelog } from './generator/changelog';
-import { DEFAULT_EXPORT_OPTIONS } from './generator/options';
+import { generateChangelog } from './targets/flutter/generator/changelog';
+import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
+import { runEngine } from './core/emit_engine';
+import { flutterTarget } from './targets/flutter';
+import { reactNativeTarget } from './targets/react_native';
+import { writePackage } from './targets/flutter/generator/write_node';
 
 interface Args {
   ir: string;
   out: string;
   name?: string;
+  target?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -29,10 +33,11 @@ function parseArgs(argv: string[]): Args {
     if (a === '--ir') args.ir = argv[++i];
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--name') args.name = argv[++i];
+    else if (a === '--target') args.target = argv[++i];
   }
   if (!args.ir || !args.out) {
     console.error(
-      'Usage: generator_cli --ir <ir.json> --out <dir> [--name <package>]',
+      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--name <package>]',
     );
     process.exit(2);
   }
@@ -65,11 +70,15 @@ function main() {
   }
 
   const oldManifest = loadManifest(outDir);
-  const { files, nextManifest } = emitPackage(
-    ir,
-    oldManifest,
-    { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' },
-  );
+  const targetId = args.target ?? 'flutter';
+  const options = { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' };
+  const targets =
+    targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
+  const { files, nextManifest } = runEngine(ir, targets, oldManifest, targetId === 'react_native' ? {
+    react_native: options,
+  } : {
+    flutter: options,
+  });
   const diff = diffManifest(oldManifest, nextManifest);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);

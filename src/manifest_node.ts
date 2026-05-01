@@ -3,7 +3,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { Manifest } from './manifest';
+import type { Manifest } from './core/manifest';
+import { normalizeManifest } from './core/manifest';
 
 const MANIFEST_REL = path.join('_meta', 'manifest.json');
 
@@ -11,9 +12,14 @@ export function loadManifest(packagePath: string): Manifest | null {
   const p = path.join(packagePath, MANIFEST_REL);
   if (!fs.existsSync(p)) return null;
   const raw = fs.readFileSync(p, 'utf-8');
-  const parsed = JSON.parse(raw) as Manifest;
-  if (!parsed || parsed.version !== '1.0') return null;
-  return parsed;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  // normalizeManifest auto-migrates v1 → v2 transparently.
+  return normalizeManifest(parsed);
 }
 
 export function saveManifest(packagePath: string, manifest: Manifest): void {
@@ -24,4 +30,3 @@ export function saveManifest(packagePath: string, manifest: Manifest): void {
     JSON.stringify(manifest, null, 2) + '\n',
   );
 }
-

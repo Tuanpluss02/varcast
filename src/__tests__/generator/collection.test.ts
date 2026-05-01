@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { IR } from '../../ir/types';
-import { prepareIR } from '../../generator/prepare';
-import { emitCollection } from '../../generator/collection';
+import { prepareIR } from '../../targets/flutter/generator/prepare';
+import { emitCollection } from '../../targets/flutter/generator/collection';
 
 function buildIr(): IR {
   return {
@@ -12,14 +12,12 @@ function buildIr(): IR {
       {
         id: 'col:basic',
         name: 'Color Basic',
-        dartName: 'ColorBasic',
         kind: 'primitive',
-        modes: [{ id: 'm:1', name: 'Value', dartName: 'value' }],
+        modes: [{ id: 'm:1', name: 'Value' }],
         variables: [
           {
             id: 'var:black',
             figmaName: 'Background/Primary',
-            dartName: 'backgroundPrimary',
             groupPath: ['Background', 'Primary'],
             type: 'COLOR',
             scopes: ['ALL_FILLS'],
@@ -30,7 +28,6 @@ function buildIr(): IR {
           {
             id: 'var:default',
             figmaName: 'Border/default',
-            dartName: 'borderDefault',
             groupPath: ['Border', 'default'],
             type: 'COLOR',
             scopes: ['ALL_FILLS'],
@@ -43,14 +40,12 @@ function buildIr(): IR {
       {
         id: 'col:token',
         name: 'Color Token',
-        dartName: 'ColorToken',
         kind: 'token',
-        modes: [{ id: 'm:1', name: 'Light Mode', dartName: 'lightMode' }],
+        modes: [{ id: 'm:1', name: 'Light Mode' }],
         variables: [
           {
             id: 'var:bg-primary',
             figmaName: 'Background/Primary',
-            dartName: 'backgroundPrimary',
             groupPath: ['Background', 'Primary'],
             type: 'COLOR',
             scopes: ['ALL_FILLS'],

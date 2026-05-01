@@ -5,14 +5,14 @@ import type {
   IREffectStyle,
   IRTextStyle,
   IRValue,
-} from '../ir/types';
+} from '../../../ir/types';
 import {
   newSanitizeContext,
   sanitize,
   sanitizeIdentifier,
-} from '../sanitize';
-import type { Manifest } from '../manifest';
-import { resolveStableCollectionName, resolveStableName } from '../manifest';
+} from '../../../sanitize';
+import type { Manifest } from '../../../manifest';
+import { resolveStableCollectionName, resolveStableName } from '../../../manifest';
 import type { ExportOptions } from './options';
 import { applyLeafAffixes, DEFAULT_EXPORT_OPTIONS } from './options';
 
@@ -79,6 +79,20 @@ export interface PreparedTextStyle {
   raw: IRTextStyle;
 }
 
+export type PreparedWarning =
+  | {
+      type: 'KEYWORD_CONFLICT';
+      variableId: string;
+      original: string;
+      fixed: string;
+    }
+  | {
+      type: 'DUPLICATE_DART_NAME';
+      variableId: string;
+      original: string;
+      fixed: string;
+    };
+
 export interface PreparedIR {
   collections: PreparedCollection[];
   paintStyles: PreparedPaintStyle[];
@@ -86,6 +100,7 @@ export interface PreparedIR {
   textStyles: PreparedTextStyle[];
   varIndex: Map<string, VarRef>;
   nextManifest: Manifest;
+  warnings: PreparedWarning[];
 }
 
 export function prepareIR(
@@ -93,7 +108,10 @@ export function prepareIR(
   manifest: Manifest | null = null,
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): PreparedIR {
-  const collections = ir.collections.map((c) => prepareCollection(c, manifest, options));
+  const warnings: PreparedWarning[] = [];
+  const collections = ir.collections.map((c) =>
+    prepareCollection(c, manifest, options, warnings),
+  );
   const varIndex = new Map<string, VarRef>();
   for (const col of collections) {
     for (const v of col.variables) {
@@ -119,9 +137,17 @@ export function prepareIR(
     (s) => `${s.groupName}`,
   );
 
-  const nextManifest = buildNextManifest(ir, collections);
+  const nextManifest = buildNextManifest(ir, collections, manifest);
 
-  return { collections, paintStyles, effectStyles, textStyles, varIndex, nextManifest };
+  return {
+    collections,
+    paintStyles,
+    effectStyles,
+    textStyles,
+    varIndex,
+    nextManifest,
+    warnings,
+  };
 }
 
 // Disallow collisions with Flutter/Dart SDK symbols that show up in generated
@@ -132,6 +158,7 @@ function prepareCollection(
   col: IRCollection,
   manifest: Manifest | null,
   options: ExportOptions,
+  warnings: PreparedWarning[],
 ): PreparedCollection {
   let className = sanitizeIdentifier(col.name, 'pascal');
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
@@ -151,7 +178,24 @@ function prepareCollection(
   const variables: PreparedVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
-    const { groupPath, leafName } = sanitize(v.groupPath, ctx);
+    const { groupPath, leafName, notes } = sanitize(v.groupPath, ctx);
+    if (notes.keywordFixedFrom) {
+      warnings.push({
+        type: 'KEYWORD_CONFLICT',
+        variableId: v.id,
+        original: notes.keywordFixedFrom,
+        fixed: leafName,
+      });
+    }
+    if (notes.dedupedAs !== undefined) {
+      const base = leafName.slice(0, -String(notes.dedupedAs).length);
+      warnings.push({
+        type: 'DUPLICATE_DART_NAME',
+        variableId: v.id,
+        original: base,
+        fixed: leafName,
+      });
+    }
     let stableLeaf = resolveStableName(v.id, leafName, manifest);
     stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
     const emittedLeaf = applyLeafAffixes(
@@ -204,7 +248,11 @@ function dedupLeafName(
   return next;
 }
 
-function buildNextManifest(ir: IR, cols: PreparedCollection[]): Manifest {
+function buildNextManifest(
+  ir: IR,
+  cols: PreparedCollection[],
+  oldManifest: Manifest | null,
+): Manifest {
   const variables: Record<string, string> = {};
   const collections: Record<string, string> = {};
   const figmaVar: Record<string, string> = {};
@@ -225,18 +273,22 @@ function buildNextManifest(ir: IR, cols: PreparedCollection[]): Manifest {
     }
   }
 
-  return {
-    version: '1.0',
-    fileKey: ir.fileKey,
-    lastExportedAt: new Date().toISOString(),
+  const preservedTargets: Manifest['targets'] = { ...(oldManifest?.targets ?? {}) };
+  preservedTargets[FLUTTER_TARGET_ID] = {
     variables,
     collections,
-    figmaNames: {
-      variables: figmaVar,
-      collections: figmaCol,
-    },
+    figmaNames: { variables: figmaVar, collections: figmaCol },
+  };
+
+  return {
+    version: '2.0',
+    fileKey: ir.fileKey,
+    lastExportedAt: new Date().toISOString(),
+    targets: preservedTargets,
   };
 }
+
+const FLUTTER_TARGET_ID = 'flutter';
 
 function preparePaint(s: IRPaintStyle): PreparedPaintStyle {
   const { groupName, getterName } = splitFigmaNameForComposite(
@@ -255,7 +307,6 @@ function prepareEffect(s: IREffectStyle): PreparedEffectStyle {
 }
 
 function prepareText(s: IRTextStyle): PreparedTextStyle {
-  // Text styles bucket on first figma path segment instead of type.
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   let groupName: string;
   let getterParts: string[];
@@ -270,7 +321,6 @@ function prepareText(s: IRTextStyle): PreparedTextStyle {
   return { id: s.id, groupName, getterName, raw: s };
 }
 
-// All paints of a given Figma type land in the same Dart subgroup.
 function paintBucket(t: IRPaintStyle['type']): string {
   switch (t) {
     case 'SOLID':
@@ -354,3 +404,4 @@ function pascalToSnake(s: string): string {
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
     .toLowerCase();
 }
+

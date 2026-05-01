@@ -1,4 +1,4 @@
-import type { ManifestDiff } from '../manifest';
+import type { ManifestDiff } from '../../../manifest';
 
 export function generateChangelog(diff: ManifestDiff): string {
   const lines: string[] = [];
@@ -19,7 +19,7 @@ export function generateChangelog(diff: ManifestDiff): string {
   if (diff.added.length > 0) {
     lines.push('## Added');
     for (const a of diff.added) {
-      lines.push(`- \`${a.dartName}\`${a.figmaName ? ` — ${a.figmaName}` : ''}`);
+      lines.push(`- \`${a.name}\`${a.figmaName ? ` — ${a.figmaName}` : ''}`);
     }
     lines.push('');
   }
@@ -27,17 +27,15 @@ export function generateChangelog(diff: ManifestDiff): string {
   if (diff.removed.length > 0) {
     lines.push('## Removed');
     for (const r of diff.removed) {
-      lines.push(`- \`${r.dartName}\`${r.figmaName ? ` — ${r.figmaName}` : ''}`);
+      lines.push(`- \`${r.name}\`${r.figmaName ? ` — ${r.figmaName}` : ''}`);
     }
     lines.push('');
   }
 
   if (diff.renamed.length > 0) {
-    lines.push('## Renamed (Figma only; Dart API unchanged)');
+    lines.push('## Renamed (Figma only; stable name unchanged)');
     for (const r of diff.renamed) {
-      lines.push(
-        `- \`${r.dartName}\`: \`${r.oldFigmaName}\` → \`${r.newFigmaName}\``,
-      );
+      lines.push(`- \`${r.name}\`: \`${r.oldFigmaName}\` → \`${r.newFigmaName}\``);
     }
     lines.push('');
   }

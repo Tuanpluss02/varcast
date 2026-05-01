@@ -4,12 +4,15 @@ import { readEffectStyles } from './reader/effect_styles';
 import { readTextStyles } from './reader/text_styles';
 import { validate } from './ir/validate';
 import type { IR } from './ir/types';
-import { emitPackage } from './generator/emit';
 import type { Manifest } from './manifest';
 import { diffManifest } from './manifest';
-import { generateChangelog } from './generator/changelog';
+import { normalizeManifest } from './core/manifest';
+import { generateChangelog } from './targets/flutter/generator/changelog';
 import { buildZip } from './zip';
-import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './generator/options';
+import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
+import { runEngine } from './core/emit_engine';
+import { flutterTarget } from './targets/flutter';
+import { reactNativeTarget } from './targets/react_native';
 
 figma.showUI(__html__, { width: 400, height: 300 });
 
@@ -23,6 +26,7 @@ type PendingExport = {
   files: { path: string; contents: string }[];
   changelog: string;
   options: ReturnType<typeof normalizeExportOptions>;
+  targetId: string;
 };
 
 let pending: PendingExport | null = null;
@@ -33,6 +37,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       pending = null;
       figma.ui.postMessage({ type: 'validating' });
       const options = normalizeExportOptions((msg as any).options ?? DEFAULT_EXPORT_OPTIONS);
+      const targetId = ((msg as any).options?.targetId as string | undefined) ?? 'flutter';
       const ir: IR = {
         version: '1.0',
         fileKey: figma.fileKey ?? 'unknown',
@@ -64,10 +69,20 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       }
 
       // Phase 6: generate package in-memory + diff + changelog + ZIP.
-      const oldManifest = (await figma.clientStorage.getAsync(
-        'manifest_v1',
-      )) as Manifest | null;
-      const { files, nextManifest } = emitPackage(ir, oldManifest, options);
+      // Read both legacy v1 and current v2 keys; normalizeManifest migrates
+      // v1 → v2 transparently so older users don't lose stable names.
+      const rawManifest =
+        (await figma.clientStorage.getAsync('manifest_v2')) ??
+        (await figma.clientStorage.getAsync('manifest_v1'));
+      const oldManifest: Manifest | null = normalizeManifest(rawManifest);
+      const targets =
+        targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
+      const { files, nextManifest } = runEngine(
+        ir,
+        targets,
+        oldManifest,
+        targetId === 'react_native' ? { react_native: options } : { flutter: options },
+      );
       const diff = diffManifest(oldManifest, nextManifest);
 
       const changelog = generateChangelog(diff);
@@ -81,6 +96,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         files,
         changelog,
         options,
+        targetId,
       };
 
       // If warnings exist, show warning screen before allowing export.
@@ -127,8 +143,8 @@ figma.ui.onmessage = async (msg: { type: string }) => {
     }
     figma.ui.postMessage({ type: 'exporting' });
 
-    // Persist manifest now (stable regen)
-    await figma.clientStorage.setAsync('manifest_v1', pending.nextManifest);
+    // Persist manifest now (stable regen). Write v2 going forward.
+    await figma.clientStorage.setAsync('manifest_v2', pending.nextManifest);
 
     const extra = [
       {

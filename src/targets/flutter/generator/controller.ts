@@ -35,6 +35,7 @@ export function emitController(collections: PreparedCollection[]): string {
   out += `  ];\n\n`;
 
   out += `  bool _vsyncAttached = false;\n\n`;
+
   out += `  void attachVsync(TickerProvider vsync) {\n`;
   out += `    if (_vsyncAttached) _detachControllers();\n`;
   out += `    _vsyncAttached = true;\n`;
@@ -118,11 +119,7 @@ function defaultConcrete(col: PreparedCollection): string {
   return `${col.className}${col.modes[col.defaultModeIndex].pascal}`;
 }
 
-// Primitive vs token collections live in different sub-directories. We mirror
-// the skeleton's layout so consumers' `import 'src/primitives/foo.dart'`
-// expectations don't break.
 function collectionDir(col: PreparedCollection): 'primitives' | 'tokens' {
-  // Determine kind from the collection: any alias usage = token.
   for (const v of col.variables) {
     for (const val of Object.values(v.valuesByMode)) {
       if (val.kind === 'alias') return 'tokens';
@@ -132,3 +129,4 @@ function collectionDir(col: PreparedCollection): 'primitives' | 'tokens' {
 }
 
 export { collectionDir };
+

@@ -1,9 +1,10 @@
 // Orchestrator: takes IR and returns all files for a complete Flutter
 // design-system package. This module must stay browser-safe (no fs/path).
 
-import type { IR } from '../ir/types';
-import type { Manifest } from '../manifest';
+import type { IR } from '../../../ir/types';
+import type { Manifest } from '../../../manifest';
 import { prepareIR } from './prepare';
+import type { PreparedIR } from './prepare';
 import type { ExportOptions } from './options';
 import { DEFAULT_EXPORT_OPTIONS } from './options';
 import { emitCollection } from './collection';
@@ -25,12 +26,10 @@ export interface EmittedFile {
   contents: string;
 }
 
-export function emitPackage(
-  ir: IR,
-  manifest: Manifest | null = null,
+export function emitPreparedPackage(
+  prepared: PreparedIR,
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): { files: EmittedFile[]; nextManifest: Manifest } {
-  const prepared = prepareIR(ir, manifest, options);
   const packageName = options.packageName;
 
   // Drop empty collections — they would emit invalid Dart (zero-arm switch).
@@ -114,5 +113,14 @@ export function emitPackage(
   }
 
   return { files, nextManifest: prepared.nextManifest };
+}
+
+export function emitPackage(
+  ir: IR,
+  manifest: Manifest | null = null,
+  options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
+): { files: EmittedFile[]; nextManifest: Manifest } {
+  const prepared = prepareIR(ir, manifest, options);
+  return emitPreparedPackage(prepared, options);
 }
 

@@ -30,7 +30,6 @@ function makeVar(
   return {
     id,
     figmaName: groupPath.join('/'),
-    dartName: groupPath[groupPath.length - 1],
     groupPath: [...groupPath],
     type,
     scopes: [],
@@ -46,10 +45,10 @@ function makeCol(
   variables: IRVariable[],
   kind: IRCollection['kind'] = 'token',
 ): IRCollection {
-  return { id, name: id, dartName: id, kind, modes, variables };
+  return { id, name: id, kind, modes, variables };
 }
 
-const M1: IRMode = { id: 'm:1', name: 'Value', dartName: 'value' };
+const M1: IRMode = { id: 'm:1', name: 'Value' };
 
 // ── Rule 1: cycle detection ───────────────────────────────────────────────
 
@@ -123,94 +122,9 @@ describe('unresolved alias', () => {
   });
 });
 
-// ── Rule 3: keyword conflict ──────────────────────────────────────────────
-
-describe('keyword conflict', () => {
-  it('renames "default" to "default_"', () => {
-    const ir = makeIR({
-      collections: [
-        makeCol('col:1', [M1], [
-          makeVar('v:1', ['Border', 'default'], {
-            'm:1': { kind: 'literal', value: { r: 0, g: 0, b: 0, a: 1 } },
-          }),
-        ]),
-      ],
-    });
-
-    const result = validate(ir);
-    const w = result.warnings.find((w) => w.type === 'KEYWORD_CONFLICT');
-    expect(w).toBeDefined();
-    expect((w as { fixed: string }).fixed).toBe('default_');
-    expect(ir.collections[0].variables[0].groupPath).toEqual(['Border', 'default_']);
-  });
-
-  it('renames "class" to "class_"', () => {
-    const ir = makeIR({
-      collections: [
-        makeCol('col:1', [M1], [
-          makeVar('v:1', ['utility', 'class'], {
-            'm:1': { kind: 'literal', value: 1 },
-          }, 'FLOAT'),
-        ]),
-      ],
-    });
-
-    const result = validate(ir);
-    expect(ir.collections[0].variables[0].groupPath[1]).toBe('class_');
-  });
-});
-
-// ── Rule 4: duplicate dartName ────────────────────────────────────────────
-
-describe('duplicate dartName', () => {
-  it('renames second/third occurrence with same full path to 2 / 3 suffix', () => {
-    const ir = makeIR({
-      collections: [
-        makeCol('col:1', [M1], [
-          makeVar('v:1', ['Background', 'primary'], {
-            'm:1': { kind: 'literal', value: { r: 1, g: 1, b: 1, a: 1 } },
-          }),
-          makeVar('v:2', ['Background', 'primary'], {
-            'm:1': { kind: 'literal', value: { r: 0, g: 0, b: 0, a: 1 } },
-          }),
-          makeVar('v:3', ['Background', 'primary'], {
-            'm:1': { kind: 'literal', value: { r: 0.5, g: 0.5, b: 0.5, a: 1 } },
-          }),
-        ]),
-      ],
-    });
-
-    const result = validate(ir);
-    const dups = result.warnings.filter((w) => w.type === 'DUPLICATE_DART_NAME');
-    expect(dups).toHaveLength(2);
-    expect(ir.collections[0].variables[0].groupPath[1]).toBe('primary');
-    expect(ir.collections[0].variables[1].groupPath[1]).toBe('primary2');
-    expect(ir.collections[0].variables[2].groupPath[1]).toBe('primary3');
-  });
-
-  it('siblings with same leaf in different parent groups are NOT duplicates', () => {
-    const ir = makeIR({
-      collections: [
-        makeCol('col:1', [M1], [
-          makeVar('v:1', ['Background', 'primary'], {
-            'm:1': { kind: 'literal', value: { r: 1, g: 1, b: 1, a: 1 } },
-          }),
-          makeVar('v:2', ['Action', 'primary'], {
-            'm:1': { kind: 'literal', value: { r: 0, g: 0, b: 0, a: 1 } },
-          }),
-        ]),
-      ],
-    });
-
-    const result = validate(ir);
-    const dups = result.warnings.filter((w) => w.type === 'DUPLICATE_DART_NAME');
-    expect(dups).toHaveLength(0);
-    expect(ir.collections[0].variables[0].groupPath[1]).toBe('primary');
-    expect(ir.collections[0].variables[1].groupPath[1]).toBe('primary');
-  });
-});
-
-// ── Rule 5: float rounding ────────────────────────────────────────────────
+// ── Rule 3: float rounding ────────────────────────────────────────────────
+// (keyword conflict + duplicate name dedup moved to generator/prepare.ts — see
+//  __tests__/generator/prepare_stable_dedup.test.ts for coverage)
 
 describe('float rounding', () => {
   it('rounds 0.30000001192092896 to 0.3', () => {
@@ -256,7 +170,7 @@ describe('float rounding', () => {
   });
 });
 
-// ── Rule 6: hidden flag ───────────────────────────────────────────────────
+// ── Rule 4: hidden flag ───────────────────────────────────────────────────
 
 describe('hidden flag', () => {
   it('hidden variable → emitToPublic=false, no warning', () => {
@@ -291,7 +205,6 @@ describe('composite warnings', () => {
     const style: IRPaintStyle = {
       id: 'S:d',
       figmaName: 'D',
-      dartName: 'D',
       groupPath: ['D'],
       type: 'GRADIENT_DIAMOND',
       stops: [{ position: 0, color: { kind: 'literal', rgba: { r: 0, g: 0, b: 0, a: 1 } } }],

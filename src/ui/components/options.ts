@@ -1,4 +1,5 @@
 export type ExportOptions = {
+  targetId: string;
   packageName: string;
   include: {
     primitives: boolean;
@@ -39,13 +40,15 @@ export function isToggleOn(el: HTMLElement) {
 }
 
 export function collectOptions(opts: {
+  targetId: HTMLSelectElement;
   packageName: HTMLInputElement;
   leafPrefix: HTMLInputElement;
   leafSuffix: HTMLInputElement;
   toggles: ToggleEls;
 }): ExportOptions {
-  const { packageName, leafPrefix, leafSuffix, toggles } = opts;
+  const { targetId, packageName, leafPrefix, leafSuffix, toggles } = opts;
   return {
+    targetId: targetId.value || 'flutter',
     packageName: packageName.value || 'design_system',
     include: {
       primitives: isToggleOn(toggles.primitives),
@@ -66,6 +69,7 @@ export function collectOptions(opts: {
 
 export function pillText(o: ExportOptions): string {
   const bits: string[] = [];
+  bits.push(o.targetId === 'flutter' ? 'Flutter' : o.targetId);
   if (o.include.primitives && o.include.tokens) bits.push('Full export');
   else if (o.include.tokens) bits.push('Tokens only');
   else if (o.include.primitives) bits.push('Primitives only');

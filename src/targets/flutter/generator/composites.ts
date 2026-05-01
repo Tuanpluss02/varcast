@@ -6,7 +6,7 @@ import type {
   IRTextStyle,
   IRTextValue,
   IRTextValueWithUnit,
-} from '../ir/types';
+} from '../../../ir/types';
 import {
   FILE_HEADER,
   angleToAlignmentDart,
@@ -21,16 +21,6 @@ import type {
   VarRef,
 } from './prepare';
 
-// ── color_styles.dart ──────────────────────────────────────────────────────
-//
-// Buckets paint styles by Figma type into Dart subgroup classes:
-//   SOLID            → DSColorStylesSolid
-//   GRADIENT_LINEAR  → DSColorStylesLinear (Alignment pre-computed at emit)
-//   GRADIENT_RADIAL  → DSColorStylesRadial
-//   GRADIENT_ANGULAR → DSColorStylesAngular (SweepGradient)
-//   GRADIENT_DIAMOND → DSColorStylesDiamond (RadialGradient + transform)
-//   IMAGE            → DSColorStylesImage (asset path)
-
 export function emitColorStyles(
   styles: PreparedPaintStyle[],
   varIndex: Map<string, VarRef>,
@@ -40,7 +30,6 @@ export function emitColorStyles(
     if (!buckets.has(s.groupName)) buckets.set(s.groupName, []);
     buckets.get(s.groupName)!.push(s);
   }
-  // Stable order across paint types so the output is deterministic.
   const ordered: [string, PreparedPaintStyle[]][] = [
     'Solid',
     'Linear',
@@ -56,22 +45,16 @@ export function emitColorStyles(
   out += `import 'dart:math' show pi;\n`;
   out += `import 'package:flutter/painting.dart';\n`;
   out += `import '../theme.dart';\n\n`;
-  // pi is imported even when unused to keep emitter simple — silence the
-  // analyzer hint.
   out += `// ignore_for_file: unused_import\n\n`;
 
-  // Bucket classes
   for (const [bucket, items] of ordered) {
     const cls = `DSColorStyles${bucket}`;
     out += `class ${cls} {\n`;
     out += `  const ${cls}();\n\n`;
-    for (const s of items) {
-      out += emitPaintGetter(s, varIndex);
-    }
+    for (const s of items) out += emitPaintGetter(s, varIndex);
     out += `}\n\n`;
   }
 
-  // Diamond requires a GradientTransform helper.
   if (buckets.has('Diamond')) {
     out += `class _DiamondTransform extends GradientTransform {\n`;
     out += `  const _DiamondTransform();\n`;
@@ -82,7 +65,6 @@ export function emitColorStyles(
     out += `}\n\n`;
   }
 
-  // Root container
   out += `class DSColorStyles {\n`;
   out += `  const DSColorStyles();\n`;
   for (const [bucket] of ordered) {
@@ -125,8 +107,8 @@ function emitPaintGetter(
       return (
         `  SweepGradient get ${s.getterName} => SweepGradient(\n` +
         `    center: Alignment.center,\n` +
-        `    startAngle: ${doubleLiteral(r.startAngle)},\n` +
-        `    endAngle: ${doubleLiteral(r.endAngle)},\n` +
+        `    startAngle: ${doubleLiteral((r as any).startAngle)},\n` +
+        `    endAngle: ${doubleLiteral((r as any).endAngle)},\n` +
         `    stops: ${stopsLiteral(r.stops)},\n` +
         `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex)).join(', ')}],\n` +
         `  );\n\n`
@@ -143,7 +125,7 @@ function emitPaintGetter(
         `  );\n\n`
       );
     case 'IMAGE':
-      return `  String get ${s.getterName} => ${stringLiteral(`packages/design_system/assets/${r.assetName}`)};\n\n`;
+      return `  String get ${s.getterName} => ${stringLiteral(`packages/design_system/assets/${(r as any).assetName}`)};\n\n`;
   }
 }
 
@@ -166,8 +148,6 @@ function stopsLiteral(stops: IRGradientStop[]): string {
   return `const [${stops.map((s) => doubleLiteral(s.position)).join(', ')}]`;
 }
 
-// ── shadows.dart ───────────────────────────────────────────────────────────
-
 export function emitShadows(
   styles: PreparedEffectStyle[],
   varIndex: Map<string, VarRef>,
@@ -184,7 +164,6 @@ export function emitShadows(
   out += `import '../theme.dart';\n\n`;
   out += `// ignore_for_file: unused_import\n\n`;
 
-  // DSShadow tag (subclass of BoxShadow) so consumers can type-annotate.
   out += `class DSShadow extends BoxShadow {\n`;
   out += `  const DSShadow({\n`;
   out += `    super.color,\n`;
@@ -227,13 +206,7 @@ function emitShadowGetter(
   varIndex: Map<string, VarRef>,
   blurStyle: 'normal' | 'inner',
 ): string {
-  const r = s.raw as {
-    color: IRColorValue;
-    offsetX: number;
-    offsetY: number;
-    blurRadius: number;
-    spreadRadius: number;
-  };
+  const r = s.raw as any;
   const colorIsLiteral = r.color.kind === 'literal';
   const colorExpr = colorRef(r.color, varIndex);
   const constKw = colorIsLiteral ? 'const ' : '';
@@ -250,13 +223,10 @@ function emitShadowGetter(
   );
 }
 
-// ── text_styles.dart ───────────────────────────────────────────────────────
-
 export function emitTextStyles(
   styles: PreparedTextStyle[],
   varIndex: Map<string, VarRef>,
 ): string {
-  // Group by first segment (already done in prepare → groupName).
   const buckets = new Map<string, PreparedTextStyle[]>();
   for (const s of styles) {
     if (!buckets.has(s.groupName)) buckets.set(s.groupName, []);
@@ -269,7 +239,6 @@ export function emitTextStyles(
   out += `import '../theme.dart';\n\n`;
   out += `// ignore_for_file: unused_import\n\n`;
 
-  // DSTextStyle wrapper with .tint() / .styled()
   out += `class DSTextStyle extends TextStyle {\n`;
   out += `  const DSTextStyle._({\n`;
   out += `    super.color,\n`;
@@ -324,17 +293,13 @@ export function emitTextStyles(
   return out;
 }
 
-function emitTextGetter(
-  s: PreparedTextStyle,
-  varIndex: Map<string, VarRef>,
-): string {
-  const r = s.raw;
+function emitTextGetter(s: PreparedTextStyle, varIndex: Map<string, VarRef>): string {
+  const r = s.raw as IRTextStyle;
   const fontSize = textValue(r.fontSize, varIndex, 'double');
   const fontFamily = textValue(r.fontFamily, varIndex, 'String');
   const fontWeight = textValue(r.fontWeight, varIndex, 'double');
-  const lh = lineHeightExpr(r.lineHeight, fontSize, varIndex);
-  const ls = letterSpacingExpr(r.letterSpacing, fontSize, varIndex);
-
+  const lh = lineHeightExpr(r.lineHeight, varIndex);
+  const ls = letterSpacingExpr(r.letterSpacing, varIndex);
   return (
     `  DSTextStyle get ${s.getterName} {\n` +
     `    final fs = ${fontSize};\n` +
@@ -354,42 +319,26 @@ function textValue<T>(
   varIndex: Map<string, VarRef>,
   type: 'double' | 'String',
 ): string {
-  if (v.kind === 'alias') return aliasExpr(v.targetVariableId, varIndex, type);
-  if (type === 'String') return stringLiteral(v.value as unknown as string);
-  return doubleLiteral(v.value as unknown as number);
+  if ((v as any).kind === 'alias') return aliasExpr((v as any).targetVariableId, varIndex, type);
+  if (type === 'String') return stringLiteral((v as any).value as string);
+  return doubleLiteral((v as any).value as number);
 }
 
-function lineHeightExpr(
-  v: IRTextValueWithUnit<number>,
-  fontSizeExpr: string,
-  varIndex: Map<string, VarRef>,
-): string {
-  if (v.kind === 'alias')
-    return `(${aliasExpr(v.targetVariableId, varIndex, 'double')} / fs)`;
-  if (v.unit === 'AUTO') return 'null';
-  // PIXELS → ratio = px / fontSize
-  if (v.unit === 'PIXELS') return `(${doubleLiteral(v.value)} / fs)`;
-  // PERCENT (e.g. 150 = 150%) → ratio
-  return `${doubleLiteral(v.value / 100)}`;
+function lineHeightExpr(v: IRTextValueWithUnit<number>, varIndex: Map<string, VarRef>): string {
+  if ((v as any).kind === 'alias')
+    return `(${aliasExpr((v as any).targetVariableId, varIndex, 'double')} / fs)`;
+  if ((v as any).unit === 'AUTO') return 'null';
+  if ((v as any).unit === 'PIXELS') return `(${doubleLiteral((v as any).value)} / fs)`;
+  return `${doubleLiteral(((v as any).value as number) / 100)}`;
 }
 
-function letterSpacingExpr(
-  v: IRTextValueWithUnit<number>,
-  fontSizeExpr: string,
-  varIndex: Map<string, VarRef>,
-): string {
-  if (v.kind === 'alias') return aliasExpr(v.targetVariableId, varIndex, 'double');
-  if (v.unit === 'PIXELS') return doubleLiteral(v.value);
-  // PERCENT → px = value/100 * fontSize. We use fontSizeExpr so it stays
-  // reactive when font size changes via mode.
-  return `(${doubleLiteral(v.value / 100)} * fs)`;
+function letterSpacingExpr(v: IRTextValueWithUnit<number>, varIndex: Map<string, VarRef>): string {
+  if ((v as any).kind === 'alias') return aliasExpr((v as any).targetVariableId, varIndex, 'double');
+  if ((v as any).unit === 'PIXELS') return doubleLiteral((v as any).value as number);
+  return `(${doubleLiteral(((v as any).value as number) / 100)} * fs)`;
 }
 
-function aliasExpr(
-  id: string,
-  varIndex: Map<string, VarRef>,
-  type: 'double' | 'String',
-): string {
+function aliasExpr(id: string, varIndex: Map<string, VarRef>, type: 'double' | 'String'): string {
   const ref = varIndex.get(id);
   if (!ref) return type === 'String' ? "''" : '0.0';
   return [
@@ -403,3 +352,4 @@ function aliasExpr(
 function lowerFirst(s: string): string {
   return s ? s[0].toLowerCase() + s.slice(1) : s;
 }
+

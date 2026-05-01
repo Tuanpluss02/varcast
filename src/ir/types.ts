@@ -11,8 +11,8 @@ export interface IR {
 
 export interface IRCollection {
   id: string;
+  /** Raw Figma name. Targets derive their own class/type name from this. */
   name: string;
-  dartName: string;
   kind: 'primitive' | 'token';
   modes: IRMode[];
   variables: IRVariable[];
@@ -20,14 +20,15 @@ export interface IRCollection {
 
 export interface IRMode {
   id: string;
+  /** Raw Figma mode name. Targets derive their own enum case from this. */
   name: string;
-  dartName: string;
 }
 
 export interface IRVariable {
   id: string;
+  /** Raw Figma name (with `/` separators). */
   figmaName: string;
-  dartName: string;
+  /** `figmaName.split('/')`, trimmed. Targets sanitize per their own rules. */
   groupPath: string[];
   type: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN';
   scopes: VariableScope[];
@@ -87,7 +88,6 @@ export type IRPaintStyle =
 export interface IRPaintStyleBase {
   id: string;
   figmaName: string;
-  dartName: string;
   groupPath: string[];
 }
 
@@ -147,7 +147,6 @@ export type IREffectStyle =
 export interface IREffectStyleBase {
   id: string;
   figmaName: string;
-  dartName: string;
   groupPath: string[];
 }
 
@@ -186,7 +185,6 @@ export interface IRBackgroundBlur extends IREffectStyleBase {
 export interface IRTextStyle {
   id: string;
   figmaName: string;
-  dartName: string;
   groupPath: string[];
   fontFamily: IRTextValue<string>;
   fontSize: IRTextValue<number>;

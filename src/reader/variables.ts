@@ -10,7 +10,7 @@ import type {
 // Reads all local Variable Collections + their variables and converts each value to IR.
 // Aliases are preserved as `{ kind: 'alias', targetVariableId }` — never flattened.
 //
-// dartName / mode.dartName are placeholders here; sanitize.ts replaces them in Phase 4.
+// Identifier sanitization is target-specific; targets derive names from figmaName / groupPath.
 export async function readVariables(): Promise<IRCollection[]> {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   const variables = await figma.variables.getLocalVariablesAsync();
@@ -21,7 +21,6 @@ export async function readVariables(): Promise<IRCollection[]> {
     const modes: IRMode[] = col.modes.map((m: any) => ({
       id: m.modeId,
       name: m.name,
-      dartName: m.name,
     }));
 
     const irVars: IRVariable[] = colVars.map((v: any) => {
@@ -34,7 +33,6 @@ export async function readVariables(): Promise<IRCollection[]> {
       return {
         id: v.id,
         figmaName: v.name,
-        dartName: v.name,
         groupPath: v.name.split('/').map((s: any) => String(s).trim()),
         type: v.resolvedType as IRVariable['type'],
         scopes: ((v.scopes ?? []) as unknown) as VariableScope[],
@@ -51,7 +49,6 @@ export async function readVariables(): Promise<IRCollection[]> {
     return {
       id: col.id,
       name: col.name,
-      dartName: col.name,
       kind: hasAlias ? 'token' : 'primitive',
       modes,
       variables: irVars,
