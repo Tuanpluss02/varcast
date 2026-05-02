@@ -180,6 +180,65 @@ describe('readVariables', () => {
     });
   });
 
+  it('variable missing value for a mode → falls back to default mode value', async () => {
+    installVariablesMock({
+      collections: [
+        {
+          id: 'col:1',
+          name: 'Theme',
+          modes: [
+            { modeId: 'm:light', name: 'Light' },
+            { modeId: 'm:dark', name: 'Dark' },
+          ],
+        },
+      ],
+      variables: [
+        {
+          id: 'var:1',
+          name: 'background/primary',
+          variableCollectionId: 'col:1',
+          resolvedType: 'COLOR',
+          scopes: ['FILL_COLOR'],
+          hiddenFromPublishing: false,
+          // No value for the dark mode (e.g. variable created before dark mode existed).
+          valuesByMode: { 'm:light': { r: 1, g: 1, b: 1, a: 1 } },
+        },
+      ],
+    });
+
+    const result = await readVariables();
+    const v = result[0].variables[0];
+    expect(v.valuesByMode['m:light']).toEqual({
+      kind: 'literal',
+      value: { r: 1, g: 1, b: 1, a: 1 },
+    });
+    // Dark mode falls back to default (Light) — never `value: undefined`.
+    expect(v.valuesByMode['m:dark']).toEqual({
+      kind: 'literal',
+      value: { r: 1, g: 1, b: 1, a: 1 },
+    });
+  });
+
+  it('groupPath drops empty segments (trailing slash, double slash)', async () => {
+    installVariablesMock({
+      collections: [COL],
+      variables: [
+        {
+          id: 'var:1',
+          name: 'neutral//900/',
+          variableCollectionId: 'col:1',
+          resolvedType: 'COLOR',
+          scopes: [],
+          hiddenFromPublishing: false,
+          valuesByMode: { 'm:1': { r: 0, g: 0, b: 0, a: 1 } },
+        },
+      ],
+    });
+
+    const result = await readVariables();
+    expect(result[0].variables[0].groupPath).toEqual(['neutral', '900']);
+  });
+
   it('STRING and BOOLEAN literals carry through', async () => {
     installVariablesMock({
       collections: [COL],

@@ -26,9 +26,22 @@ export interface TypeMapping {
   literalBool(b: boolean): string;
 }
 
+export interface TargetWarning {
+  /** Source target id (for namespacing in UI). */
+  targetId: string;
+  /** Stable warning code (e.g. "KEYWORD_CONFLICT", "DUPLICATE_LEAF_NAME"). */
+  code: string;
+  /** Human-readable message ready for display. */
+  message: string;
+  /** Optional structured payload for UI inspection. */
+  details?: Record<string, unknown>;
+}
+
 export interface PreparedIR {
   /** Per-target manifest section for this run. */
   nextManifestSection: ManifestTargetSection;
+  /** Optional non-fatal diagnostics (keyword fixes, dedup, etc.). */
+  warnings?: TargetWarning[];
 }
 
 export interface Target {

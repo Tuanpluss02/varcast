@@ -50,6 +50,8 @@ export interface PreparedRNCollection {
 }
 
 export interface PreparedRN {
+  /** All known modes across collections (used for composites). */
+  modes: PreparedRNMode[];
   collections: PreparedRNCollection[];
   paintStyles: PreparedRNPaintStyle[];
   effectStyles: PreparedRNEffectStyle[];
@@ -99,6 +101,7 @@ function kebab(raw: string): string {
 }
 
 export function prepareRN(ir: IR, manifest: Manifest | null): PreparedRN {
+  const modes = collectAllModes(ir);
   const collections: PreparedRNCollection[] = ir.collections.map((c) =>
     prepareCollection(c, manifest),
   );
@@ -119,7 +122,18 @@ export function prepareRN(ir: IR, manifest: Manifest | null): PreparedRN {
   );
 
   const nextManifestSection = buildNextManifestSection(ir, collections);
-  return { collections, paintStyles, effectStyles, textStyles, resolvedVarByMode, nextManifestSection };
+  return { modes, collections, paintStyles, effectStyles, textStyles, resolvedVarByMode, nextManifestSection };
+}
+
+function collectAllModes(ir: IR): PreparedRNMode[] {
+  const byId = new Map<string, PreparedRNMode>();
+  for (const c of ir.collections) {
+    for (const m of c.modes) {
+      if (byId.has(m.id)) continue;
+      byId.set(m.id, { id: m.id, name: m.name, key: modeKey(m.name) });
+    }
+  }
+  return [...byId.values()];
 }
 
 function prepareCollection(col: IRCollection, manifest: Manifest | null): PreparedRNCollection {
@@ -131,7 +145,7 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
   const modes: PreparedRNMode[] = col.modes.map((m) => ({
     id: m.id,
     name: m.name,
-    key: camel(m.name),
+    key: modeKey(m.name),
   }));
 
   const variables: PreparedRNVariable[] = [];
@@ -165,6 +179,12 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
     modes,
     variables,
   };
+}
+
+function modeKey(modeName: string): string {
+  const base = camel(modeName);
+  // prefer explicit semantic keys like `darkMode`/`lightMode`
+  return /mode$/i.test(base) ? base : `${base}Mode`;
 }
 
 function buildNextManifestSection(ir: IR, cols: PreparedRNCollection[]): ManifestTargetSection {

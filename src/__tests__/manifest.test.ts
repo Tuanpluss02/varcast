@@ -22,7 +22,7 @@ function flutterManifest(
 }
 
 describe('manifest', () => {
-  it('resolveStableName: rename in Figma keeps dartName stable by id', () => {
+  it('resolveStableName: rename in Figma keeps stable name by id', () => {
     const m = flutterManifest({ 'var:1': 'n900' });
     expect(resolveStableName('var:1', 'charcoal', m)).toBe('n900');
     expect(resolveStableName('var:2', 'n800', m)).toBe('n800');
@@ -36,6 +36,18 @@ describe('manifest', () => {
     expect(resolveStableName('var:1', 'bgSecondary', m)).toBe('bgSecondary2');
     // keyword fix stays as-is
     expect(resolveStableName('var:2', 'default', m)).toBe('default_');
+  });
+
+  it('legacy `_2` rename keeps original when target name already used by sibling', () => {
+    // Both `bgSecondary_2` and `bgSecondary2` exist in the manifest (e.g. one
+    // legacy variable + one variable that was deduped after migration). The
+    // rename must not silently merge them onto the same Dart identifier.
+    const m = flutterManifest({
+      'var:1': 'bgSecondary_2',
+      'var:2': 'bgSecondary2',
+    });
+    expect(resolveStableName('var:1', 'bgSecondary', m)).toBe('bgSecondary_2');
+    expect(resolveStableName('var:2', 'bgSecondary', m)).toBe('bgSecondary2');
   });
 
   it('diffManifest: added/removed/renamed detected by variable id', () => {

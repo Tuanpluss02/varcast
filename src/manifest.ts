@@ -10,7 +10,7 @@ import {
   resolveStableVariableName,
   resolveStableCollectionName as coreResolveStableCollectionName,
 } from './core/manifest';
-import type { Manifest, ManifestDiff } from './core/manifest';
+import type { Manifest, ManifestDiff, ManifestTargetSection } from './core/manifest';
 
 export type {
   Manifest,
@@ -42,7 +42,11 @@ export function resolveStableName(
     derivedLeafName,
     manifest,
   );
-  return normalizeLegacyLeafName(raw);
+  // Normalize against the full Flutter section so renames detect collisions
+  // (a legacy `bgSecondary_2` should not be renamed to `bgSecondary2` if some
+  // other variable in the same manifest is already called `bgSecondary2`).
+  const section = manifest?.targets?.[FLUTTER_TARGET_ID];
+  return normalizeLegacyLeafName(raw, section, variableId);
 }
 
 export function resolveStableCollectionName(
@@ -68,11 +72,27 @@ export function diffManifest(
 // Migration: older Flutter generators used `_2`, `_3` suffixes for dedup.
 // Dart public members should be lowerCamelCase without underscores. Convert
 // `foo_2` → `foo2`. Keyword fix-ups like `default_` are preserved.
-function normalizeLegacyLeafName(name: string): string {
+//
+// Collision-safe: if the renamed form matches the stable name of a *different*
+// variable in the same manifest section, keep the original name and let the
+// downstream dedup pass disambiguate. This prevents a silent rename that would
+// merge two variables onto the same Dart identifier.
+function normalizeLegacyLeafName(
+  name: string,
+  section: ManifestTargetSection | undefined,
+  variableId: string,
+): string {
   const m = /^(.+)_([0-9]+)$/.exec(name);
   if (!m) return name;
   const base = m[1];
   const n = m[2];
   if (base.endsWith('_')) return name;
-  return `${base}${n}`;
+  const renamed = `${base}${n}`;
+  if (section?.variables) {
+    for (const [otherId, otherName] of Object.entries(section.variables)) {
+      if (otherId === variableId) continue;
+      if (otherName === renamed) return name;
+    }
+  }
+  return renamed;
 }

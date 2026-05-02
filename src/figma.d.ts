@@ -26,4 +26,5 @@ declare global {
   type TextStyle = any;
   type LineHeight = any;
   type LetterSpacing = any;
+  type FontName = { family: string; style: string };
 }

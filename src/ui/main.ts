@@ -1,7 +1,7 @@
 import { byId } from './lib/dom';
 import { fmtDiff, fmtSummary } from './lib/format';
 import type { PluginToUiMessage } from './lib/messages';
-import { postToPlugin } from './lib/messages';
+import { formatError, formatWarning, postToPlugin } from './lib/messages';
 import { setupModal } from './components/modal';
 import { showScreen } from './components/screens';
 import type { Screens } from './components/screens';
@@ -118,7 +118,8 @@ byId<HTMLButtonElement>('cancelWarnings').addEventListener('click', () => {
 });
 byId<HTMLButtonElement>('continueWarnings').addEventListener('click', () => {
   showScreen(screens, 'ready');
-  postToPlugin({ type: 'continue' });
+  const options = collectOptions({ targetId, packageName, leafPrefix, leafSuffix, toggles });
+  postToPlugin({ type: 'continue', options });
 });
 
 byId<HTMLButtonElement>('downloadZip').addEventListener('click', () => {
@@ -144,18 +145,14 @@ window.onmessage = (e: MessageEvent) => {
   if (msg.type === 'validation-errors') {
     const errs = msg.errors || [];
     errTitle.textContent = `✗ ${errs.length} errors — fix in Figma before exporting`;
-    errList.textContent = errs
-      .map((er) => `${er.type}: ${(er.path || []).join(' → ')}`)
-      .join('\n');
+    errList.textContent = errs.map(formatError).join('\n');
     showScreen(screens, 'errors');
     return;
   }
 
   if (msg.type === 'validation-warnings') {
     const ws = msg.warnings || [];
-    warnList.textContent = ws
-      .map((w) => `${w.type}: ${(w.path || []).join(' → ')}`)
-      .join('\n');
+    warnList.textContent = ws.map(formatWarning).join('\n');
     state.lastDiff = msg.diff || state.lastDiff;
     showScreen(screens, 'warnings');
     return;

@@ -180,6 +180,59 @@ describe('readPaintStyles', () => {
     });
   });
 
+  it('GRADIENT_RADIAL with non-identity transform → center & radius scale accordingly', async () => {
+    // A transform that doubles object-space (scale 2) shrinks the gradient
+    // ellipse in layer space — the inverse maps (0.5, 0.5) → (0.25, 0.25)
+    // with half-axes of 0.25 each.
+    installPaintStylesMock([
+      {
+        id: 'S:r2',
+        name: 'Gradient/Radial Offset',
+        paints: [
+          {
+            type: 'GRADIENT_RADIAL',
+            gradientTransform: [
+              [2, 0, 0],
+              [0, 2, 0],
+            ],
+            gradientStops: [{ position: 0, color: { r: 0, g: 0, b: 0, a: 1 } }],
+          },
+        ],
+      },
+    ]);
+
+    const result = await readPaintStyles();
+    const r = result[0] as Extract<typeof result[0], { type: 'GRADIENT_RADIAL' }>;
+    expect(r.center.x).toBeCloseTo(0.25, 4);
+    expect(r.center.y).toBeCloseTo(0.25, 4);
+    expect(r.radius).toBeCloseTo(0.25, 4);
+  });
+
+  it('GRADIENT_ANGULAR transform encodes start angle', async () => {
+    // Rotate 90° → first column = (cos90, sin90) = (0, 1) → start = atan2(1,0) = π/2.
+    installPaintStylesMock([
+      {
+        id: 'S:a90',
+        name: 'Gradient/Sweep90',
+        paints: [
+          {
+            type: 'GRADIENT_ANGULAR',
+            gradientTransform: [
+              [0, -1, 0],
+              [1, 0, 0],
+            ],
+            gradientStops: [{ position: 0, color: { r: 0, g: 0, b: 0, a: 1 } }],
+          },
+        ],
+      },
+    ]);
+
+    const result = await readPaintStyles();
+    const r = result[0] as Extract<typeof result[0], { type: 'GRADIENT_ANGULAR' }>;
+    expect(r.startAngle).toBeCloseTo(Math.PI / 2, 4);
+    expect(r.endAngle).toBeCloseTo(Math.PI / 2 + 2 * Math.PI, 4);
+  });
+
   it('IMAGE styles are skipped (no asset export)', async () => {
     installPaintStylesMock([
       {

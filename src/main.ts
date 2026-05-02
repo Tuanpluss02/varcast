@@ -77,7 +77,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       const oldManifest: Manifest | null = normalizeManifest(rawManifest);
       const targets =
         targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
-      const { files, nextManifest } = runEngine(
+      const { files, nextManifest, warnings: targetWarnings } = runEngine(
         ir,
         targets,
         oldManifest,
@@ -85,10 +85,22 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       );
       const diff = diffManifest(oldManifest, nextManifest);
 
+      // Merge IR validation warnings with per-target prepare warnings so the
+      // UI can display all non-fatal diagnostics in one place.
+      const mergedWarnings = [
+        ...result.warnings,
+        ...targetWarnings.map((w) => ({
+          type: 'TARGET_WARNING' as const,
+          targetId: w.targetId,
+          code: w.code,
+          message: w.message,
+        })),
+      ];
+
       const changelog = generateChangelog(diff);
       pending = {
         ir,
-        warnings: result.warnings,
+        warnings: mergedWarnings,
         errors: result.errors,
         oldManifest,
         nextManifest,
@@ -100,8 +112,8 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       };
 
       // If warnings exist, show warning screen before allowing export.
-      if (result.warnings.length > 0) {
-        figma.ui.postMessage({ type: 'validation-warnings', warnings: result.warnings, diff });
+      if (mergedWarnings.length > 0) {
+        figma.ui.postMessage({ type: 'validation-warnings', warnings: mergedWarnings, diff });
         return;
       }
       figma.ui.postMessage({
@@ -133,6 +145,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       type: 'ready',
       diff: pending.diff,
       summary: summarize(pending.ir, pending.files),
+      options: pending.options,
     });
   }
 

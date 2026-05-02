@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { IR } from '../../../ir/types';
 import { runEngine } from '../../../core/emit_engine';
 import { reactNativeTarget } from '../../../targets/react_native';
+import { makeIrForRnCompositesFixture } from '../../fixtures/ir_composites_minimal';
 
 function fileMap(files: { path: string; contents: string }[]) {
   const m = new Map<string, string>();
@@ -11,65 +11,7 @@ function fileMap(files: { path: string; contents: string }[]) {
 
 describe('react_native composites mapping', () => {
   it('emits textStyles and shadows with per-mode values', () => {
-    const ir: IR = {
-      version: '1.0',
-      fileKey: 'k',
-      generatedAt: new Date(0).toISOString(),
-      collections: [
-        {
-          id: 'col:1',
-          name: 'Numbers',
-          kind: 'primitive',
-          modes: [
-            { id: 'm:dark', name: 'Dark' },
-            { id: 'm:light', name: 'Light' },
-          ],
-          variables: [
-            {
-              id: 'var:size',
-              figmaName: 'font/size',
-              groupPath: ['font', 'size'],
-              type: 'FLOAT',
-              scopes: [],
-              hiddenFromPublishing: false,
-              emitToPublic: true,
-              valuesByMode: {
-                'm:dark': { kind: 'literal', value: 16 },
-                'm:light': { kind: 'literal', value: 18 },
-              },
-            },
-          ],
-        },
-      ],
-      composites: {
-        paintStyles: [],
-        effectStyles: [
-          {
-            id: 'E:1',
-            figmaName: 'Shadow/Primary',
-            groupPath: ['Shadow', 'Primary'],
-            type: 'DROP_SHADOW',
-            color: { kind: 'literal', rgba: { r: 0, g: 0, b: 0, a: 0.5 } },
-            offsetX: 0,
-            offsetY: 2,
-            blurRadius: 8,
-            spreadRadius: 0,
-          },
-        ],
-        textStyles: [
-          {
-            id: 'T:1',
-            figmaName: 'Body/Regular',
-            groupPath: ['Body', 'Regular'],
-            fontFamily: { kind: 'literal', value: 'Inter' },
-            fontSize: { kind: 'alias', targetVariableId: 'var:size' },
-            fontWeight: { kind: 'literal', value: 400 },
-            lineHeight: { kind: 'literal', value: 150, unit: 'PERCENT' },
-            letterSpacing: { kind: 'literal', value: 0, unit: 'PIXELS' },
-          },
-        ],
-      },
-    };
+    const ir = makeIrForRnCompositesFixture();
 
     const out = runEngine(ir, [reactNativeTarget], null, { react_native: { packageName: 'ds' } });
     const files = fileMap(out.files);
@@ -77,6 +19,11 @@ describe('react_native composites mapping', () => {
     const shadow = files.get('src/composites/shadows.ts')!;
     expect(text).toContain('export const textStyles');
     expect(text).toContain('Inter');
+    // Should key composites by mode keys (e.g. darkMode/lightMode) instead of raw mode ids.
+    expect(text).toContain('"darkMode"');
+    expect(text).toContain('"lightMode"');
+    expect(text).not.toContain('m:dark');
+    expect(text).not.toContain('m:light');
     expect(shadow).toContain('shadowOpacity');
     expect(shadow).toContain('#00000080'); // 0.5 alpha -> 0x80
   });

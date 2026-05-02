@@ -47,10 +47,11 @@ export function validate(ir: IR): ValidationResult {
 
 // ── Rule 1: cycle detection ─────────────────────────────────────────────────
 //
-// DFS from each variable, treating alias targets as edges. A cycle is reported
-// once per unique vertex set; we canonicalise the path by rotating to start at
-// the lexicographically smallest id, so the same cycle reached from different
-// entry points dedupes.
+// Iterative DFS with a global "visited" set: each variable is explored at most
+// once across the whole pass (O(V + E) overall). When DFS revisits a node
+// already on the current stack we have a back-edge → cycle. Cycles are
+// canonicalised (rotated to start at the lexicographically smallest id) so the
+// same cycle reached from different entry points dedupes.
 
 function detectCycles(
   col: IRCollection,
@@ -58,41 +59,65 @@ function detectCycles(
   errors: ValidationError[],
 ): void {
   const reported = new Set<string>();
+  const visited = new Set<string>();
 
   for (const v of col.variables) {
-    const cycle = findCycle(v.id, allVars);
-    if (!cycle) continue;
-    const key = canonicalCycleKey(cycle);
-    if (reported.has(key)) continue;
-    reported.add(key);
-    errors.push({ type: 'CYCLE', path: cycle });
+    if (visited.has(v.id)) continue;
+    findCyclesFrom(v.id, allVars, visited, reported, errors);
   }
 }
 
-function findCycle(
+type Frame = { id: string; aliasIds: string[]; cursor: number };
+
+function findCyclesFrom(
   startId: string,
   allVars: Map<string, IRVariable>,
-): string[] | null {
-  const stack: { id: string; path: string[] }[] = [
-    { id: startId, path: [] },
-  ];
-  // Iterative DFS to avoid stack blowups on pathological graphs.
-  while (stack.length > 0) {
-    const { id, path } = stack.pop()!;
-    if (path.includes(id)) {
-      const start = path.indexOf(id);
-      return [...path.slice(start), id];
-    }
+  visited: Set<string>,
+  reported: Set<string>,
+  errors: ValidationError[],
+): void {
+  const onStack = new Set<string>();
+  const stack: Frame[] = [];
+
+  const push = (id: string) => {
+    if (visited.has(id) || onStack.has(id)) return;
     const v = allVars.get(id);
-    if (!v) continue;
-    const nextPath = [...path, id];
-    for (const val of Object.values(v.valuesByMode)) {
-      if (val.kind === 'alias') {
-        stack.push({ id: val.targetVariableId, path: nextPath });
+    const aliasIds: string[] = [];
+    if (v) {
+      for (const val of Object.values(v.valuesByMode)) {
+        if (val.kind === 'alias') aliasIds.push(val.targetVariableId);
       }
     }
+    onStack.add(id);
+    stack.push({ id, aliasIds, cursor: 0 });
+  };
+
+  push(startId);
+
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1];
+    if (top.cursor >= top.aliasIds.length) {
+      onStack.delete(top.id);
+      visited.add(top.id);
+      stack.pop();
+      continue;
+    }
+    const next = top.aliasIds[top.cursor++];
+    if (onStack.has(next)) {
+      // Back-edge: extract the cycle from the current stack.
+      const startIdx = stack.findIndex((f) => f.id === next);
+      const cycle = stack.slice(startIdx).map((f) => f.id);
+      cycle.push(next);
+      const key = canonicalCycleKey(cycle);
+      if (!reported.has(key)) {
+        reported.add(key);
+        errors.push({ type: 'CYCLE', path: cycle });
+      }
+      continue;
+    }
+    if (visited.has(next)) continue;
+    push(next);
   }
-  return null;
 }
 
 function canonicalCycleKey(cycle: string[]): string {

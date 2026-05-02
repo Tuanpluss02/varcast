@@ -53,7 +53,9 @@ export function emitController(collections: PreparedCollection[]): string {
 
   out += `  void _detachControllers() {\n`;
   for (const col of collections) {
-    out += `    _${col.accessor}Anim?.dispose(); _${col.accessor}Anim = null;\n`;
+    out += `    _${col.accessor}Anim?.removeListener(notifyListeners);\n`;
+    out += `    _${col.accessor}Anim?.dispose();\n`;
+    out += `    _${col.accessor}Anim = null;\n`;
   }
   out += `  }\n\n`;
 

@@ -127,6 +127,30 @@ describe('prepareIR keyword conflict warnings', () => {
     expect(leaves).toEqual(['primary', 'primary2', 'primary3']);
   });
 
+  it('manifest carries a Dart keyword as stable name → keyword fix re-applied', () => {
+    // Pretend an older generator wrote `default` into the manifest before
+    // keyword handling existed. The new prepare must detect and fix it.
+    const ir = baseIR([makeVar('var:1', ['Border', 'primary'])]);
+    const manifest: Manifest = {
+      version: '2.0',
+      fileKey: 'k',
+      lastExportedAt: new Date(0).toISOString(),
+      targets: {
+        flutter: {
+          variables: { 'var:1': 'default' },
+          collections: { 'col:1': 'ColorToken' },
+        },
+      },
+    };
+    const prepared = prepareIR(ir, manifest);
+    const v = prepared.collections[0].variables[0];
+    expect(v.leafName).toBe('default_');
+    expect(v.stableLeafName).toBe('default_');
+    const w = prepared.warnings.find((w) => w.type === 'KEYWORD_CONFLICT');
+    expect(w).toBeDefined();
+    expect((w as { fixed: string }).fixed).toBe('default_');
+  });
+
   it('siblings with same leaf in different parent groups are NOT duplicates', () => {
     const ir = baseIR([
       makeVar('v:1', ['Background', 'primary']),

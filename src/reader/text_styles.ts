@@ -17,28 +17,70 @@ export async function readTextStyles(): Promise<IRTextStyle[]> {
 function buildTextStyle(style: TextStyle): IRTextStyle {
   const bv = ((style as { boundVariables?: BoundVarMap }).boundVariables ?? {}) as BoundVarMap;
 
-  const lh = style.lineHeight as LineHeight;
-  const lineHeight: IRTextValueWithUnit<number> = bv['lineHeight']
-    ? { kind: 'alias', targetVariableId: bv['lineHeight'].id }
-    : lh.unit === 'AUTO'
-      ? { kind: 'literal', value: 0, unit: 'AUTO' }
-      : { kind: 'literal', value: lh.value, unit: lh.unit };
+  const lineHeight = readLineHeight(style, bv);
+  const letterSpacing = readLetterSpacing(style, bv);
 
-  const ls = style.letterSpacing as LetterSpacing;
-  const letterSpacing: IRTextValueWithUnit<number> = bv['letterSpacing']
-    ? { kind: 'alias', targetVariableId: bv['letterSpacing'].id }
-    : { kind: 'literal', value: ls.value, unit: ls.unit };
+  const fontName = (style.fontName ?? {}) as Partial<FontName>;
+  const family = typeof fontName.family === 'string' ? fontName.family : '';
+  const styleStr = typeof fontName.style === 'string' ? fontName.style : '';
+  // Prefer Figma's explicit numeric weight when present, otherwise infer from
+  // the style name. Both `style.fontWeight` (some plugin API versions) and
+  // `style.fontName.style` are best-effort sources.
+  const explicitWeight = (style as { fontWeight?: unknown }).fontWeight;
+  const fallbackWeight =
+    typeof explicitWeight === 'number' && Number.isFinite(explicitWeight)
+      ? explicitWeight
+      : styleStr
+        ? styleNameToWeight(styleStr)
+        : 400;
+  const fontSize = typeof style.fontSize === 'number' ? style.fontSize : 0;
 
   return {
     id: style.id,
     figmaName: style.name,
-    groupPath: style.name.split('/').map((s: any) => String(s).trim()),
-    fontFamily: textVal<string>(bv, 'fontFamily', style.fontName.family),
-    fontSize: textVal<number>(bv, 'fontSize', style.fontSize),
-    fontWeight: textVal<number>(bv, 'fontWeight', style.fontName.style ? styleNameToWeight(style.fontName.style) : 400),
+    groupPath: String(style.name)
+      .split('/')
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0),
+    fontFamily: textVal<string>(bv, 'fontFamily', family),
+    fontSize: textVal<number>(bv, 'fontSize', fontSize),
+    fontWeight: textVal<number>(bv, 'fontWeight', fallbackWeight),
     lineHeight,
     letterSpacing,
   };
+}
+
+function readLineHeight(
+  style: TextStyle,
+  bv: BoundVarMap,
+): IRTextValueWithUnit<number> {
+  if (bv['lineHeight']) {
+    return { kind: 'alias', targetVariableId: bv['lineHeight'].id };
+  }
+  const lh = style.lineHeight as Partial<LineHeight> | undefined;
+  if (!lh || lh.unit === 'AUTO') {
+    return { kind: 'literal', value: 0, unit: 'AUTO' };
+  }
+  const value = typeof lh.value === 'number' && Number.isFinite(lh.value) ? lh.value : 0;
+  const unit = lh.unit === 'PIXELS' || lh.unit === 'PERCENT' ? lh.unit : 'AUTO';
+  if (unit === 'AUTO') return { kind: 'literal', value: 0, unit: 'AUTO' };
+  return { kind: 'literal', value, unit };
+}
+
+function readLetterSpacing(
+  style: TextStyle,
+  bv: BoundVarMap,
+): IRTextValueWithUnit<number> {
+  if (bv['letterSpacing']) {
+    return { kind: 'alias', targetVariableId: bv['letterSpacing'].id };
+  }
+  const ls = style.letterSpacing as Partial<LetterSpacing> | undefined;
+  if (!ls) return { kind: 'literal', value: 0, unit: 'PIXELS' };
+  const value = typeof ls.value === 'number' && Number.isFinite(ls.value) ? ls.value : 0;
+  // letterSpacing in Figma is PIXELS or PERCENT — never AUTO. Default to PIXELS
+  // if the runtime hands us something unexpected.
+  const unit = ls.unit === 'PERCENT' ? 'PERCENT' : 'PIXELS';
+  return { kind: 'literal', value, unit };
 }
 
 function textVal<T>(bv: BoundVarMap, key: string, fallback: T): IRTextValue<T> {

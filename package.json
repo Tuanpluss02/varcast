@@ -5,6 +5,8 @@
   "scripts": {
     "build": "node esbuild.config.js",
     "watch": "node esbuild.config.js --watch",
+    "leakcheck": "node scripts/leak_check.js",
+    "smoke:rn": "pnpm build && node scripts/rn_smoke_cli.mjs && node scripts/rn_smoke_runtime.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

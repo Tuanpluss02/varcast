@@ -119,6 +119,57 @@ describe('readTextStyles', () => {
     });
   });
 
+  it('missing lineHeight/letterSpacing fields → safe defaults (no undefined)', async () => {
+    installTextStylesMock([
+      {
+        id: 'T:safe',
+        name: 'Sketch',
+        // No fontName, no lineHeight, no letterSpacing — minimal style.
+        fontSize: 14,
+      },
+    ]);
+
+    const result = await readTextStyles();
+    const s = result[0];
+    expect(s.fontFamily).toEqual({ kind: 'literal', value: '' });
+    expect(s.fontWeight).toEqual({ kind: 'literal', value: 400 });
+    expect(s.lineHeight).toEqual({ kind: 'literal', value: 0, unit: 'AUTO' });
+    expect(s.letterSpacing).toEqual({ kind: 'literal', value: 0, unit: 'PIXELS' });
+  });
+
+  it('explicit numeric fontWeight wins over fontName.style heuristic', async () => {
+    installTextStylesMock([
+      {
+        id: 'T:weight',
+        name: 'Custom',
+        fontName: { family: 'Inter', style: 'Regular' },
+        fontWeight: 950,
+        fontSize: 16,
+        lineHeight: { value: 24, unit: 'PIXELS' },
+        letterSpacing: { value: 0, unit: 'PIXELS' },
+      },
+    ]);
+
+    const result = await readTextStyles();
+    expect(result[0].fontWeight).toEqual({ kind: 'literal', value: 950 });
+  });
+
+  it('groupPath drops empty segments (leading/trailing slash)', async () => {
+    installTextStylesMock([
+      {
+        id: 'T:slash',
+        name: '/Display/H1/',
+        fontName: { family: 'Inter', style: 'Bold' },
+        fontSize: 32,
+        lineHeight: { value: 40, unit: 'PIXELS' },
+        letterSpacing: { value: 0, unit: 'PIXELS' },
+      },
+    ]);
+
+    const result = await readTextStyles();
+    expect(result[0].groupPath).toEqual(['Display', 'H1']);
+  });
+
   it('groupPath split on /', async () => {
     installTextStylesMock([
       {

@@ -19,7 +19,10 @@ function buildEffect(style: EffectStyle, effect: Effect): IREffectStyle | null {
   const base = {
     id: style.id,
     figmaName: style.name,
-    groupPath: style.name.split('/').map((s: any) => String(s).trim()),
+    groupPath: String(style.name)
+      .split('/')
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0),
   };
 
   switch (effect.type) {

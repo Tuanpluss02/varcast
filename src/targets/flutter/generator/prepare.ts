@@ -11,6 +11,7 @@ import {
   sanitize,
   sanitizeIdentifier,
 } from '../../../sanitize';
+import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
 import type { Manifest } from '../../../manifest';
 import { resolveStableCollectionName, resolveStableName } from '../../../manifest';
 import type { ExportOptions } from './options';
@@ -151,8 +152,31 @@ export function prepareIR(
 }
 
 // Disallow collisions with Flutter/Dart SDK symbols that show up in generated
-// files (e.g. `FontWeight`, `Color`). Keep this list small and additive.
-const DISALLOWED_COLLECTION_CLASS_NAMES = new Set(['FontWeight', 'Color']);
+// files. The list covers types referenced anywhere in the generated package
+// (controller, theme, composites). Keep additive — a designer-chosen
+// collection name that shadows a Flutter SDK class would silently break
+// imports in consumer code.
+const DISALLOWED_COLLECTION_CLASS_NAMES = new Set([
+  'FontWeight',
+  'Color',
+  'TextStyle',
+  'BoxShadow',
+  'Gradient',
+  'LinearGradient',
+  'RadialGradient',
+  'SweepGradient',
+  'ImageFilter',
+  'AnimationController',
+  'ChangeNotifier',
+  'ThemeData',
+  'AppTheme',
+  'DesignSystemController',
+  'DSColorStyles',
+  'DSShadows',
+  'DSStyles',
+  'DSTextStyle',
+  'DSShadow',
+]);
 
 function prepareCollection(
   col: IRCollection,
@@ -197,6 +221,21 @@ function prepareCollection(
       });
     }
     let stableLeaf = resolveStableName(v.id, leafName, manifest);
+    // Re-apply keyword fix: an old manifest may carry a leaf name that is a
+    // Dart keyword (e.g. emitted before keyword handling existed). Without
+    // this guard we'd emit `default` and break Dart compilation.
+    if (DART_KEYWORDS.has(stableLeaf)) {
+      const fixed = `${stableLeaf}_`;
+      if (notes.keywordFixedFrom === undefined) {
+        warnings.push({
+          type: 'KEYWORD_CONFLICT',
+          variableId: v.id,
+          original: stableLeaf,
+          fixed,
+        });
+      }
+      stableLeaf = fixed;
+    }
     stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
     const emittedLeaf = applyLeafAffixes(
       stableLeaf,

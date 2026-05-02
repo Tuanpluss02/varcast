@@ -88,6 +88,42 @@ describe('cycle detection', () => {
     );
   });
 
+  it('detects cycle reachable via a non-entry chain', () => {
+    // C → B → A → B forms a cycle (A↔B). Entry is C which is not on the cycle.
+    const ir = makeIR({
+      collections: [
+        makeCol('col:1', [M1], [
+          makeVar('v:C', ['C'], { 'm:1': { kind: 'alias', targetVariableId: 'v:B' } }),
+          makeVar('v:B', ['B'], { 'm:1': { kind: 'alias', targetVariableId: 'v:A' } }),
+          makeVar('v:A', ['A'], { 'm:1': { kind: 'alias', targetVariableId: 'v:B' } }),
+        ]),
+      ],
+    });
+
+    const result = validate(ir);
+    const cycles = result.errors.filter((e) => e.type === 'CYCLE');
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0].path).toEqual(expect.arrayContaining(['v:A', 'v:B']));
+    expect(cycles[0].path).not.toContain('v:C');
+  });
+
+  it('two disjoint cycles in the same collection → reported separately', () => {
+    const ir = makeIR({
+      collections: [
+        makeCol('col:1', [M1], [
+          makeVar('v:A1', ['A1'], { 'm:1': { kind: 'alias', targetVariableId: 'v:A2' } }),
+          makeVar('v:A2', ['A2'], { 'm:1': { kind: 'alias', targetVariableId: 'v:A1' } }),
+          makeVar('v:B1', ['B1'], { 'm:1': { kind: 'alias', targetVariableId: 'v:B2' } }),
+          makeVar('v:B2', ['B2'], { 'm:1': { kind: 'alias', targetVariableId: 'v:B1' } }),
+        ]),
+      ],
+    });
+
+    const result = validate(ir);
+    const cycles = result.errors.filter((e) => e.type === 'CYCLE');
+    expect(cycles).toHaveLength(2);
+  });
+
   it('non-cyclic alias chain → no cycle', () => {
     const ir = makeIR({
       collections: [

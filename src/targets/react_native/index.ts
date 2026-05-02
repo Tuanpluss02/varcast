@@ -34,7 +34,7 @@ export const reactNativeTarget: Target = {
   },
 
   emit(prepared: PreparedIR, options: unknown): EmittedFile[] {
-    const o = (options as ReactNativeOptions | undefined) ?? DEFAULT_RN_OPTIONS;
+    const o = mergeRnOptions(options);
     const base: EmittedFile[] = [
       { path: 'package.json', contents: packageJson(o) },
       { path: 'tsconfig.json', contents: tsconfigJson() },
@@ -46,8 +46,51 @@ export const reactNativeTarget: Target = {
     ];
     const colFiles = emitCollections(prepared as any);
     const runtimeFiles = emitRuntime(prepared as any);
-    const compositeFiles = emitComposites(prepared as any);
+    const compositeFiles = emitComposites(prepared as any).filter((f) => {
+      if (f.path.endsWith('colorStyles.ts')) return o.include.composites.colorStyles;
+      if (f.path.endsWith('shadows.ts')) return o.include.composites.shadows;
+      if (f.path.endsWith('textStyles.ts')) return o.include.composites.textStyles;
+      return true;
+    });
     return [...base, ...runtimeFiles, ...compositeFiles, ...colFiles];
   },
 };
+
+// Merge user-supplied RN options with defaults so partial inputs (e.g. just
+// `{ packageName }` from a test or older UI) still produce a fully-formed
+// options object.
+type RnIncludePartial = {
+  primitives?: boolean;
+  tokens?: boolean;
+  composites?: {
+    colorStyles?: boolean;
+    shadows?: boolean;
+    textStyles?: boolean;
+  };
+};
+
+type RnOptionsPartial = {
+  packageName?: string;
+  include?: RnIncludePartial;
+};
+
+function mergeRnOptions(options: unknown): ReactNativeOptions {
+  const partial: RnOptionsPartial = (options ?? {}) as RnOptionsPartial;
+  const includeIn: RnIncludePartial = partial.include ?? {};
+  const compositesIn = includeIn.composites ?? {};
+  return {
+    packageName: partial.packageName ?? DEFAULT_RN_OPTIONS.packageName,
+    include: {
+      primitives: includeIn.primitives ?? DEFAULT_RN_OPTIONS.include.primitives,
+      tokens: includeIn.tokens ?? DEFAULT_RN_OPTIONS.include.tokens,
+      composites: {
+        colorStyles:
+          compositesIn.colorStyles ?? DEFAULT_RN_OPTIONS.include.composites.colorStyles,
+        shadows: compositesIn.shadows ?? DEFAULT_RN_OPTIONS.include.composites.shadows,
+        textStyles:
+          compositesIn.textStyles ?? DEFAULT_RN_OPTIONS.include.composites.textStyles,
+      },
+    },
+  };
+}
 

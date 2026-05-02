@@ -31,9 +31,9 @@ function emitColorStyles(styles: PreparedRNPaintStyle[], prepared: PreparedRN): 
     if (s.type === 'SOLID') {
       // resolve per mode; if alias can't resolve, keep null.
       const byMode: Record<string, string | null> = {};
-      for (const modeId of Object.keys(prepared.resolvedVarByMode)) {
-        const hex = resolveColorValueToHex(modeId, r.color, prepared.resolvedVarByMode);
-        byMode[modeId] = hex;
+      for (const mode of prepared.modes) {
+        const hex = resolveColorValueToHex(mode.id, r.color, prepared.resolvedVarByMode);
+        byMode[mode.key] = hex;
       }
       out.solid[s.getterName] = byMode;
     } else {
@@ -57,10 +57,10 @@ function emitShadows(styles: PreparedRNEffectStyle[], prepared: PreparedRN): str
     const r: any = s.raw as any;
     if (s.type === 'DROP_SHADOW') {
       const byMode: Record<string, any> = {};
-      for (const modeId of Object.keys(prepared.resolvedVarByMode)) {
-        const hex = resolveColorValueToHex(modeId, r.color, prepared.resolvedVarByMode);
+      for (const mode of prepared.modes) {
+        const hex = resolveColorValueToHex(mode.id, r.color, prepared.resolvedVarByMode);
         const opacity = hex ? alphaFromHex(hex) : 1;
-        byMode[modeId] = {
+        byMode[mode.key] = {
           shadowColor: hex ?? '#00000000',
           shadowOffset: { width: r.offsetX, height: r.offsetY },
           shadowRadius: r.blurRadius,
@@ -90,25 +90,30 @@ function emitTextStyles(styles: PreparedRNTextStyle[], prepared: PreparedRN): st
   for (const s of styles) {
     const r = s.raw as any;
     const byMode: Record<string, any> = {};
-    for (const modeId of Object.keys(prepared.resolvedVarByMode)) {
-      const fontFamily = resolveTextValue<string>(modeId, r.fontFamily, prepared.resolvedVarByMode);
-      const fontSize = resolveTextValue<number>(modeId, r.fontSize, prepared.resolvedVarByMode);
-      const fontWeight = resolveTextValue<number>(modeId, r.fontWeight, prepared.resolvedVarByMode);
-      const lh = resolveTextValueWithUnit(modeId, r.lineHeight, prepared.resolvedVarByMode);
-      const ls = resolveTextValueWithUnit(modeId, r.letterSpacing, prepared.resolvedVarByMode);
+    for (const mode of prepared.modes) {
+      const fontFamily = resolveTextValue<string>(mode.id, r.fontFamily, prepared.resolvedVarByMode);
+      const fontSize = resolveTextValue<number>(mode.id, r.fontSize, prepared.resolvedVarByMode);
+      const fontWeight = resolveTextValue<number>(mode.id, r.fontWeight, prepared.resolvedVarByMode);
+      const lh = resolveTextValueWithUnit(mode.id, r.lineHeight, prepared.resolvedVarByMode);
+      const ls = resolveTextValueWithUnit(mode.id, r.letterSpacing, prepared.resolvedVarByMode);
 
       const style: any = {};
       if (fontFamily != null) style.fontFamily = fontFamily;
       if (fontSize != null) style.fontSize = fontSize;
       if (fontWeight != null) style.fontWeight = String(Math.round(fontWeight));
 
+      // PERCENT units in Figma multiply against the resolved fontSize. When
+      // fontSize itself is an unresolved alias we fall back to 16 (the React
+      // Native default text size) so consumers see a usable value rather than
+      // a silently dropped field.
+      const fsForPercent = fontSize ?? 16;
       if (lh) {
         if (lh.unit === 'AUTO') {
           // omit
         } else if (lh.unit === 'PIXELS') {
           style.lineHeight = lh.value;
         } else if (lh.unit === 'PERCENT') {
-          if (fontSize != null) style.lineHeight = (lh.value / 100) * fontSize;
+          style.lineHeight = (lh.value / 100) * fsForPercent;
         }
       }
       if (ls) {
@@ -117,11 +122,11 @@ function emitTextStyles(styles: PreparedRNTextStyle[], prepared: PreparedRN): st
         } else if (ls.unit === 'PIXELS') {
           style.letterSpacing = ls.value;
         } else if (ls.unit === 'PERCENT') {
-          if (fontSize != null) style.letterSpacing = (ls.value / 100) * fontSize;
+          style.letterSpacing = (ls.value / 100) * fsForPercent;
         }
       }
 
-      byMode[modeId] = style;
+      byMode[mode.key] = style;
     }
 
     if (!out[s.groupName]) out[s.groupName] = {};

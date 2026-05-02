@@ -12,7 +12,7 @@
 
 import type { IR } from '../ir/types';
 import type { Manifest } from './manifest';
-import type { EmittedFile, Target } from './target';
+import type { EmittedFile, Target, TargetWarning } from './target';
 
 // ── Engine output ──────────────────────────────────────────────────────────
 
@@ -22,6 +22,8 @@ export interface EngineOutput {
   files: EmittedFile[];
   /** Updated manifest to persist back to storage / disk. */
   nextManifest: Manifest;
+  /** Aggregated non-fatal diagnostics from each target's prepare step. */
+  warnings: TargetWarning[];
 }
 
 // ── Engine ─────────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ export function runEngine(
 ): EngineOutput {
   const multiTarget = targets.length > 1;
   const allFiles: EmittedFile[] = [];
+  const allWarnings: TargetWarning[] = [];
   const nextTargets: Manifest['targets'] = { ...(manifest?.targets ?? {}) };
 
   for (const target of targets) {
@@ -54,6 +57,7 @@ export function runEngine(
       allFiles.push({ path: `${prefix}${f.path}`, contents: f.contents });
     }
     nextTargets[target.id] = prepared.nextManifestSection;
+    if (prepared.warnings) allWarnings.push(...prepared.warnings);
   }
 
   const nextManifest: Manifest = {
@@ -63,5 +67,5 @@ export function runEngine(
     targets: nextTargets,
   };
 
-  return { files: allFiles, nextManifest };
+  return { files: allFiles, nextManifest, warnings: allWarnings };
 }
