@@ -12,18 +12,22 @@ export function setupModal(opts: {
 
   function open(text: string) {
     textEl.textContent = text || 'No changelog yet.';
-    (backdrop as HTMLElement).style.display = 'flex';
+    backdrop.classList.add('is-open');
   }
 
   function close() {
-    (backdrop as HTMLElement).style.display = 'none';
+    backdrop.classList.remove('is-open');
   }
 
   closeBtn.addEventListener('click', close);
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
   });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && backdrop.classList.contains('is-open')) {
+      close();
+    }
+  });
 
   return { open, close };
 }
-

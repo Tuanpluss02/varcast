@@ -26,17 +26,16 @@ export type ToggleEls = {
   smokeTest: HTMLElement;
 };
 
-export function toggleDataOn(el: HTMLElement) {
-  const on = el.dataset.on === 'true';
-  el.dataset.on = (!on).toString();
+export function isToggleOn(el: HTMLElement) {
+  return el.getAttribute('aria-checked') === 'true';
 }
 
 export function setToggle(el: HTMLElement, on: boolean) {
-  el.dataset.on = on ? 'true' : 'false';
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
 }
 
-export function isToggleOn(el: HTMLElement) {
-  return el.dataset.on === 'true';
+export function toggleDataOn(el: HTMLElement) {
+  setToggle(el, !isToggleOn(el));
 }
 
 export function collectOptions(opts: {
@@ -69,7 +68,7 @@ export function collectOptions(opts: {
 
 export function pillText(o: ExportOptions): string {
   const bits: string[] = [];
-  bits.push(o.targetId === 'flutter' ? 'Flutter' : o.targetId);
+  bits.push(o.targetId === 'flutter' ? 'Flutter' : 'React Native');
   if (o.include.primitives && o.include.tokens) bits.push('Full export');
   else if (o.include.tokens) bits.push('Tokens only');
   else if (o.include.primitives) bits.push('Primitives only');
@@ -85,4 +84,3 @@ export function pillText(o: ExportOptions): string {
   bits.push(customized ? 'customized' : 'defaults');
   return bits.join(' · ');
 }
-

@@ -1,0 +1,23 @@
+{
+  "version": "2.0",
+  "fileKey": "k",
+  "lastExportedAt": "2026-05-02T16:44:53.998Z",
+  "targets": {
+    "react_native": {
+      "variables": {
+        "var:1": "primary"
+      },
+      "collections": {
+        "col:1": "ColorToken"
+      },
+      "figmaNames": {
+        "variables": {
+          "var:1": "Background/primary"
+        },
+        "collections": {
+          "col:1": "Color Token"
+        }
+      }
+    }
+  }
+}

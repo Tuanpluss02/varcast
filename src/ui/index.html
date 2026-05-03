@@ -1,157 +1,276 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="./ui.css" />
   </head>
   <body>
-    <div class="top">
+    <div class="aurora" aria-hidden="true">
+      <span class="orb orb--violet"></span>
+      <span class="orb orb--cyan"></span>
+      <span class="orb orb--magenta"></span>
+      <span class="grain"></span>
+    </div>
+
+    <header class="topbar">
       <div class="brand">
-        <h1>Varcast</h1>
-        <div class="sub">Figma → Flutter design system exporter</div>
-      </div>
-      <div class="pill" id="pillStatus">Full export · defaults</div>
-    </div>
-
-    <div id="screen-home" class="clay col">
-      <div class="col">
-        <div class="row" style="justify-content: space-between">
-          <label>Package name</label>
-          <span class="pill">ZIP download</span>
+        <div class="brand__mark" aria-hidden="true">
+          <span></span>
         </div>
-        <input id="packageName" type="text" placeholder="design_system" value="design_system" />
+        <div class="brand__text">
+          <h1>Varcast</h1>
+          <p>Figma → Flutter / RN tokens</p>
+        </div>
       </div>
-
-      <div class="clay col" style="padding: 10px; border-radius: 16px">
-        <div style="font-weight: 800; margin-bottom: 2px">Target</div>
-        <label>Export target</label>
-        <select id="targetId">
-          <option value="flutter" selected>Flutter</option>
-          <option value="react_native">React Native</option>
-        </select>
+      <div class="status-pill" id="pillStatus">
+        <span class="status-pill__dot"></span>
+        <span id="pillStatusText">Full export · defaults</span>
       </div>
+    </header>
 
-      <div class="clay col" style="padding: 10px; border-radius: 16px">
-        <div style="font-weight: 800; margin-bottom: 2px">Export</div>
-        <div class="toggle" id="tPrimitives" data-on="true">
-          <div>
-            <div style="font-weight: 700">Primitives</div>
-            <div style="font-size: 11px; color: var(--muted)">ColorBasic, NumberBasic…</div>
+    <main>
+      <!-- ========================= HOME ========================= -->
+      <section id="screen-home" class="screen">
+        <div class="card">
+          <div class="card__row">
+            <div class="field" style="flex: 1">
+              <label for="packageName">Package name</label>
+              <input id="packageName" type="text" placeholder="design_system" value="design_system" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field" style="width: 160px">
+              <label for="targetId">Target</label>
+              <div class="select">
+                <select id="targetId">
+                  <option value="flutter" selected>Flutter</option>
+                  <option value="react_native">React Native</option>
+                </select>
+                <svg class="select__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                  <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <div class="switch"></div>
         </div>
-        <div class="toggle" id="tTokens" data-on="true">
-          <div>
-            <div style="font-weight: 700">Tokens</div>
-            <div style="font-size: 11px; color: var(--muted)">ColorToken, TextToken…</div>
+
+        <div class="card">
+          <div class="card__head">
+            <div>
+              <h2 class="card__title">Tokens</h2>
+              <p class="card__sub">What lands in <code>lib/tokens/</code></p>
+            </div>
+            <span class="count-pill" id="tokensCount" aria-live="polite">2 of 2</span>
           </div>
-          <div class="switch"></div>
-        </div>
-        <div class="toggle" id="tColorStyles" data-on="true">
-          <div>
-            <div style="font-weight: 700">Color styles</div>
-            <div style="font-size: 11px; color: var(--muted)">Paint styles composites</div>
+          <div class="toggle" id="tPrimitives" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tPrimitives-label">
+            <div class="toggle__copy">
+              <div class="toggle__title" id="tPrimitives-label">Primitives</div>
+              <div class="toggle__sub">ColorBasic, NumberBasic…</div>
+            </div>
+            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
-          <div class="switch"></div>
-        </div>
-        <div class="toggle" id="tShadows" data-on="true">
-          <div>
-            <div style="font-weight: 700">Shadows</div>
-            <div style="font-size: 11px; color: var(--muted)">Effect styles composites</div>
+          <div class="toggle" id="tTokens" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tTokens-label">
+            <div class="toggle__copy">
+              <div class="toggle__title" id="tTokens-label">Semantic tokens</div>
+              <div class="toggle__sub">ColorToken, TextToken…</div>
+            </div>
+            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
-          <div class="switch"></div>
         </div>
-        <div class="toggle" id="tTextStyles" data-on="true">
-          <div>
-            <div style="font-weight: 700">Text styles</div>
-            <div style="font-size: 11px; color: var(--muted)">Text styles composites</div>
+
+        <div class="card">
+          <div class="card__head">
+            <div>
+              <h2 class="card__title">Composite styles</h2>
+              <p class="card__sub">Generated from Figma styles</p>
+            </div>
+            <span class="count-pill" id="compositesCount" aria-live="polite">3 of 3</span>
           </div>
-          <div class="switch"></div>
-        </div>
-        <div class="toggle" id="tSmokeTest" data-on="true">
-          <div>
-            <div style="font-weight: 700">Smoke test</div>
-            <div style="font-size: 11px; color: var(--muted)">test/smoke_test.dart</div>
+          <div class="toggle" id="tColorStyles" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tColorStyles-label">
+            <div class="toggle__copy">
+              <div class="toggle__title" id="tColorStyles-label">Color styles</div>
+              <div class="toggle__sub">Paint styles composites</div>
+            </div>
+            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
-          <div class="switch"></div>
+          <div class="toggle" id="tShadows" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tShadows-label">
+            <div class="toggle__copy">
+              <div class="toggle__title" id="tShadows-label">Shadows</div>
+              <div class="toggle__sub">Effect styles composites</div>
+            </div>
+            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
+          </div>
+          <div class="toggle" id="tTextStyles" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tTextStyles-label">
+            <div class="toggle__copy">
+              <div class="toggle__title" id="tTextStyles-label">Text styles</div>
+              <div class="toggle__sub">Text styles composites</div>
+            </div>
+            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
+          </div>
         </div>
-      </div>
 
-      <div class="clay col" style="padding: 10px; border-radius: 16px">
-        <div style="font-weight: 800; margin-bottom: 2px">Naming</div>
-        <label>Leaf prefix (camelCase)</label>
-        <input id="leafPrefix" type="text" placeholder="ds" />
-        <label>Leaf suffix (PascalCase)</label>
-        <input id="leafSuffix" type="text" placeholder="Token" />
-      </div>
+        <details class="card card--collapsible">
+          <summary class="card__head">
+            <div>
+              <h2 class="card__title">Naming &amp; extras</h2>
+              <p class="card__sub" id="namingPreview">Preview · <code>primary</code> → <code>primary</code></p>
+            </div>
+            <svg class="chev" width="12" height="8" viewBox="0 0 12 8" fill="none" aria-hidden="true">
+              <path d="M1 1.5l5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </summary>
+          <div class="card__body">
+            <div class="card__row">
+              <div class="field" style="flex: 1">
+                <label for="leafPrefix">Leaf prefix <span class="hint">camelCase</span></label>
+                <input id="leafPrefix" type="text" placeholder="ds" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="field" style="flex: 1">
+                <label for="leafSuffix">Leaf suffix <span class="hint">PascalCase</span></label>
+                <input id="leafSuffix" type="text" placeholder="Token" autocomplete="off" spellcheck="false" />
+              </div>
+            </div>
+            <div class="toggle" id="tSmokeTest" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tSmokeTest-label">
+              <div class="toggle__copy">
+                <div class="toggle__title" id="tSmokeTest-label">Generate smoke test</div>
+                <div class="toggle__sub"><code>test/smoke_test.dart</code></div>
+              </div>
+              <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
+            </div>
+          </div>
+        </details>
 
-      <div class="row" style="justify-content: space-between">
-        <button class="btn" id="reset">Reset</button>
-        <div class="row">
-          <button class="btn" id="regen">Re-generate</button>
-          <button class="btn primary" id="export">Export</button>
+        <div id="status" class="status-line" role="status" aria-live="polite"></div>
+      </section>
+
+      <!-- ========================= VALIDATING ========================= -->
+      <section id="screen-validating" class="screen hidden">
+        <div class="card card--center">
+          <div class="spinner" aria-hidden="true"></div>
+          <div class="card__title">Validating…</div>
+          <div class="card__sub">Reading tokens and styles from Figma.</div>
         </div>
+      </section>
+
+      <!-- ========================= ERRORS ========================= -->
+      <section id="screen-errors" class="screen hidden">
+        <div class="card card--danger">
+          <div class="card__head">
+            <div>
+              <h2 class="card__title" id="errTitle">Errors</h2>
+              <p class="card__sub">Fix in Figma, then try again</p>
+            </div>
+            <button class="ghost-btn" id="copyErrors" type="button" title="Copy errors">Copy</button>
+          </div>
+          <pre class="log log--danger" id="errList"></pre>
+        </div>
+      </section>
+
+      <!-- ========================= WARNINGS ========================= -->
+      <section id="screen-warnings" class="screen hidden">
+        <div class="card card--warn">
+          <div class="card__head">
+            <div>
+              <h2 class="card__title">Warnings (auto-fixed)</h2>
+              <p class="card__sub">Review before continuing</p>
+            </div>
+            <button class="ghost-btn" id="copyWarnings" type="button" title="Copy warnings">Copy</button>
+          </div>
+          <pre class="log log--warn" id="warnList"></pre>
+        </div>
+      </section>
+
+      <!-- ========================= READY ========================= -->
+      <section id="screen-ready" class="screen hidden">
+        <div class="card">
+          <div class="card__head">
+            <div>
+              <h2 class="card__title">Ready to package</h2>
+              <p class="card__sub">Review the diff before downloading</p>
+            </div>
+          </div>
+          <pre class="log" id="summary"></pre>
+          <pre class="log log--muted" id="diffSummary"></pre>
+        </div>
+      </section>
+
+      <!-- ========================= EXPORTING ========================= -->
+      <section id="screen-exporting" class="screen hidden">
+        <div class="card card--center">
+          <div class="spinner" aria-hidden="true"></div>
+          <div class="card__title">Packing zip…</div>
+          <div class="card__sub">Almost there.</div>
+        </div>
+      </section>
+
+      <!-- ========================= DONE ========================= -->
+      <section id="screen-done" class="screen hidden">
+        <div class="card card--success">
+          <div class="card__head">
+            <div>
+              <h2 class="card__title">Export complete</h2>
+              <p class="card__sub" id="doneFilename">design_system.zip</p>
+            </div>
+          </div>
+          <pre class="log" id="doneSummary"></pre>
+        </div>
+      </section>
+    </main>
+
+    <!-- ========================= ACTION BAR ========================= -->
+    <footer class="actions" id="actionBar">
+      <!-- HOME actions -->
+      <div class="actions__group" data-screen="home">
+        <button class="link-btn" id="reset" type="button">Reset</button>
+        <button class="cta" id="export" type="button">
+          <span>Export</span>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 1v8m0 0l-3-3m3 3l3-3M2 12h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
       </div>
 
-      <div id="status" class="mono"></div>
-    </div>
-
-    <div id="screen-validating" class="clay col hidden">
-      <div style="font-weight: 900">Validating…</div>
-      <div style="color: var(--muted)">Reading tokens and styles from Figma.</div>
-    </div>
-
-    <div id="screen-errors" class="clay col hidden">
-      <div style="font-weight: 900; color: var(--danger)" id="errTitle">✗ Errors</div>
-      <div class="mono" id="errList"></div>
-      <div class="row" style="justify-content: flex-end">
-        <button class="btn danger" id="closeErrors">Close</button>
+      <!-- ERRORS actions -->
+      <div class="actions__group hidden" data-screen="errors">
+        <button class="link-btn" id="closeErrors" type="button">Back</button>
       </div>
-    </div>
 
-    <div id="screen-warnings" class="clay col hidden">
-      <div style="font-weight: 900">⚠ Warnings (auto-fixed)</div>
-      <div class="mono" id="warnList"></div>
-      <div class="row" style="justify-content: space-between">
-        <button class="btn" id="cancelWarnings">Cancel</button>
-        <button class="btn primary" id="continueWarnings">Continue</button>
+      <!-- WARNINGS actions -->
+      <div class="actions__group hidden" data-screen="warnings">
+        <button class="link-btn" id="cancelWarnings" type="button">Cancel</button>
+        <button class="cta" id="continueWarnings" type="button">Continue</button>
       </div>
-    </div>
 
-    <div id="screen-ready" class="clay col hidden">
-      <div style="font-weight: 900">Ready</div>
-      <div class="mono" id="summary"></div>
-      <div class="mono" id="diffSummary"></div>
-      <div class="row" style="justify-content: space-between">
-        <button class="btn" id="viewChangelog">Changelog</button>
-        <button class="btn primary" id="downloadZip">Download ZIP</button>
+      <!-- READY actions -->
+      <div class="actions__group hidden" data-screen="ready">
+        <button class="link-btn" id="viewChangelog" type="button">Changelog</button>
+        <button class="cta" id="downloadZip" type="button">
+          <span>Download ZIP</span>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 1v8m0 0l-3-3m3 3l3-3M2 12h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
       </div>
-    </div>
 
-    <div id="screen-exporting" class="clay col hidden">
-      <div style="font-weight: 900">Exporting…</div>
-      <div style="color: var(--muted)">Packing a fluffy zip file.</div>
-    </div>
-
-    <div id="screen-done" class="clay col hidden">
-      <div style="font-weight: 900">✓ Export complete</div>
-      <div class="mono" id="doneSummary"></div>
-      <div class="row" style="justify-content: space-between">
-        <button class="btn" id="viewChangelogDone">Changelog</button>
-        <button class="btn primary" id="downloadZipAgain">Download ZIP</button>
+      <!-- DONE actions -->
+      <div class="actions__group hidden" data-screen="done">
+        <button class="link-btn" id="viewChangelogDone" type="button">Changelog</button>
+        <button class="cta" id="downloadZipAgain" type="button">Download again</button>
       </div>
-    </div>
 
-    <div id="modalBackdrop" class="modal-backdrop">
-      <div class="modal clay">
-        <header>
-          <div class="title">Changelog</div>
-          <button class="btn" id="closeModal">Close</button>
+      <!-- VALIDATING/EXPORTING: no actions -->
+    </footer>
+
+    <!-- ========================= MODAL ========================= -->
+    <div id="modalBackdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal">
+        <header class="modal__head">
+          <div class="modal__title" id="modalTitle">Changelog</div>
+          <button class="ghost-btn" id="closeModal" type="button" aria-label="Close">Close</button>
         </header>
-        <pre id="changelogText" class="mono" style="margin: 0"></pre>
+        <pre id="changelogText" class="log"></pre>
       </div>
     </div>
+
     <script src="./ui.js"></script>
   </body>
 </html>
