@@ -49,7 +49,7 @@ import '../theme.dart';
 enum ColorTokenMode { lightMode }
 
 abstract class ColorToken {
-  ColorToken();
+  const ColorToken();
   Color get backgroundPrimary;
 
   static ColorToken lerp(ColorToken a, ColorToken b, double t) =>

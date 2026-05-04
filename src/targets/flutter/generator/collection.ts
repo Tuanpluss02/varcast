@@ -77,9 +77,8 @@ export function emitCollection(
   out += `enum ${cn}Mode { ${col.modes.map((m) => m.camel).join(', ')} }\n\n`;
 
   // ── Abstract class ─────────────────────────────────────────────────────────
-  const abstractCtor = isAllConst ? `const ${cn}` : cn;
   out += `abstract class ${cn} {\n`;
-  out += `  ${abstractCtor}();\n`;
+  out += `  const ${cn}();\n`;
   for (const { v, getter } of vars) {
     out += `  ${v.dartType} get ${getter};\n`;
   }

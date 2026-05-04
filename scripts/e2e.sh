@@ -4,8 +4,8 @@ set -euo pipefail
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_DIR="$(cd "${PLUGIN_DIR}/.." && pwd)"
 
-IR_PATH="${ROOT_DIR}/docs/tmp/ir.json"
-OUT_DIR="${ROOT_DIR}/output/design_system_e2e"
+IR_PATH="${PLUGIN_DIR}/test_fixtures/ir.json"
+OUT_DIR="${PLUGIN_DIR}/output/design_system_e2e"
 
 if [[ ! -f "${IR_PATH}" ]]; then
   echo "Missing IR fixture at: ${IR_PATH}" >&2

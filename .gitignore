@@ -4,6 +4,8 @@ node_modules/
 
 # Build output
 dist/
+output/
+.tmp_*
 
 # OS specific files
 .DS_Store
