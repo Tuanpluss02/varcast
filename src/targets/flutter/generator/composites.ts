@@ -14,6 +14,7 @@ import {
   doubleLiteral,
   stringLiteral,
 } from './emit_helpers';
+import { flatAliasExpr } from './collection';
 import type {
   PreparedEffectStyle,
   PreparedPaintStyle,
@@ -133,13 +134,7 @@ function colorRef(c: IRColorValue, varIndex: Map<string, VarRef>): string {
   if (c.kind === 'alias') {
     const ref = varIndex.get(c.targetVariableId);
     if (!ref) return 'const Color(0x00000000)';
-    const segs = [
-      'AppTheme',
-      ref.collectionAccessor,
-      ...ref.groupPath.map(lowerFirst),
-      ref.leafName,
-    ];
-    return segs.join('.');
+    return flatAliasExpr(ref.collectionAccessor, ref.groupPath, ref.leafName);
   }
   return colorLiteral(c.rgba);
 }
@@ -341,15 +336,7 @@ function letterSpacingExpr(v: IRTextValueWithUnit<number>, varIndex: Map<string,
 function aliasExpr(id: string, varIndex: Map<string, VarRef>, type: 'double' | 'String'): string {
   const ref = varIndex.get(id);
   if (!ref) return type === 'String' ? "''" : '0.0';
-  return [
-    'AppTheme',
-    ref.collectionAccessor,
-    ...ref.groupPath.map((s) => s[0].toLowerCase() + s.slice(1)),
-    ref.leafName,
-  ].join('.');
+  return flatAliasExpr(ref.collectionAccessor, ref.groupPath, ref.leafName);
 }
 
-function lowerFirst(s: string): string {
-  return s ? s[0].toLowerCase() + s.slice(1) : s;
-}
 

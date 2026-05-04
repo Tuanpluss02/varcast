@@ -9,77 +9,31 @@ import '../_internal/lerp.dart';
 
 enum ColorBasicMode { value }
 
-abstract class ColorBasicBackground {
-  const ColorBasicBackground();
-  Color get primary;
-
-  static ColorBasicBackground lerp(ColorBasicBackground a, ColorBasicBackground b, double t) =>
-      _LerpedColorBasicBackground(
-        primary: a.primary.lerpTo(b.primary, t),
-      );
-}
-
-class ColorBasicBackgroundValue extends ColorBasicBackground {
-  const ColorBasicBackgroundValue();
-  @override Color get primary => const Color(0xFF000000);
-}
-
-class _LerpedColorBasicBackground extends ColorBasicBackground {
-  const _LerpedColorBasicBackground({
-    required this.primary,
-  });
-  @override final Color primary;
-}
-
-abstract class ColorBasicBorder {
-  const ColorBasicBorder();
-  Color get default_;
-
-  static ColorBasicBorder lerp(ColorBasicBorder a, ColorBasicBorder b, double t) =>
-      _LerpedColorBasicBorder(
-        default_: a.default_.lerpTo(b.default_, t),
-      );
-}
-
-class ColorBasicBorderValue extends ColorBasicBorder {
-  const ColorBasicBorderValue();
-  @override Color get default_ => const Color(0xFFFFFFFF);
-}
-
-class _LerpedColorBasicBorder extends ColorBasicBorder {
-  const _LerpedColorBasicBorder({
-    required this.default_,
-  });
-  @override final Color default_;
-}
-
 abstract class ColorBasic {
-  ColorBasic();
-  ColorBasicBackground get background;
-  ColorBasicBorder get border;
+  const ColorBasic();
+  Color get backgroundPrimary;
+  Color get borderDefault_;
 
   static ColorBasic lerp(ColorBasic a, ColorBasic b, double t) =>
       _LerpedColorBasic(
-        background: ColorBasicBackground.lerp(a.background, b.background, t),
-        border: ColorBasicBorder.lerp(a.border, b.border, t),
+        backgroundPrimary: a.backgroundPrimary.lerpTo(b.backgroundPrimary, t),
+        borderDefault_: a.borderDefault_.lerpTo(b.borderDefault_, t),
       );
 }
 
 class ColorBasicValue extends ColorBasic {
-  ColorBasicValue()
-      : background = const ColorBasicBackgroundValue(),
-        border = const ColorBasicBorderValue();
-  @override final ColorBasicBackground background;
-  @override final ColorBasicBorder border;
+  const ColorBasicValue();
+  @override Color get backgroundPrimary => const Color(0xFF000000);
+  @override Color get borderDefault_ => const Color(0xFFFFFFFF);
 }
 
 class _LerpedColorBasic extends ColorBasic {
-  _LerpedColorBasic({
-    required this.background,
-    required this.border,
+  const _LerpedColorBasic({
+    required this.backgroundPrimary,
+    required this.borderDefault_,
   });
-  @override final ColorBasicBackground background;
-  @override final ColorBasicBorder border;
+  @override final Color backgroundPrimary;
+  @override final Color borderDefault_;
 }
 "
 `;
@@ -94,49 +48,26 @@ import '../theme.dart';
 
 enum ColorTokenMode { lightMode }
 
-abstract class ColorTokenBackground {
-  const ColorTokenBackground();
-  Color get primary;
-
-  static ColorTokenBackground lerp(ColorTokenBackground a, ColorTokenBackground b, double t) =>
-      _LerpedColorTokenBackground(
-        primary: a.primary.lerpTo(b.primary, t),
-      );
-}
-
-class ColorTokenBackgroundLightMode extends ColorTokenBackground {
-  ColorTokenBackgroundLightMode();
-  @override Color get primary => AppTheme.colorBasic.background.primary;
-}
-
-class _LerpedColorTokenBackground extends ColorTokenBackground {
-  const _LerpedColorTokenBackground({
-    required this.primary,
-  });
-  @override final Color primary;
-}
-
 abstract class ColorToken {
   ColorToken();
-  ColorTokenBackground get background;
+  Color get backgroundPrimary;
 
   static ColorToken lerp(ColorToken a, ColorToken b, double t) =>
       _LerpedColorToken(
-        background: ColorTokenBackground.lerp(a.background, b.background, t),
+        backgroundPrimary: a.backgroundPrimary.lerpTo(b.backgroundPrimary, t),
       );
 }
 
 class ColorTokenLightMode extends ColorToken {
-  ColorTokenLightMode()
-      : background = ColorTokenBackgroundLightMode();
-  @override final ColorTokenBackground background;
+  ColorTokenLightMode();
+  @override Color get backgroundPrimary => AppTheme.colorBasic.backgroundPrimary;
 }
 
 class _LerpedColorToken extends ColorToken {
-  _LerpedColorToken({
-    required this.background,
+  const _LerpedColorToken({
+    required this.backgroundPrimary,
   });
-  @override final ColorTokenBackground background;
+  @override final Color backgroundPrimary;
 }
 "
 `;

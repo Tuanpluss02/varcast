@@ -104,7 +104,6 @@ function findCyclesFrom(
     }
     const next = top.aliasIds[top.cursor++];
     if (onStack.has(next)) {
-      // Back-edge: extract the cycle from the current stack.
       const startIdx = stack.findIndex((f) => f.id === next);
       const cycle = stack.slice(startIdx).map((f) => f.id);
       cycle.push(next);
