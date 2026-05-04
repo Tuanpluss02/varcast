@@ -7,17 +7,19 @@ export interface ValidationResult {
 
 export type ValidationError = { type: 'CYCLE'; path: string[] };
 
-// Target-neutral warnings only. Per-target naming concerns (reserved-word
-// conflicts, duplicate identifier conflicts) live in each target's prepare
-// step because reserved-word sets and identifier rules differ per language.
+/**
+ * Target-neutral validation warnings.
+ * Per-target naming conflicts (e.g., reserved words) are handled in the target's prepare step.
+ */
 export type ValidationWarning =
   | { type: 'UNRESOLVED_ALIAS'; variableId: string; targetId: string }
   | { type: 'DIAMOND_APPROXIMATED'; styleId: string }
   | { type: 'IMAGE_ASSET_REQUIRED'; styleId: string; assetName: string };
 
-// Mutates the IR in place: rounds floats, applies hidden flag, marks
-// unresolved aliases. Returns errors (block emit) and warnings (emit
-// proceeds; surfaced in UI).
+/**
+ * Validates and mutates the IR in place (rounds floats, applies hidden flag, marks unresolved aliases).
+ * @returns Validation errors (blocks emit) and warnings (surfaced in UI).
+ */
 export function validate(ir: IR): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
@@ -46,12 +48,11 @@ export function validate(ir: IR): ValidationResult {
 }
 
 // ── Rule 1: cycle detection ─────────────────────────────────────────────────
-//
-// Iterative DFS with a global "visited" set: each variable is explored at most
-// once across the whole pass (O(V + E) overall). When DFS revisits a node
-// already on the current stack we have a back-edge → cycle. Cycles are
-// canonicalised (rotated to start at the lexicographically smallest id) so the
-// same cycle reached from different entry points dedupes.
+
+/**
+ * Detects cyclic alias dependencies using iterative post-order DFS (O(V + E)).
+ * Cycles are canonicalized to avoid duplicate reports from different entry points.
+ */
 
 function detectCycles(
   col: IRCollection,
@@ -153,9 +154,10 @@ function resolveAliases(
 }
 
 // ── Rule 3: float noise rounding ────────────────────────────────────────────
-//
-// Figma stores some floats as binary32 (e.g. 0.30000001192092896). Round all
-// FLOAT literals to 6 decimals so emitted Dart is readable.
+
+/**
+ * Rounds all FLOAT literals to 6 decimals to clean up Figma's binary32 float noise.
+ */
 
 function roundFloats(col: IRCollection): void {
   for (const v of col.variables) {

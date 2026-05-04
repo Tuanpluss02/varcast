@@ -17,8 +17,10 @@ import { resolveStableCollectionName, resolveStableName } from '../../../manifes
 import type { ExportOptions } from './options';
 import { applyLeafAffixes, DEFAULT_EXPORT_OPTIONS } from './options';
 
-// PreparedIR — the IR with all Dart identifiers finalised and a flat var index
-// for cross-collection alias lookup. Generators consume this, never raw IR.
+/**
+ * PreparedIR — The IR with finalized Dart identifiers and a flattened variable index
+ * for cross-collection alias lookup. Generators consume this rather than raw IR.
+ */
 
 export type DartType = 'Color' | 'double' | 'String' | 'bool';
 
@@ -151,11 +153,10 @@ export function prepareIR(
   };
 }
 
-// Disallow collisions with Flutter/Dart SDK symbols that show up in generated
-// files. The list covers types referenced anywhere in the generated package
-// (controller, theme, composites). Keep additive — a designer-chosen
-// collection name that shadows a Flutter SDK class would silently break
-// imports in consumer code.
+/**
+ * Reserved Flutter/Dart SDK symbols to prevent collisions in generated files.
+ * Shadowing these would break imports in the consumer codebase.
+ */
 const DISALLOWED_COLLECTION_CLASS_NAMES = new Set([
   'FontWeight',
   'Color',
@@ -221,9 +222,10 @@ function prepareCollection(
       });
     }
     let stableLeaf = resolveStableName(v.id, leafName, manifest);
-    // Re-apply keyword fix: an old manifest may carry a leaf name that is a
-    // Dart keyword (e.g. emitted before keyword handling existed). Without
-    // this guard we'd emit `default` and break Dart compilation.
+    /**
+     * Re-apply keyword fix for legacy manifests that may carry a Dart keyword leaf name.
+     * Prevents emitting reserved words like `default` which break compilation.
+     */
     if (DART_KEYWORDS.has(stableLeaf)) {
       const fixed = `${stableLeaf}_`;
       if (notes.keywordFixedFrom === undefined) {

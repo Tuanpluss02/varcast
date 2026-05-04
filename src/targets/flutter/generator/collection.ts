@@ -13,24 +13,20 @@ import type {
   DartType,
 } from './prepare';
 
-// Returns the leaf suffix to append when building the flat getter name.
-//  - If leafName is `n` followed by only digits (e.g. n50, n100, n950):
-//    the `n` was added by the sanitizer because Dart identifiers can't start
-//    with a digit. Strip it and use just the number → `50`, `100`, `950`.
-//  - Otherwise: capitalize the first letter so the result is proper camelCase
-//    → `headingSecondary` becomes `HeadingSecondary`.
+/**
+ * Processes a variable leaf name for flat getter concatenation.
+ * Strips the 'n' prefix from digit-only names (e.g., 'n950' -> '950')
+ * added by the sanitizer, or capitalizes the first letter for camelCase.
+ */
 function leafSuffix(leafName: string): string {
-  if (/^n\d+$/.test(leafName)) return leafName.slice(1); // e.g. n950 → 950
-  return leafName.charAt(0).toUpperCase() + leafName.slice(1); // e.g. headingSecondary → HeadingSecondary
+  if (/^n\d+$/.test(leafName)) return leafName.slice(1);
+  return leafName.charAt(0).toUpperCase() + leafName.slice(1);
 }
 
-// Compute the flat getter name for a variable by concatenating all group-path
-// segments (first segment is lowerFirst, subsequent segments stay PascalCase)
-// then appending the processed leafName.
-// e.g. groupPath=['Brand'],   leafName='n950'           → 'brand950'
-//      groupPath=['Text'],    leafName='headingSecondary'→ 'textHeadingSecondary'
-//      groupPath=['Success'],  leafName='n100'           → 'success100'
-//      groupPath=['Base'],    leafName='white'           → 'baseWhite'
+/**
+ * Computes a flat camelCase getter name by concatenating group segments and the leaf name.
+ * Example: `['Brand', 'Primary'], 'n950'` -> `'brandPrimary950'`
+ */
 function flatGetterName(groupPath: string[], leafName: string): string {
   if (groupPath.length === 0) return leafName;
   const [first, ...rest] = groupPath;
@@ -38,11 +34,13 @@ function flatGetterName(groupPath: string[], leafName: string): string {
   return firstLower + rest.join('') + leafSuffix(leafName);
 }
 
-// Builds the alias expression used inside generated code when one variable
-// references another, e.g. `AppTheme.colorBasic.brandn950`.
+/**
+ * Generates the Dart expression to access an aliased variable.
+ * Example: `AppTheme.colorBasic.brand950`
+ */
 export function flatAliasExpr(
   collectionAccessor: string,
-  groupPath: string[], // PascalCase segments from VarRef
+  groupPath: string[],
   leafName: string,
 ): string {
   const getter = flatGetterName(groupPath, leafName);

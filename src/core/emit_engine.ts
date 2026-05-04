@@ -1,14 +1,12 @@
-// Emit engine — target-agnostic orchestrator.
-//
-// Phase 8: the engine accepts an array of targets, runs each target's
-// prepare+emit pipeline, and merges emitted files + per-target manifest
-// sections into a single v2 manifest.
-//
-// Invariants guaranteed by the engine (not by individual targets):
-//   - Files from different targets are namespaced under `<targetId>/` to
-//     prevent path collisions when multiple targets are emitted simultaneously.
-//   - The output manifest preserves sections for targets NOT included in this
-//     run so stable names from previous exports are not wiped.
+/**
+ * Emit Engine — Target-agnostic orchestrator.
+ * 
+ * Responsibilities:
+ * - Runs each target's `prepare` and `emit` pipeline.
+ * - Namespaces output files under `<targetId>/` if multiple targets are exported.
+ * - Merges emitted files and per-target manifest sections into a single v2 manifest.
+ * - Preserves manifest sections for targets not included in the current run.
+ */
 
 import type { IR } from '../ir/types';
 import type { Manifest } from './manifest';
