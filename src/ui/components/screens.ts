@@ -1,11 +1,6 @@
 export type ScreenName =
   | 'home'
-  | 'validating'
-  | 'errors'
-  | 'warnings'
-  | 'ready'
-  | 'exporting'
-  | 'done';
+  | 'errors';
 
 export type Screens = Record<ScreenName, HTMLElement>;
 

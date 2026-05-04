@@ -725,6 +725,30 @@ code {
 }
 
 /* ============================================================
+   Loading overlay
+   ============================================================ */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(5, 3, 12, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.loading-overlay.is-open {
+  display: flex;
+  animation: fade-in 160ms var(--ease);
+}
+.loading-overlay .card {
+  width: 100%;
+  max-width: 340px;
+}
+
+/* ============================================================
    Screens & utilities
    ============================================================ */
 .screen {

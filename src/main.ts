@@ -111,17 +111,36 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         targetId,
       };
 
-      // If warnings exist, show warning screen before allowing export.
+      // UX: "Export" should export immediately (no warnings/ready screens).
+      // Errors still block export. Warnings are non-fatal and only logged.
       if (mergedWarnings.length > 0) {
-        figma.ui.postMessage({ type: 'validation-warnings', warnings: mergedWarnings, diff });
-        return;
+        console.log('Non-fatal warnings (auto-fixed):', mergedWarnings);
       }
+
+      figma.ui.postMessage({ type: 'exporting' });
+
+      // Persist manifest now (stable regen). Write v2 going forward.
+      await figma.clientStorage.setAsync('manifest_v2', nextManifest);
+
+      const extra = [
+        {
+          path: '_meta/manifest.json',
+          contents: JSON.stringify(nextManifest, null, 2) + '\n',
+        },
+        { path: 'CHANGELOG.md', contents: changelog + '\n' },
+      ];
+      const zipBytes = buildZip([...files, ...extra]);
+
       figma.ui.postMessage({
-        type: 'ready',
+        type: 'zip-ready',
+        filename: `${options.packageName}.zip`,
+        bytes: zipBytes,
+        changelog,
         diff,
         summary: summarize(ir, files),
-        options,
       });
+
+      pending = null;
     } catch (err) {
       console.error('Export failed:', err);
       figma.ui.postMessage({

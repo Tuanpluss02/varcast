@@ -20,12 +20,7 @@
         </div>
         <div class="brand__text">
           <h1>Varcast</h1>
-          <p>Figma → Flutter / RN tokens</p>
         </div>
-      </div>
-      <div class="status-pill" id="pillStatus">
-        <span class="status-pill__dot"></span>
-        <span id="pillStatusText">Full export · defaults</span>
       </div>
     </header>
 
@@ -142,15 +137,6 @@
         <div id="status" class="status-line" role="status" aria-live="polite"></div>
       </section>
 
-      <!-- ========================= VALIDATING ========================= -->
-      <section id="screen-validating" class="screen hidden">
-        <div class="card card--center">
-          <div class="spinner" aria-hidden="true"></div>
-          <div class="card__title">Validating…</div>
-          <div class="card__sub">Reading tokens and styles from Figma.</div>
-        </div>
-      </section>
-
       <!-- ========================= ERRORS ========================= -->
       <section id="screen-errors" class="screen hidden">
         <div class="card card--danger">
@@ -162,56 +148,6 @@
             <button class="ghost-btn" id="copyErrors" type="button" title="Copy errors">Copy</button>
           </div>
           <pre class="log log--danger" id="errList"></pre>
-        </div>
-      </section>
-
-      <!-- ========================= WARNINGS ========================= -->
-      <section id="screen-warnings" class="screen hidden">
-        <div class="card card--warn">
-          <div class="card__head">
-            <div>
-              <h2 class="card__title">Warnings (auto-fixed)</h2>
-              <p class="card__sub">Review before continuing</p>
-            </div>
-            <button class="ghost-btn" id="copyWarnings" type="button" title="Copy warnings">Copy</button>
-          </div>
-          <pre class="log log--warn" id="warnList"></pre>
-        </div>
-      </section>
-
-      <!-- ========================= READY ========================= -->
-      <section id="screen-ready" class="screen hidden">
-        <div class="card">
-          <div class="card__head">
-            <div>
-              <h2 class="card__title">Ready to package</h2>
-              <p class="card__sub">Review the diff before downloading</p>
-            </div>
-          </div>
-          <pre class="log" id="summary"></pre>
-          <pre class="log log--muted" id="diffSummary"></pre>
-        </div>
-      </section>
-
-      <!-- ========================= EXPORTING ========================= -->
-      <section id="screen-exporting" class="screen hidden">
-        <div class="card card--center">
-          <div class="spinner" aria-hidden="true"></div>
-          <div class="card__title">Packing zip…</div>
-          <div class="card__sub">Almost there.</div>
-        </div>
-      </section>
-
-      <!-- ========================= DONE ========================= -->
-      <section id="screen-done" class="screen hidden">
-        <div class="card card--success">
-          <div class="card__head">
-            <div>
-              <h2 class="card__title">Export complete</h2>
-              <p class="card__sub" id="doneFilename">design_system.zip</p>
-            </div>
-          </div>
-          <pre class="log" id="doneSummary"></pre>
         </div>
       </section>
     </main>
@@ -234,29 +170,6 @@
         <button class="link-btn" id="closeErrors" type="button">Back</button>
       </div>
 
-      <!-- WARNINGS actions -->
-      <div class="actions__group hidden" data-screen="warnings">
-        <button class="link-btn" id="cancelWarnings" type="button">Cancel</button>
-        <button class="cta" id="continueWarnings" type="button">Continue</button>
-      </div>
-
-      <!-- READY actions -->
-      <div class="actions__group hidden" data-screen="ready">
-        <button class="link-btn" id="viewChangelog" type="button">Changelog</button>
-        <button class="cta" id="downloadZip" type="button">
-          <span>Download ZIP</span>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M7 1v8m0 0l-3-3m3 3l3-3M2 12h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- DONE actions -->
-      <div class="actions__group hidden" data-screen="done">
-        <button class="link-btn" id="viewChangelogDone" type="button">Changelog</button>
-        <button class="cta" id="downloadZipAgain" type="button">Download again</button>
-      </div>
-
       <!-- VALIDATING/EXPORTING: no actions -->
     </footer>
 
@@ -268,6 +181,15 @@
           <button class="ghost-btn" id="closeModal" type="button" aria-label="Close">Close</button>
         </header>
         <pre id="changelogText" class="log"></pre>
+      </div>
+    </div>
+
+    <!-- ========================= LOADING OVERLAY ========================= -->
+    <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
+      <div class="card card--center">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="card__title" id="loadingTitle">Working…</div>
+        <div class="card__sub" id="loadingSub">Please wait.</div>
       </div>
     </div>
 

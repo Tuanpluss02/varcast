@@ -1,13 +1,12 @@
 import { byId } from './lib/dom';
 import { fmtDiff, fmtSummary } from './lib/format';
 import type { PluginToUiMessage } from './lib/messages';
-import { formatError, formatWarning, postToPlugin } from './lib/messages';
+import { formatError, postToPlugin } from './lib/messages';
 import { setupModal } from './components/modal';
 import { showScreen } from './components/screens';
 import type { Screens } from './components/screens';
 import {
   collectOptions,
-  pillText,
   setToggle,
   toggleDataOn,
   isToggleOn,
@@ -17,28 +16,20 @@ import { createInitialState } from './state';
 
 const state = createInitialState();
 
-const pillStatusText = byId<HTMLSpanElement>('pillStatusText');
 const status = byId<HTMLDivElement>('status');
 const exportBtn = byId<HTMLButtonElement>('export');
 const actionBar = byId<HTMLElement>('actionBar');
+const loadingOverlay = byId<HTMLDivElement>('loadingOverlay');
+const loadingTitle = byId<HTMLDivElement>('loadingTitle');
+const loadingSub = byId<HTMLDivElement>('loadingSub');
 
 const screens: Screens = {
   home: byId('screen-home'),
-  validating: byId('screen-validating'),
   errors: byId('screen-errors'),
-  warnings: byId('screen-warnings'),
-  ready: byId('screen-ready'),
-  exporting: byId('screen-exporting'),
-  done: byId('screen-done'),
 };
 
 const errTitle = byId<HTMLHeadingElement>('errTitle');
 const errList = byId<HTMLPreElement>('errList');
-const warnList = byId<HTMLPreElement>('warnList');
-const summary = byId<HTMLPreElement>('summary');
-const diffSummary = byId<HTMLPreElement>('diffSummary');
-const doneSummary = byId<HTMLPreElement>('doneSummary');
-const doneFilename = byId<HTMLParagraphElement>('doneFilename');
 
 const packageName = byId<HTMLInputElement>('packageName');
 const targetId = byId<HTMLSelectElement>('targetId');
@@ -83,7 +74,6 @@ function updateMeta() {
     leafSuffix,
     toggles,
   });
-  pillStatusText.textContent = pillText(o);
 
   // Counters
   const tokenOn = [toggles.primitives, toggles.tokens].filter(isToggleOn).length;
@@ -123,10 +113,21 @@ function downloadZip() {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+function showLoading(title: string, sub: string) {
+  loadingTitle.textContent = title;
+  loadingSub.textContent = sub;
+  loadingOverlay.classList.add('is-open');
+  loadingOverlay.setAttribute('aria-hidden', 'false');
+}
+function hideLoading() {
+  loadingOverlay.classList.remove('is-open');
+  loadingOverlay.setAttribute('aria-hidden', 'true');
+}
+
 function startExport() {
   exportBtn.disabled = true;
   status.textContent = '';
-  go('validating');
+  showLoading('Validating…', 'Reading tokens and styles from Figma.');
   const options = collectOptions({
     targetId,
     packageName,
@@ -177,34 +178,6 @@ byId<HTMLButtonElement>('closeErrors').addEventListener('click', () => {
   postToPlugin({ type: 'cancel' });
   go('home');
 });
-byId<HTMLButtonElement>('cancelWarnings').addEventListener('click', () => {
-  postToPlugin({ type: 'cancel' });
-  go('home');
-});
-byId<HTMLButtonElement>('continueWarnings').addEventListener('click', () => {
-  go('exporting');
-  const options = collectOptions({
-    targetId,
-    packageName,
-    leafPrefix,
-    leafSuffix,
-    toggles,
-  });
-  postToPlugin({ type: 'continue', options });
-});
-
-byId<HTMLButtonElement>('downloadZip').addEventListener('click', () => {
-  go('exporting');
-  postToPlugin({ type: 'download-zip' });
-});
-byId<HTMLButtonElement>('downloadZipAgain').addEventListener('click', downloadZip);
-
-byId<HTMLButtonElement>('viewChangelog').addEventListener('click', () => {
-  modal.open(state.lastChangelog);
-});
-byId<HTMLButtonElement>('viewChangelogDone').addEventListener('click', () => {
-  modal.open(state.lastChangelog);
-});
 
 // Copy buttons for errors / warnings
 function wireCopy(btnId: string, source: HTMLElement) {
@@ -233,7 +206,6 @@ function wireCopy(btnId: string, source: HTMLElement) {
   });
 }
 wireCopy('copyErrors', errList);
-wireCopy('copyWarnings', warnList);
 
 window.onmessage = (e: MessageEvent) => {
   const msg = (e.data as any)?.pluginMessage as PluginToUiMessage | undefined;
@@ -242,6 +214,7 @@ window.onmessage = (e: MessageEvent) => {
   exportBtn.disabled = false;
 
   if (msg.type === 'validation-errors') {
+    hideLoading();
     const errs = msg.errors || [];
     errTitle.textContent = `${errs.length} error${errs.length === 1 ? '' : 's'}`;
     errList.textContent = errs.map(formatError).join('\n');
@@ -249,25 +222,8 @@ window.onmessage = (e: MessageEvent) => {
     return;
   }
 
-  if (msg.type === 'validation-warnings') {
-    const ws = msg.warnings || [];
-    warnList.textContent = ws.map(formatWarning).join('\n');
-    state.lastDiff = msg.diff || state.lastDiff;
-    go('warnings');
-    return;
-  }
-
-  if (msg.type === 'ready') {
-    state.lastDiff = msg.diff || state.lastDiff;
-    state.lastSummary = msg.summary || state.lastSummary;
-    summary.textContent = fmtSummary(state.lastSummary);
-    diffSummary.textContent = fmtDiff(state.lastDiff);
-    go('ready');
-    return;
-  }
-
   if (msg.type === 'exporting') {
-    go('exporting');
+    showLoading('Packing zip…', 'Almost there.');
     return;
   }
 
@@ -277,15 +233,16 @@ window.onmessage = (e: MessageEvent) => {
     state.lastChangelog = msg.changelog || '';
     state.lastDiff = msg.diff || state.lastDiff;
     state.lastSummary = msg.summary || state.lastSummary;
-    doneFilename.textContent = state.lastFilename;
-    doneSummary.textContent =
-      fmtSummary(state.lastSummary) + '\n\n' + fmtDiff(state.lastDiff);
-    go('done');
+    hideLoading();
     downloadZip();
+    // Stay in plugin after download (no "Export complete" screen).
+    status.textContent = '';
+    go('home');
     return;
   }
 
   if (msg.type === 'error') {
+    hideLoading();
     go('home');
     status.textContent = 'Error: ' + msg.message;
   }
