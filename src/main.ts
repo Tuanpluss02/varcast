@@ -14,7 +14,7 @@ import { runEngine } from './core/emit_engine';
 import { flutterTarget } from './targets/flutter';
 import { reactNativeTarget } from './targets/react_native';
 
-figma.showUI(__html__, { width: 400, height: 300 });
+figma.showUI(__html__, { width: 440, height: 720, themeColors: false });
 
 type PendingExport = {
   ir: IR;
