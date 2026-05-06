@@ -33,9 +33,6 @@ const errList = byId<HTMLPreElement>('errList');
 
 const packageName = byId<HTMLInputElement>('packageName');
 const targetId = byId<HTMLSelectElement>('targetId');
-const leafPrefix = byId<HTMLInputElement>('leafPrefix');
-const leafSuffix = byId<HTMLInputElement>('leafSuffix');
-const namingPreview = byId<HTMLParagraphElement>('namingPreview');
 const tokensCount = byId<HTMLSpanElement>('tokensCount');
 const compositesCount = byId<HTMLSpanElement>('compositesCount');
 
@@ -45,7 +42,6 @@ const toggles: ToggleEls = {
   colorStyles: byId('tColorStyles'),
   shadows: byId('tShadows'),
   textStyles: byId('tTextStyles'),
-  smokeTest: byId('tSmokeTest'),
 };
 
 const modal = setupModal({
@@ -58,20 +54,10 @@ function go(name: keyof typeof screens) {
   showScreen(screens, name as any, actionBar);
 }
 
-function camel(s: string) {
-  return s.replace(/[_\-\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
-}
-function pascal(s: string) {
-  const c = camel(s);
-  return c ? c[0].toUpperCase() + c.slice(1) : '';
-}
-
 function updateMeta() {
   const o = collectOptions({
     targetId,
     packageName,
-    leafPrefix,
-    leafSuffix,
     toggles,
   });
 
@@ -81,21 +67,6 @@ function updateMeta() {
   const compOn = [toggles.colorStyles, toggles.shadows, toggles.textStyles]
     .filter(isToggleOn).length;
   compositesCount.textContent = `${compOn} of 3`;
-
-  // Naming preview: e.g. "primary" → "dsPrimaryToken"
-  const prefix = camel(leafPrefix.value.trim());
-  const suffix = pascal(leafSuffix.value.trim());
-  const example = prefix
-    ? prefix + 'Primary' + suffix
-    : 'primary' + suffix || 'primary';
-  namingPreview.innerHTML = `Preview · <code>primary</code> → <code>${escapeHtml(example)}</code>`;
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 function downloadZip() {
@@ -131,8 +102,6 @@ function startExport() {
   const options = collectOptions({
     targetId,
     packageName,
-    leafPrefix,
-    leafSuffix,
     toggles,
   });
   postToPlugin({ type: 'export', options });
@@ -155,7 +124,7 @@ Object.values(toggles).forEach((el) => {
   });
 });
 
-[targetId, packageName, leafPrefix, leafSuffix].forEach((el) => {
+[targetId, packageName].forEach((el) => {
   el.addEventListener('input', updateMeta);
   el.addEventListener('change', updateMeta);
 });
@@ -163,14 +132,11 @@ Object.values(toggles).forEach((el) => {
 byId<HTMLButtonElement>('reset').addEventListener('click', () => {
   targetId.value = 'flutter';
   packageName.value = 'design_system';
-  leafPrefix.value = '';
-  leafSuffix.value = '';
   setToggle(toggles.primitives, true);
   setToggle(toggles.tokens, true);
   setToggle(toggles.colorStyles, true);
   setToggle(toggles.shadows, true);
   setToggle(toggles.textStyles, true);
-  setToggle(toggles.smokeTest, true);
   updateMeta();
 });
 

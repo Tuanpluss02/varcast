@@ -1,15 +1,15 @@
-import type { IR } from '../../ir/types';
 import type { Manifest, ManifestTargetSection } from '../../core/manifest';
 import type { EmittedFile, PreparedIR, Target } from '../../core/target';
+import type { IR } from '../../ir/types';
+import { emitCollections } from './generator/emit_collections';
+import { emitComposites } from './generator/emit_composites';
+import { emitRuntime } from './generator/emit_runtime';
+import { prepareRN } from './generator/prepare';
 import { reactNativeIdentifierProfile } from './identifier';
-import { reactNativeTypeMapping } from './type_mapping';
 import type { ReactNativeOptions } from './options';
 import { DEFAULT_RN_OPTIONS } from './options';
-import { packageJson, readmeMd, runtimeIndexTs, themeProviderTsx, tsconfigJson, reactShimDts, modesTs } from './static_files';
-import { prepareRN } from './generator/prepare';
-import { emitCollections } from './generator/emit_collections';
-import { emitRuntime } from './generator/emit_runtime';
-import { emitComposites } from './generator/emit_composites';
+import { modesTs, packageJson, reactShimDts, readmeMd, runtimeIndexTs, themeProviderTsx, tsconfigJson } from './static_files';
+import { reactNativeTypeMapping } from './type_mapping';
 
 export type PreparedReactNative = PreparedIR & {
   nextManifestSection: ManifestTargetSection;

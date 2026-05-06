@@ -15,7 +15,7 @@ import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
 import type { Manifest } from '../../../manifest';
 import { resolveStableCollectionName, resolveStableName } from '../../../manifest';
 import type { ExportOptions } from './options';
-import { applyLeafAffixes, DEFAULT_EXPORT_OPTIONS } from './options';
+import { DEFAULT_EXPORT_OPTIONS } from './options';
 
 /**
  * PreparedIR — The IR with finalized Dart identifiers and a flattened variable index
@@ -239,16 +239,11 @@ function prepareCollection(
       stableLeaf = fixed;
     }
     stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
-    const emittedLeaf = applyLeafAffixes(
-      stableLeaf,
-      options.naming.leafPrefix,
-      options.naming.leafSuffix,
-    );
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
       groupPath,
-      leafName: emittedLeaf,
+      leafName: stableLeaf,
       stableLeafName: stableLeaf,
       dartType: dartTypeOf(v.type),
       valuesByMode: v.valuesByMode,

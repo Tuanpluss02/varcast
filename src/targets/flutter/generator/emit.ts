@@ -105,12 +105,10 @@ export function emitPreparedPackage(
   // Package metadata
   files.push({ path: 'pubspec.yaml', contents: pubspecYaml(packageName) });
   files.push({ path: 'README.md', contents: readmeMd(packageName) });
-  if (options.include.smokeTest) {
-    files.push({
-      path: 'test/smoke_test.dart',
-      contents: smokeTestDartFile(packageName),
-    });
-  }
+  files.push({
+    path: 'test/smoke_test.dart',
+    contents: smokeTestDartFile(packageName),
+  });
 
   return { files, nextManifest: prepared.nextManifest };
 }

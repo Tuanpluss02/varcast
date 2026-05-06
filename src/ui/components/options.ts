@@ -9,11 +9,6 @@ export type ExportOptions = {
       shadows: boolean;
       textStyles: boolean;
     };
-    smokeTest: boolean;
-  };
-  naming: {
-    leafPrefix: string;
-    leafSuffix: string;
   };
 };
 
@@ -23,7 +18,6 @@ export type ToggleEls = {
   colorStyles: HTMLElement;
   shadows: HTMLElement;
   textStyles: HTMLElement;
-  smokeTest: HTMLElement;
 };
 
 export function isToggleOn(el: HTMLElement) {
@@ -41,11 +35,9 @@ export function toggleDataOn(el: HTMLElement) {
 export function collectOptions(opts: {
   targetId: HTMLSelectElement;
   packageName: HTMLInputElement;
-  leafPrefix: HTMLInputElement;
-  leafSuffix: HTMLInputElement;
   toggles: ToggleEls;
 }): ExportOptions {
-  const { targetId, packageName, leafPrefix, leafSuffix, toggles } = opts;
+  const { targetId, packageName, toggles } = opts;
   return {
     targetId: targetId.value || 'flutter',
     packageName: packageName.value || 'design_system',
@@ -57,11 +49,6 @@ export function collectOptions(opts: {
         shadows: isToggleOn(toggles.shadows),
         textStyles: isToggleOn(toggles.textStyles),
       },
-      smokeTest: isToggleOn(toggles.smokeTest),
-    },
-    naming: {
-      leafPrefix: leafPrefix.value || '',
-      leafSuffix: leafSuffix.value || '',
     },
   };
 }
@@ -75,8 +62,6 @@ export function pillText(o: ExportOptions): string {
   else bits.push('Custom');
 
   const customized =
-    Boolean(o.naming.leafPrefix) ||
-    Boolean(o.naming.leafSuffix) ||
     !o.include.composites.colorStyles ||
     !o.include.composites.shadows ||
     !o.include.composites.textStyles;
