@@ -45,7 +45,7 @@ class DesignSystemWrapper extends StatefulWidget {
   const DesignSystemWrapper({
     super.key,
     required this.builder,
-    this.duration = const Duration(milliseconds: 300),
+    this.duration = Duration.zero,
   });
 
   /// A builder callback that is re-evaluated when modes change.
@@ -114,7 +114,7 @@ export function pubspecYaml(packageName = 'design_system'): string {
   return `name: ${packageName}
 description: >
   Generated Flutter design system package.
-  Produced by the Figma → Flutter plugin. Do not edit by hand.
+  Produced by Varcast. Do not edit by hand.
 version: 0.1.0
 publish_to: "none"
 

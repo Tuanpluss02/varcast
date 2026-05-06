@@ -129,15 +129,15 @@ export function prepareIR(
 
   const paintStyles = dedupCompositeGetters(
     ir.composites.paintStyles.map((s) => preparePaint(s)),
-    (s) => `${s.groupName}`,
+    () => `paint`,
   );
   const effectStyles = dedupCompositeGetters(
     ir.composites.effectStyles.map((s) => prepareEffect(s)),
-    (s) => `${s.groupName}`,
+    () => `effect`,
   );
   const textStyles = dedupCompositeGetters(
     ir.composites.textStyles.map((s) => prepareText(s)),
-    (s) => `${s.groupName}`,
+    () => `text`,
   );
 
   const nextManifest = buildNextManifest(ir, collections, manifest);
@@ -332,73 +332,24 @@ function buildNextManifest(
 const FLUTTER_TARGET_ID = 'flutter';
 
 function preparePaint(s: IRPaintStyle): PreparedPaintStyle {
-  const { groupName, getterName } = splitFigmaNameForComposite(
-    paintBucket(s.type),
-    s.figmaName,
-  );
-  return { id: s.id, type: s.type, groupName, getterName, raw: s };
+  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
+  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
+  const getterName = sanitizeIdentifier(getter, 'camel');
+  return { id: s.id, type: s.type, groupName: 'Paint', getterName, raw: s };
 }
 
 function prepareEffect(s: IREffectStyle): PreparedEffectStyle {
-  const { groupName, getterName } = splitFigmaNameForComposite(
-    effectBucket(s.type),
-    s.figmaName,
-  );
-  return { id: s.id, type: s.type, groupName, getterName, raw: s };
+  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
+  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
+  const getterName = sanitizeIdentifier(getter, 'camel');
+  return { id: s.id, type: s.type, groupName: 'Effect', getterName, raw: s };
 }
 
 function prepareText(s: IRTextStyle): PreparedTextStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
-  let groupName: string;
-  let getterParts: string[];
-  if (segments.length >= 2) {
-    groupName = sanitizeIdentifier(segments[0], 'pascal');
-    getterParts = segments.slice(1);
-  } else {
-    groupName = 'Main';
-    getterParts = segments;
-  }
-  const getterName = sanitizeIdentifier(getterParts.join(' '), 'camel');
-  return { id: s.id, groupName, getterName, raw: s };
-}
-
-function paintBucket(t: IRPaintStyle['type']): string {
-  switch (t) {
-    case 'SOLID':
-      return 'Solid';
-    case 'GRADIENT_LINEAR':
-      return 'Linear';
-    case 'GRADIENT_RADIAL':
-      return 'Radial';
-    case 'GRADIENT_ANGULAR':
-      return 'Angular';
-    case 'GRADIENT_DIAMOND':
-      return 'Diamond';
-    case 'IMAGE':
-      return 'Image';
-  }
-}
-
-function effectBucket(t: IREffectStyle['type']): string {
-  switch (t) {
-    case 'DROP_SHADOW':
-      return 'Drop';
-    case 'INNER_SHADOW':
-      return 'Inner';
-    case 'LAYER_BLUR':
-      return 'LayerBlur';
-    case 'BACKGROUND_BLUR':
-      return 'BackgroundBlur';
-  }
-}
-
-function splitFigmaNameForComposite(
-  groupName: string,
-  figmaName: string,
-): { groupName: string; getterName: string } {
-  const segments = figmaName.split('/').map((s) => s.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  return { groupName, getterName: sanitizeIdentifier(getter, 'camel') };
+  const getterName = sanitizeIdentifier(getter, 'camel');
+  return { id: s.id, groupName: 'Text', getterName, raw: s };
 }
 
 function dedupCompositeGetters<T extends { getterName: string }>(

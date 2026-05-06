@@ -26,37 +26,13 @@ export function emitColorStyles(
   styles: PreparedPaintStyle[],
   varIndex: Map<string, VarRef>,
 ): string {
-  const buckets = new Map<string, PreparedPaintStyle[]>();
-  for (const s of styles) {
-    if (!buckets.has(s.groupName)) buckets.set(s.groupName, []);
-    buckets.get(s.groupName)!.push(s);
-  }
-  const ordered: [string, PreparedPaintStyle[]][] = [
-    'Solid',
-    'Linear',
-    'Radial',
-    'Angular',
-    'Diamond',
-    'Image',
-  ]
-    .filter((b) => buckets.has(b))
-    .map((b) => [b, buckets.get(b)!]);
-
   let out = FILE_HEADER;
   out += `import 'dart:math' show pi;\n`;
   out += `import 'package:flutter/painting.dart';\n`;
   out += `import '../theme.dart';\n\n`;
   out += `// ignore_for_file: unused_import\n\n`;
 
-  for (const [bucket, items] of ordered) {
-    const cls = `DSColorStyles${bucket}`;
-    out += `class ${cls} {\n`;
-    out += `  const ${cls}();\n\n`;
-    for (const s of items) out += emitPaintGetter(s, varIndex);
-    out += `}\n\n`;
-  }
-
-  if (buckets.has('Diamond')) {
+  if (styles.some((s) => s.type === 'GRADIENT_DIAMOND')) {
     out += `class _DiamondTransform extends GradientTransform {\n`;
     out += `  const _DiamondTransform();\n`;
     out += `  @override\n`;
@@ -67,10 +43,9 @@ export function emitColorStyles(
   }
 
   out += `class DSColorStyles {\n`;
-  out += `  const DSColorStyles();\n`;
-  for (const [bucket] of ordered) {
-    const field = bucket[0].toLowerCase() + bucket.slice(1);
-    out += `  final DSColorStyles${bucket} ${field} = const DSColorStyles${bucket}();\n`;
+  out += `  const DSColorStyles();\n\n`;
+  for (const s of styles) {
+    out += emitPaintGetter(s, varIndex);
   }
   out += `}\n`;
   return out;
@@ -169,29 +144,13 @@ export function emitShadows(
   out += `  });\n`;
   out += `}\n\n`;
 
-  if (drops.length > 0) {
-    out += `class DSDropShadows {\n  const DSDropShadows();\n\n`;
-    for (const s of drops) out += emitShadowGetter(s, varIndex, 'normal');
-    out += `}\n\n`;
+  out += `class DSShadows {\n  const DSShadows();\n\n`;
+  for (const s of drops) out += emitShadowGetter(s, varIndex, 'normal');
+  for (const s of inners) out += emitShadowGetter(s, varIndex, 'inner');
+  for (const s of blurs) {
+    const r = s.raw as { sigmaX: number; sigmaY: number };
+    out += `  ImageFilter get ${s.getterName} => ImageFilter.blur(sigmaX: ${doubleLiteral(r.sigmaX)}, sigmaY: ${doubleLiteral(r.sigmaY)});\n\n`;
   }
-  if (inners.length > 0) {
-    out += `class DSInnerShadows {\n  const DSInnerShadows();\n\n`;
-    for (const s of inners) out += emitShadowGetter(s, varIndex, 'inner');
-    out += `}\n\n`;
-  }
-  if (blurs.length > 0) {
-    out += `class DSBlurs {\n  const DSBlurs();\n\n`;
-    for (const s of blurs) {
-      const r = s.raw as { sigmaX: number; sigmaY: number };
-      out += `  ImageFilter get ${s.getterName} => ImageFilter.blur(sigmaX: ${doubleLiteral(r.sigmaX)}, sigmaY: ${doubleLiteral(r.sigmaY)});\n\n`;
-    }
-    out += `}\n\n`;
-  }
-
-  out += `class DSShadows {\n  const DSShadows();\n`;
-  if (drops.length > 0) out += `  final DSDropShadows drop = const DSDropShadows();\n`;
-  if (inners.length > 0) out += `  final DSInnerShadows inner = const DSInnerShadows();\n`;
-  if (blurs.length > 0) out += `  final DSBlurs blur = const DSBlurs();\n`;
   out += `}\n`;
   return out;
 }
@@ -222,12 +181,6 @@ export function emitTextStyles(
   styles: PreparedTextStyle[],
   varIndex: Map<string, VarRef>,
 ): string {
-  const buckets = new Map<string, PreparedTextStyle[]>();
-  for (const s of styles) {
-    if (!buckets.has(s.groupName)) buckets.set(s.groupName, []);
-    buckets.get(s.groupName)!.push(s);
-  }
-  const ordered = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   let out = FILE_HEADER;
   out += `import 'package:flutter/painting.dart';\n`;
@@ -270,19 +223,10 @@ export function emitTextStyles(
   out += `  };\n`;
   out += `}\n\n`;
 
-  for (const [bucket, items] of ordered) {
-    const cls = `DSStyles${bucket}`;
-    out += `class ${cls} {\n`;
-    out += `  const ${cls}();\n\n`;
-    for (const s of items) out += emitTextGetter(s, varIndex);
-    out += `}\n\n`;
-  }
-
   out += `class DSStyles {\n`;
-  out += `  const DSStyles();\n`;
-  for (const [bucket] of ordered) {
-    const field = bucket[0].toLowerCase() + bucket.slice(1);
-    out += `  final DSStyles${bucket} ${field} = const DSStyles${bucket}();\n`;
+  out += `  const DSStyles();\n\n`;
+  for (const s of styles) {
+    out += emitTextGetter(s, varIndex);
   }
   out += `}\n`;
   return out;
