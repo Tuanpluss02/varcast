@@ -6,6 +6,5 @@
   "capabilities": ["inspect"],
   "main": "dist/code.js",
   "ui": "dist/ui.html",
-  "permissions": ["currentuser"],
   "documentAccess": "dynamic-page"
 }

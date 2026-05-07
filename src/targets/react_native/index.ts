@@ -44,9 +44,18 @@ export const reactNativeTarget: Target = {
       { path: 'src/runtime/modes.ts', contents: modesTs() },
       { path: 'src/react-shim.d.ts', contents: reactShimDts() },
     ];
-    const colFiles = emitCollections(prepared as any);
-    const runtimeFiles = emitRuntime(prepared as any);
-    const compositeFiles = emitComposites(prepared as any).filter((f) => {
+    // Filter collections by kind so toggling primitives/tokens off in the UI
+    // actually drops the corresponding collection files (and their imports
+    // in the generated runtime).
+    const filteredCollections = (prepared as PreparedReactNative).collections.filter((c) => {
+      if (c.kind === 'primitive' && !o.include.primitives) return false;
+      if (c.kind === 'token' && !o.include.tokens) return false;
+      return true;
+    });
+    const filtered = { ...prepared, collections: filteredCollections } as PreparedReactNative;
+    const colFiles = emitCollections(filtered as any);
+    const runtimeFiles = emitRuntime(filtered as any);
+    const compositeFiles = emitComposites(filtered as any).filter((f) => {
       if (f.path.endsWith('colorStyles.ts')) return o.include.composites.colorStyles;
       if (f.path.endsWith('shadows.ts')) return o.include.composites.shadows;
       if (f.path.endsWith('textStyles.ts')) return o.include.composites.textStyles;

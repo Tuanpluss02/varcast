@@ -6,17 +6,13 @@
     <link rel="stylesheet" href="./ui.css" />
   </head>
   <body>
-    <div class="aurora" aria-hidden="true">
-      <span class="orb orb--violet"></span>
-      <span class="orb orb--cyan"></span>
-      <span class="orb orb--magenta"></span>
-      <span class="grain"></span>
-    </div>
-
     <header class="topbar">
       <div class="brand">
         <div class="brand__mark" aria-hidden="true">
-          <span></span>
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M9 4c-2 0-3 1-3 3v3c0 1-.7 2-2 2 1.3 0 2 1 2 2v3c0 2 1 3 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M14 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </div>
         <div class="brand__text">
           <h1>Varcast</h1>
@@ -50,23 +46,32 @@
 
         <div class="card">
           <div class="card__head">
-            <div>
-              <h2 class="card__title">Tokens</h2>
-              <p class="card__sub">What lands in <code>lib/tokens/</code></p>
-            </div>
+            <h2 class="card__title">Tokens</h2>
             <span class="count-pill" id="tokensCount" aria-live="polite">2 of 2</span>
           </div>
           <div class="toggle" id="tPrimitives" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tPrimitives-label">
             <div class="toggle__copy">
               <div class="toggle__title" id="tPrimitives-label">Primitives</div>
-              <div class="toggle__sub">ColorBasic, NumberBasic…</div>
+              <button class="info" type="button" tabindex="0" aria-label="Primitives info" data-tooltip="Raw value collections (e.g. ColorBasic, NumberBasic)">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
+                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
+                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
+                </svg>
+              </button>
             </div>
             <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
           <div class="toggle" id="tTokens" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tTokens-label">
             <div class="toggle__copy">
               <div class="toggle__title" id="tTokens-label">Semantic tokens</div>
-              <div class="toggle__sub">ColorToken, TextToken…</div>
+              <button class="info" type="button" tabindex="0" aria-label="Semantic tokens info" data-tooltip="Aliased collections that reference primitives (e.g. ColorToken, TextToken)">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
+                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
+                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
+                </svg>
+              </button>
             </div>
             <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
@@ -74,30 +79,45 @@
 
         <div class="card">
           <div class="card__head">
-            <div>
-              <h2 class="card__title">Composite styles</h2>
-              <p class="card__sub">Generated from Figma styles</p>
-            </div>
+            <h2 class="card__title">Composite styles</h2>
             <span class="count-pill" id="compositesCount" aria-live="polite">3 of 3</span>
           </div>
           <div class="toggle" id="tColorStyles" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tColorStyles-label">
             <div class="toggle__copy">
               <div class="toggle__title" id="tColorStyles-label">Color styles</div>
-              <div class="toggle__sub">Paint styles composites</div>
+              <button class="info" type="button" tabindex="0" aria-label="Color styles info" data-tooltip="Paint styles emitted as DSColorStyles (solids and gradients)">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
+                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
+                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
+                </svg>
+              </button>
             </div>
             <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
           <div class="toggle" id="tShadows" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tShadows-label">
             <div class="toggle__copy">
               <div class="toggle__title" id="tShadows-label">Shadows</div>
-              <div class="toggle__sub">Effect styles composites</div>
+              <button class="info" type="button" tabindex="0" aria-label="Shadows info" data-tooltip="Effect styles emitted as DSShadows (drop, inner, blur)">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
+                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
+                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
+                </svg>
+              </button>
             </div>
             <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
           <div class="toggle" id="tTextStyles" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tTextStyles-label">
             <div class="toggle__copy">
               <div class="toggle__title" id="tTextStyles-label">Text styles</div>
-              <div class="toggle__sub">Text styles composites</div>
+              <button class="info" type="button" tabindex="0" aria-label="Text styles info" data-tooltip="Text styles emitted as DSStyles / DSTextStyle">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
+                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
+                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
+                </svg>
+              </button>
             </div>
             <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
           </div>
@@ -110,10 +130,7 @@
       <section id="screen-errors" class="screen hidden">
         <div class="card card--danger">
           <div class="card__head">
-            <div>
-              <h2 class="card__title" id="errTitle">Errors</h2>
-              <p class="card__sub">Fix in Figma, then try again</p>
-            </div>
+            <h2 class="card__title" id="errTitle">Errors</h2>
             <button class="ghost-btn" id="copyErrors" type="button" title="Copy errors">Copy</button>
           </div>
           <pre class="log log--danger" id="errList"></pre>
@@ -138,27 +155,14 @@
       <div class="actions__group hidden" data-screen="errors">
         <button class="link-btn" id="closeErrors" type="button">Back</button>
       </div>
-
-      <!-- VALIDATING/EXPORTING: no actions -->
     </footer>
-
-    <!-- ========================= MODAL ========================= -->
-    <div id="modalBackdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal">
-        <header class="modal__head">
-          <div class="modal__title" id="modalTitle">Changelog</div>
-          <button class="ghost-btn" id="closeModal" type="button" aria-label="Close">Close</button>
-        </header>
-        <pre id="changelogText" class="log"></pre>
-      </div>
-    </div>
 
     <!-- ========================= LOADING OVERLAY ========================= -->
     <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
       <div class="card card--center">
         <div class="spinner" aria-hidden="true"></div>
         <div class="card__title" id="loadingTitle">Working…</div>
-        <div class="card__sub" id="loadingSub">Please wait.</div>
+        <div class="loading-sub" id="loadingSub">Please wait.</div>
       </div>
     </div>
 

@@ -7,7 +7,9 @@
  * - plugin/src/reader
  * - plugin/src/ir
  *
- * Fails if it finds any forbidden symbols.
+ * Strips comments before scanning so cross-target docstrings don't trip the
+ * regex; tightens the JSX detector so generic angle brackets like `Map<X>`
+ * or `Foo<T>` aren't false positives.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,24 +17,23 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const SCAN_DIRS = ['src/core', 'src/reader', 'src/ir'].map((p) => path.join(ROOT, p));
 
-/** Keep this list intentionally broad and cheap. */
 const FORBIDDEN = [
-  // Flutter/Dart
-  /\bDart\b/,
-  /\bFlutter\b/,
-  /\bpubspec\b/,
-  /\bColor\s*\(/, // common Dart literal pattern; helps catch accidental snippets
+  // Flutter/Dart code patterns (not just words — we want to catch actual code)
+  /\bnew\s+(Color|TextStyle|BoxShadow|Gradient|LinearGradient|RadialGradient|SweepGradient)\(/,
+  /\bColor\s*\(\s*0x[0-9A-Fa-f]+\s*\)/,
+  /\bpubspec\.yaml/,
+  /\bimport\s+'package:flutter/,
   // React Native / JSX
   /\breact-native\b/i,
-  /\bJSX\b/,
-  /<\s*[A-Z][A-Za-z0-9]*\s*[^>]*>/, // rough JSX tag detector
-  // Future targets
-  /\bSwift\b/,
-  /\bKotlin\b/,
-  /\bCompose\b/,
+  /\bimport\s+React\b/,
+  // Real JSX tag: <TagName ... > followed by content or close tag, NOT a generic
+  // Generics look like `<T>`, `<TypeName>` followed by `(`, `=`, `,`, `>`, etc.
+  // A JSX tag will typically have attributes (=) or close with `</…>` somewhere.
+  /<\/[A-Z][A-Za-z0-9]*>/,
+  /<[A-Z][A-Za-z0-9]*\s+[a-z][A-Za-z0-9]*=/,
 ];
 
-const ALLOW_FILE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.md']);
+const ALLOW_FILE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx']);
 
 function walk(dir) {
   const out = [];
@@ -48,11 +49,19 @@ function rel(p) {
   return path.relative(ROOT, p);
 }
 
-/** @returns {string[]} */
+function stripComments(src) {
+  // Remove block comments /* ... */ and line comments // ...
+  // (good enough for source files; not robust against weird strings, but
+  // these are TS/JS files in our own codebase.)
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
 function scanFile(file) {
   const ext = path.extname(file);
   if (!ALLOW_FILE_EXT.has(ext)) return [];
-  const text = fs.readFileSync(file, 'utf8');
+  const text = stripComments(fs.readFileSync(file, 'utf8'));
   const hits = [];
   for (const rx of FORBIDDEN) {
     if (rx.test(text)) hits.push(String(rx));

@@ -150,37 +150,4 @@ export function themeProviderTsx(): string {
   );
 }
 
-export function createThemeTs(): string {
-  return (
-    [
-      "import type { Dispatch, SetStateAction } from 'react';",
-      '',
-      '// Collection modes are added by generated token modules.',
-      'export type ThemeModeState = Record<string, string>;',
-      '',
-      'export type Theme = {',
-      '  modes: ThemeModeState;',
-      '  setMode: (collection: string, mode: string) => void;',
-      '  // collections are added by generated modules',
-      '  [k: string]: any;',
-      '};',
-      '',
-      'export function createTheme(',
-      '  modes: ThemeModeState = {},',
-      '  setModes?: Dispatch<SetStateAction<ThemeModeState>>,',
-      '): Theme {',
-      '  const setMode = (collection: string, mode: string) => {',
-      '    if (!setModes) return;',
-      '    setModes((prev) => ({ ...prev, [collection]: mode }));',
-      '  };',
-      '',
-      '  return {',
-      '    modes,',
-      '    setMode,',
-      '  } as Theme;',
-      '}',
-      '',
-    ].join('\\n') + '\\n'
-  );
-}
 

@@ -1,8 +1,6 @@
 import { byId } from './lib/dom';
-import { fmtDiff, fmtSummary } from './lib/format';
 import type { PluginToUiMessage } from './lib/messages';
 import { formatError, postToPlugin } from './lib/messages';
-import { setupModal } from './components/modal';
 import { showScreen } from './components/screens';
 import type { Screens } from './components/screens';
 import {
@@ -44,24 +42,11 @@ const toggles: ToggleEls = {
   textStyles: byId('tTextStyles'),
 };
 
-const modal = setupModal({
-  backdrop: byId('modalBackdrop'),
-  textEl: byId('changelogText'),
-  closeBtn: byId('closeModal'),
-});
-
 function go(name: keyof typeof screens) {
   showScreen(screens, name as any, actionBar);
 }
 
 function updateMeta() {
-  const o = collectOptions({
-    targetId,
-    packageName,
-    toggles,
-  });
-
-  // Counters
   const tokenOn = [toggles.primitives, toggles.tokens].filter(isToggleOn).length;
   tokensCount.textContent = `${tokenOn} of 2`;
   const compOn = [toggles.colorStyles, toggles.shadows, toggles.textStyles]
@@ -109,13 +94,19 @@ function startExport() {
 
 exportBtn.addEventListener('click', startExport);
 
-// Toggles: click + keyboard (Space / Enter)
+// Clicks/keys on the info button inside .toggle__copy must not flip the switch.
+function isFromInfoButton(e: Event): boolean {
+  const t = e.target as HTMLElement | null;
+  return !!t && !!t.closest && !!t.closest('.info');
+}
 Object.values(toggles).forEach((el) => {
-  el.addEventListener('click', () => {
+  el.addEventListener('click', (e) => {
+    if (isFromInfoButton(e)) return;
     toggleDataOn(el);
     updateMeta();
   });
   el.addEventListener('keydown', (e) => {
+    if (isFromInfoButton(e)) return;
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       toggleDataOn(el);
@@ -145,7 +136,6 @@ byId<HTMLButtonElement>('closeErrors').addEventListener('click', () => {
   go('home');
 });
 
-// Copy buttons for errors / warnings
 function wireCopy(btnId: string, source: HTMLElement) {
   const btn = byId<HTMLButtonElement>(btnId);
   btn.addEventListener('click', async () => {
@@ -196,12 +186,8 @@ window.onmessage = (e: MessageEvent) => {
   if (msg.type === 'zip-ready') {
     state.lastZip = msg.bytes;
     state.lastFilename = msg.filename || 'design_system.zip';
-    state.lastChangelog = msg.changelog || '';
-    state.lastDiff = msg.diff || state.lastDiff;
-    state.lastSummary = msg.summary || state.lastSummary;
     hideLoading();
     downloadZip();
-    // Stay in plugin after download (no "Export complete" screen).
     status.textContent = '';
     go('home');
     return;
