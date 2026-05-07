@@ -89,7 +89,7 @@ export function emitCollection(
 
   // ── Mode-specific concrete classes ─────────────────────────────────────────
   for (const mode of col.modes) {
-    const concreteName = `${cn}${mode.pascal}`;
+    const concreteName = concreteClassName(cn, mode.pascal);
     const ctorPrefix = isAllConst ? 'const ' : '';
     out += `class ${concreteName} extends ${cn} {\n`;
     out += `  ${ctorPrefix}${concreteName}();\n`;
@@ -115,6 +115,14 @@ export function emitCollection(
   out += `}\n`;
 
   return out;
+
+  function concreteClassName(collectionClassName: string, modePascal: string): string {
+    const candidate = `${collectionClassName}${modePascal}`;
+    // Prevent collision with the enum `${Collection}Mode`.
+    // Example: `FontFamily` + mode `Mode` => `FontFamilyMode` (enum) vs class.
+    if (candidate === `${collectionClassName}Mode`) return `${candidate}Value`;
+    return candidate;
+  }
 
   function emitValueExpr(v: PreparedVariable, modeId: string): string {
     const val = v.valuesByMode[modeId];

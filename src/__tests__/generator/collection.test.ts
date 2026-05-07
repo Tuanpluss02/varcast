@@ -55,6 +55,26 @@ function buildIr(): IR {
           },
         ],
       },
+      {
+        id: 'col:font-family',
+        name: 'Font Family',
+        kind: 'primitive',
+        // Intentionally named "Mode" to reproduce a collision:
+        // enum FontFamilyMode vs class FontFamilyMode.
+        modes: [{ id: 'm:1', name: 'Mode' }],
+        variables: [
+          {
+            id: 'var:font',
+            figmaName: 'fonts',
+            groupPath: [],
+            type: 'STRING',
+            scopes: ['TEXT_CONTENT'],
+            hiddenFromPublishing: false,
+            emitToPublic: true,
+            valuesByMode: { 'm:1': { kind: 'literal', value: 'Inter' } },
+          },
+        ],
+      },
     ],
     composites: { paintStyles: [], effectStyles: [], textStyles: [] },
   };
@@ -74,6 +94,15 @@ describe('emitCollection (golden)', () => {
     const dart = emitCollection(col, prepared.varIndex);
     expect(dart).toMatchSnapshot();
     expect(dart).toContain('AppTheme.colorBasic');
+  });
+
+  it('avoids class/enum collision when a mode is named "Mode"', () => {
+    const prepared = prepareIR(buildIr());
+    const col = prepared.collections.find((c) => c.className === 'FontFamily')!;
+    const dart = emitCollection(col, prepared.varIndex);
+    expect(dart).toContain('enum FontFamilyMode');
+    expect(dart).toContain('class FontFamilyModeValue extends FontFamily');
+    expect(dart).not.toContain('class FontFamilyMode extends FontFamily');
   });
 });
 

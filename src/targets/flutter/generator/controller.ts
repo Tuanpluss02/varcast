@@ -108,7 +108,7 @@ function controllerBlock(col: PreparedCollection): string {
   out += `    _${accessor}Prev = ${accessor};\n`;
   out += `    _${accessor} = switch (mode) {\n`;
   for (const m of modes) {
-    out += `      ${cls}Mode.${m.camel} => ${cls}${m.pascal}(),\n`;
+    out += `      ${cls}Mode.${m.camel} => ${concreteClassName(cls, m.pascal)}(),\n`;
   }
   out += `    };\n`;
   out += `    _trigger(_${accessor}Anim);\n`;
@@ -118,7 +118,13 @@ function controllerBlock(col: PreparedCollection): string {
 }
 
 function defaultConcrete(col: PreparedCollection): string {
-  return `${col.className}${col.modes[col.defaultModeIndex].pascal}`;
+  return concreteClassName(col.className, col.modes[col.defaultModeIndex].pascal);
+}
+
+function concreteClassName(collectionClassName: string, modePascal: string): string {
+  const candidate = `${collectionClassName}${modePascal}`;
+  if (candidate === `${collectionClassName}Mode`) return `${candidate}Value`;
+  return candidate;
 }
 
 function collectionDir(col: PreparedCollection): 'primitives' | 'tokens' {
