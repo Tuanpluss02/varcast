@@ -362,7 +362,8 @@ function dedupCompositeGetters<T extends { getterName: string }>(
     }
     const next = n + 1;
     used.set(key, next);
-    it.getterName = `${base}_${next}`;
+    // Dart lowerCamelCase: "shadowMd" + 2 = "shadowMd2", not "shadowMd_2".
+    it.getterName = `${base}${next}`;
   }
   return items;
 }

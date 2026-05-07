@@ -294,7 +294,8 @@ function dedupCompositeGetters<T extends { getterName: string }>(
     }
     const next = n + 1;
     used.set(key, next);
-    it.getterName = `${base}_${next}`;
+    // JS/TS camelCase: keep digits attached (no underscore separator).
+    it.getterName = `${base}${next}`;
   }
   return items;
 }
