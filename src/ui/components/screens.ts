@@ -1,5 +1,6 @@
 export type ScreenName =
   | 'home'
+  | 'review'
   | 'errors';
 
 export type Screens = Record<ScreenName, HTMLElement>;

@@ -5,6 +5,7 @@ import { readTextStyles } from './reader/text_styles';
 import { validate } from './ir/validate';
 import type { IR } from './ir/types';
 import { diffManifest } from './manifest';
+import type { Manifest } from './core/manifest';
 import { normalizeManifest } from './core/manifest';
 import { generateChangelog } from './targets/flutter/generator/changelog';
 import { buildZip } from './zip';
@@ -15,9 +16,19 @@ import { reactNativeTarget } from './targets/react_native';
 
 figma.showUI(__html__, { width: 440, height: 720, themeColors: false });
 
+// Cached between Export and Download so we don't re-read or re-prepare the IR.
+// Cleared on a fresh Export run, on cancel, or once the ZIP is delivered.
+type Pending = {
+  files: { path: string; contents: string }[];
+  nextManifest: Manifest;
+  packageName: string;
+};
+let pending: Pending | null = null;
+
 figma.ui.onmessage = async (msg: { type: string }) => {
   if (msg.type === 'export') {
     try {
+      pending = null;
       const options = normalizeExportOptions((msg as any).options ?? DEFAULT_EXPORT_OPTIONS);
       const targetId = ((msg as any).options?.targetId as string | undefined) ?? 'flutter';
       const ir: IR = {
@@ -41,8 +52,6 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         return;
       }
 
-      // Read both legacy v1 and current v2 keys; normalizeManifest migrates
-      // v1 → v2 transparently so older users don't lose stable names.
       const rawManifest =
         (await figma.clientStorage.getAsync('manifest_v2')) ??
         (await figma.clientStorage.getAsync('manifest_v1'));
@@ -58,23 +67,40 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       const diff = diffManifest(oldManifest, nextManifest);
       const changelog = generateChangelog(diff);
 
-      figma.ui.postMessage({ type: 'exporting' });
-
-      await figma.clientStorage.setAsync('manifest_v2', nextManifest);
-
-      const extra = [
+      const allFiles = [
+        ...files,
         {
           path: '_meta/manifest.json',
           contents: JSON.stringify(nextManifest, null, 2) + '\n',
         },
         { path: 'CHANGELOG.md', contents: changelog + '\n' },
       ];
-      const zipBytes = buildZip([...files, ...extra]);
+
+      pending = {
+        files: allFiles,
+        nextManifest,
+        packageName: options.packageName,
+      };
+
+      const previewFiles = allFiles.map((f) => ({
+        path: f.path,
+        contents: f.contents,
+        size: byteLength(f.contents),
+      }));
+      const totalBytes = previewFiles.reduce((acc, f) => acc + f.size, 0);
 
       figma.ui.postMessage({
-        type: 'zip-ready',
-        filename: `${options.packageName}.zip`,
-        bytes: zipBytes,
+        type: 'preview-ready',
+        files: previewFiles,
+        diff: {
+          added: diff.added.length,
+          removed: diff.removed.length,
+          renamed: diff.renamed.length,
+        },
+        summary: {
+          fileCount: previewFiles.length,
+          totalBytes,
+        },
       });
     } catch (err) {
       figma.ui.postMessage({
@@ -84,8 +110,39 @@ figma.ui.onmessage = async (msg: { type: string }) => {
     }
   }
 
+  if (msg.type === 'download-zip') {
+    if (!pending) {
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'No pending export. Run Export again.',
+      });
+      return;
+    }
+    figma.ui.postMessage({ type: 'exporting' });
+    await figma.clientStorage.setAsync('manifest_v2', pending.nextManifest);
+    const zipBytes = buildZip(pending.files);
+    figma.ui.postMessage({
+      type: 'zip-ready',
+      filename: `${pending.packageName}.zip`,
+      bytes: zipBytes,
+    });
+  }
+
   if (msg.type === 'cancel') {
+    pending = null;
     figma.closePlugin();
   }
 };
 
+// Figma's plugin sandbox doesn't expose TextEncoder, so count UTF-8 bytes by hand.
+function byteLength(s: string): number {
+  let n = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    if (cp < 0x80) n += 1;
+    else if (cp < 0x800) n += 2;
+    else if (cp < 0x10000) n += 3;
+    else n += 4;
+  }
+  return n;
+}
