@@ -15,6 +15,7 @@ import {
   stringLiteral,
 } from './emit_helpers';
 import { flatAliasExpr } from './collection';
+import type { ArchMode } from './options';
 import type {
   PreparedEffectStyle,
   PreparedPaintStyle,
@@ -22,14 +23,65 @@ import type {
   VarRef,
 } from './prepare';
 
+function aliasRootImport(archMode: ArchMode): string {
+  return archMode === 'context'
+    ? `import '../_internal/controller.dart';\n`
+    : `import '../theme.dart';\n`;
+}
+
+// In context mode, composite classes that resolve aliases hold the controller
+// as a ctor-injected `_c` field — same pattern as token concretes — so getters
+// never reach for `DesignSystemController.instance`. Composites with literal-
+// only values (e.g. solid colors with no aliases) stay const-constructible.
+
+export function paintStylesUseAlias(styles: PreparedPaintStyle[]): boolean {
+  return styles.some((s) => {
+    const r = s.raw;
+    if (r.type === 'SOLID') return r.color.kind === 'alias';
+    if (r.type === 'IMAGE') return false;
+    return r.stops.some((st) => st.color.kind === 'alias');
+  });
+}
+
+export function effectStylesUseAlias(styles: PreparedEffectStyle[]): boolean {
+  return styles.some((s) => {
+    const r = s.raw as { color?: { kind: string } };
+    return r.color?.kind === 'alias';
+  });
+}
+
+export function textStylesUseAlias(styles: PreparedTextStyle[]): boolean {
+  const isAlias = (v: any) => v?.kind === 'alias';
+  return styles.some((s) => {
+    const r = s.raw as IRTextStyle;
+    return (
+      isAlias(r.fontSize) ||
+      isAlias(r.fontFamily) ||
+      isAlias(r.fontWeight) ||
+      isAlias(r.lineHeight) ||
+      isAlias(r.letterSpacing)
+    );
+  });
+}
+
+function emitCompositeCtor(name: string, injectsController: boolean): string {
+  if (!injectsController) return `  const ${name}();\n\n`;
+  return (
+    `  const ${name}(this._c);\n` +
+    `  final DesignSystemController _c;\n\n`
+  );
+}
+
 export function emitColorStyles(
   styles: PreparedPaintStyle[],
   varIndex: Map<string, VarRef>,
+  archMode: ArchMode = 'static',
 ): string {
   let out = FILE_HEADER;
   out += `import 'dart:math' show pi;\n`;
   out += `import 'package:flutter/painting.dart';\n`;
-  out += `import '../theme.dart';\n\n`;
+  out += aliasRootImport(archMode);
+  out += `\n`;
   out += `// ignore_for_file: unused_import\n\n`;
 
   if (styles.some((s) => s.type === 'GRADIENT_DIAMOND')) {
@@ -42,10 +94,12 @@ export function emitColorStyles(
     out += `}\n\n`;
   }
 
+  const injectsController =
+    archMode === 'context' && paintStylesUseAlias(styles);
   out += `class DSColorStyles {\n`;
-  out += `  const DSColorStyles();\n\n`;
+  out += emitCompositeCtor('DSColorStyles', injectsController);
   for (const s of styles) {
-    out += emitPaintGetter(s, varIndex);
+    out += emitPaintGetter(s, varIndex, archMode);
   }
   out += `}\n`;
   return out;
@@ -54,11 +108,12 @@ export function emitColorStyles(
 function emitPaintGetter(
   s: PreparedPaintStyle,
   varIndex: Map<string, VarRef>,
+  archMode: ArchMode,
 ): string {
   const r = s.raw;
   switch (r.type) {
     case 'SOLID':
-      return `  Color get ${s.getterName} => ${colorRef(r.color, varIndex)};\n\n`;
+      return `  Color get ${s.getterName} => ${colorRef(r.color, varIndex, archMode)};\n\n`;
     case 'GRADIENT_LINEAR': {
       const { begin, end } = angleToAlignmentDart(r.angleRadians);
       return (
@@ -66,7 +121,7 @@ function emitPaintGetter(
         `    begin: ${begin},\n` +
         `    end: ${end},\n` +
         `    stops: ${stopsLiteral(r.stops)},\n` +
-        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex)).join(', ')}],\n` +
+        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex, archMode)).join(', ')}],\n` +
         `  );\n\n`
       );
     }
@@ -76,7 +131,7 @@ function emitPaintGetter(
         `    center: Alignment(${doubleLiteral((r.center.x - 0.5) * 2)}, ${doubleLiteral((r.center.y - 0.5) * 2)}),\n` +
         `    radius: ${doubleLiteral(r.radius * 2)},\n` +
         `    stops: ${stopsLiteral(r.stops)},\n` +
-        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex)).join(', ')}],\n` +
+        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex, archMode)).join(', ')}],\n` +
         `  );\n\n`
       );
     case 'GRADIENT_ANGULAR':
@@ -86,7 +141,7 @@ function emitPaintGetter(
         `    startAngle: ${doubleLiteral((r as any).startAngle)},\n` +
         `    endAngle: ${doubleLiteral((r as any).endAngle)},\n` +
         `    stops: ${stopsLiteral(r.stops)},\n` +
-        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex)).join(', ')}],\n` +
+        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex, archMode)).join(', ')}],\n` +
         `  );\n\n`
       );
     case 'GRADIENT_DIAMOND':
@@ -97,7 +152,7 @@ function emitPaintGetter(
         `    radius: 1.0,\n` +
         `    transform: const _DiamondTransform(),\n` +
         `    stops: ${stopsLiteral(r.stops)},\n` +
-        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex)).join(', ')}],\n` +
+        `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex, archMode)).join(', ')}],\n` +
         `  );\n\n`
       );
     case 'IMAGE':
@@ -105,11 +160,20 @@ function emitPaintGetter(
   }
 }
 
-function colorRef(c: IRColorValue, varIndex: Map<string, VarRef>): string {
+function colorRef(
+  c: IRColorValue,
+  varIndex: Map<string, VarRef>,
+  archMode: ArchMode,
+): string {
   if (c.kind === 'alias') {
     const ref = varIndex.get(c.targetVariableId);
     if (!ref) return 'const Color(0x00000000)';
-    return flatAliasExpr(ref.collectionAccessor, ref.groupPath, ref.leafName);
+    return flatAliasExpr(
+      ref.collectionAccessor,
+      ref.groupPath,
+      ref.leafName,
+      archMode,
+    );
   }
   return colorLiteral(c.rgba);
 }
@@ -121,6 +185,7 @@ function stopsLiteral(stops: IRGradientStop[]): string {
 export function emitShadows(
   styles: PreparedEffectStyle[],
   varIndex: Map<string, VarRef>,
+  archMode: ArchMode = 'static',
 ): string {
   const drops = styles.filter((s) => s.type === 'DROP_SHADOW');
   const inners = styles.filter((s) => s.type === 'INNER_SHADOW');
@@ -131,7 +196,8 @@ export function emitShadows(
   let out = FILE_HEADER;
   out += `import 'dart:ui' show ImageFilter;\n`;
   out += `import 'package:flutter/painting.dart';\n`;
-  out += `import '../theme.dart';\n\n`;
+  out += aliasRootImport(archMode);
+  out += `\n`;
   out += `// ignore_for_file: unused_import\n\n`;
 
   out += `class DSShadow extends BoxShadow {\n`;
@@ -144,9 +210,12 @@ export function emitShadows(
   out += `  });\n`;
   out += `}\n\n`;
 
-  out += `class DSShadows {\n  const DSShadows();\n\n`;
-  for (const s of drops) out += emitShadowGetter(s, varIndex, 'normal');
-  for (const s of inners) out += emitShadowGetter(s, varIndex, 'inner');
+  const injectsController =
+    archMode === 'context' && effectStylesUseAlias(styles);
+  out += `class DSShadows {\n`;
+  out += emitCompositeCtor('DSShadows', injectsController);
+  for (const s of drops) out += emitShadowGetter(s, varIndex, 'normal', archMode);
+  for (const s of inners) out += emitShadowGetter(s, varIndex, 'inner', archMode);
   for (const s of blurs) {
     const r = s.raw as { sigmaX: number; sigmaY: number };
     out += `  ImageFilter get ${s.getterName} => ImageFilter.blur(sigmaX: ${doubleLiteral(r.sigmaX)}, sigmaY: ${doubleLiteral(r.sigmaY)});\n\n`;
@@ -159,10 +228,11 @@ function emitShadowGetter(
   s: PreparedEffectStyle,
   varIndex: Map<string, VarRef>,
   blurStyle: 'normal' | 'inner',
+  archMode: ArchMode,
 ): string {
   const r = s.raw as any;
   const colorIsLiteral = r.color.kind === 'literal';
-  const colorExpr = colorRef(r.color, varIndex);
+  const colorExpr = colorRef(r.color, varIndex, archMode);
   const constKw = colorIsLiteral ? 'const ' : '';
   return (
     `  List<DSShadow> get ${s.getterName} => ${constKw}[\n` +
@@ -180,11 +250,13 @@ function emitShadowGetter(
 export function emitTextStyles(
   styles: PreparedTextStyle[],
   varIndex: Map<string, VarRef>,
+  archMode: ArchMode = 'static',
 ): string {
 
   let out = FILE_HEADER;
   out += `import 'package:flutter/painting.dart';\n`;
-  out += `import '../theme.dart';\n\n`;
+  out += aliasRootImport(archMode);
+  out += `\n`;
   out += `// ignore_for_file: unused_import\n\n`;
 
   out += `class DSTextStyle extends TextStyle {\n`;
@@ -223,22 +295,28 @@ export function emitTextStyles(
   out += `  };\n`;
   out += `}\n\n`;
 
+  const injectsController =
+    archMode === 'context' && textStylesUseAlias(styles);
   out += `class DSStyles {\n`;
-  out += `  const DSStyles();\n\n`;
+  out += emitCompositeCtor('DSStyles', injectsController);
   for (const s of styles) {
-    out += emitTextGetter(s, varIndex);
+    out += emitTextGetter(s, varIndex, archMode);
   }
   out += `}\n`;
   return out;
 }
 
-function emitTextGetter(s: PreparedTextStyle, varIndex: Map<string, VarRef>): string {
+function emitTextGetter(
+  s: PreparedTextStyle,
+  varIndex: Map<string, VarRef>,
+  archMode: ArchMode,
+): string {
   const r = s.raw as IRTextStyle;
-  const fontSize = textValue(r.fontSize, varIndex, 'double');
-  const fontFamily = textValue(r.fontFamily, varIndex, 'String');
-  const fontWeight = textValue(r.fontWeight, varIndex, 'double');
-  const lh = lineHeightExpr(r.lineHeight, varIndex);
-  const ls = letterSpacingExpr(r.letterSpacing, varIndex);
+  const fontSize = textValue(r.fontSize, varIndex, 'double', archMode);
+  const fontFamily = textValue(r.fontFamily, varIndex, 'String', archMode);
+  const fontWeight = textValue(r.fontWeight, varIndex, 'double', archMode);
+  const lh = lineHeightExpr(r.lineHeight, varIndex, archMode);
+  const ls = letterSpacingExpr(r.letterSpacing, varIndex, archMode);
   return (
     `  DSTextStyle get ${s.getterName} {\n` +
     `    final fs = ${fontSize};\n` +
@@ -257,30 +335,51 @@ function textValue<T>(
   v: IRTextValue<T>,
   varIndex: Map<string, VarRef>,
   type: 'double' | 'String',
+  archMode: ArchMode,
 ): string {
-  if ((v as any).kind === 'alias') return aliasExpr((v as any).targetVariableId, varIndex, type);
+  if ((v as any).kind === 'alias')
+    return aliasExpr((v as any).targetVariableId, varIndex, type, archMode);
   if (type === 'String') return stringLiteral((v as any).value as string);
   return doubleLiteral((v as any).value as number);
 }
 
-function lineHeightExpr(v: IRTextValueWithUnit<number>, varIndex: Map<string, VarRef>): string {
+function lineHeightExpr(
+  v: IRTextValueWithUnit<number>,
+  varIndex: Map<string, VarRef>,
+  archMode: ArchMode,
+): string {
   if ((v as any).kind === 'alias')
-    return `(${aliasExpr((v as any).targetVariableId, varIndex, 'double')} / fs)`;
+    return `(${aliasExpr((v as any).targetVariableId, varIndex, 'double', archMode)} / fs)`;
   if ((v as any).unit === 'AUTO') return 'null';
   if ((v as any).unit === 'PIXELS') return `(${doubleLiteral((v as any).value)} / fs)`;
   return `${doubleLiteral(((v as any).value as number) / 100)}`;
 }
 
-function letterSpacingExpr(v: IRTextValueWithUnit<number>, varIndex: Map<string, VarRef>): string {
-  if ((v as any).kind === 'alias') return aliasExpr((v as any).targetVariableId, varIndex, 'double');
+function letterSpacingExpr(
+  v: IRTextValueWithUnit<number>,
+  varIndex: Map<string, VarRef>,
+  archMode: ArchMode,
+): string {
+  if ((v as any).kind === 'alias')
+    return aliasExpr((v as any).targetVariableId, varIndex, 'double', archMode);
   if ((v as any).unit === 'PIXELS') return doubleLiteral((v as any).value as number);
   return `(${doubleLiteral(((v as any).value as number) / 100)} * fs)`;
 }
 
-function aliasExpr(id: string, varIndex: Map<string, VarRef>, type: 'double' | 'String'): string {
+function aliasExpr(
+  id: string,
+  varIndex: Map<string, VarRef>,
+  type: 'double' | 'String',
+  archMode: ArchMode,
+): string {
   const ref = varIndex.get(id);
   if (!ref) return type === 'String' ? "''" : '0.0';
-  return flatAliasExpr(ref.collectionAccessor, ref.groupPath, ref.leafName);
+  return flatAliasExpr(
+    ref.collectionAccessor,
+    ref.groupPath,
+    ref.leafName,
+    archMode,
+  );
 }
 
 

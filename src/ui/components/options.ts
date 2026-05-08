@@ -1,6 +1,7 @@
 export type ExportOptions = {
   targetId: string;
   packageName: string;
+  archMode: 'context' | 'static';
   include: {
     primitives: boolean;
     tokens: boolean;
@@ -18,6 +19,7 @@ export type ToggleEls = {
   colorStyles: HTMLElement;
   shadows: HTMLElement;
   textStyles: HTMLElement;
+  archContext: HTMLElement;
 };
 
 export function isToggleOn(el: HTMLElement) {
@@ -41,6 +43,7 @@ export function collectOptions(opts: {
   return {
     targetId: targetId.value || 'flutter',
     packageName: packageName.value || 'design_system',
+    archMode: isToggleOn(toggles.archContext) ? 'context' : 'static',
     include: {
       primitives: isToggleOn(toggles.primitives),
       tokens: isToggleOn(toggles.tokens),
@@ -67,5 +70,8 @@ export function pillText(o: ExportOptions): string {
     !o.include.composites.textStyles;
 
   bits.push(customized ? 'customized' : 'defaults');
+  if (o.targetId === 'flutter') {
+    bits.push(o.archMode === 'context' ? 'context' : 'static');
+  }
   return bits.join(' · ');
 }

@@ -2,6 +2,7 @@
 // the wrapper widget, pubspec, and the README scaffold.
 
 import { FILE_HEADER } from './emit_helpers';
+import type { ArchMode } from './options';
 
 export function lerpDartFile(): string {
   return (
@@ -31,12 +32,25 @@ extension LerpImageFilter on ImageFilter {
   );
 }
 
-export function wrapperDartFile(): string {
+export function wrapperDartFile(archMode: ArchMode = 'static'): string {
+  const extraImport =
+    archMode === 'context' ? `import '_internal/scope.dart';\n` : '';
+  const buildBody =
+    archMode === 'context'
+      ? `    return DesignSystemScope(
+      controller: DesignSystemController.instance,
+      child: Builder(builder: widget.builder),
+    );`
+      : `    return ListenableBuilder(
+      listenable: DesignSystemController.instance,
+      builder: (context, _) => widget.builder(context),
+    );`;
+
   return (
     FILE_HEADER +
     `import 'package:flutter/widgets.dart';
 import '_internal/controller.dart';
-
+${extraImport}
 /// Place once near the root of your widget tree, above [MaterialApp].
 ///
 /// This widget attaches vsync for animated mode transitions and sets the
@@ -82,10 +96,7 @@ class _DesignSystemWrapperState extends State<DesignSystemWrapper>
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: DesignSystemController.instance,
-      builder: (context, _) => widget.builder(context),
-    );
+${buildBody}
   }
 }
 `
@@ -135,7 +146,52 @@ flutter:
 `;
 }
 
-export function readmeMd(packageName = 'design_system'): string {
+export function readmeMd(
+  packageName = 'design_system',
+  archMode: ArchMode = 'static',
+): string {
+  if (archMode === 'context') {
+    return `# ${packageName}
+
+Generated Flutter design system. Do not edit by hand.
+
+## Usage
+
+\`\`\`dart
+import 'package:${packageName}/${packageName}.dart';
+
+void main() {
+  runApp(DesignSystemWrapper(builder: (_) => MyApp()));
+}
+
+// Inside a widget — read via context. Reads register a dependency on the
+// design system scope, so const widgets rebuild correctly on mode changes.
+@override
+Widget build(BuildContext context) {
+  final theme = AppTheme.of(context);
+  return Container(color: theme.colorToken.background.primary);
+}
+
+// Or use the BuildContext extension for shorter access.
+@override
+Widget build(BuildContext context) {
+  return Container(color: context.colorToken.background.primary);
+}
+
+// Switch mode at runtime (imperative — no context needed).
+AppTheme.setColorTokenMode(ColorTokenMode.lightMode);
+\`\`\`
+
+## Why context-based?
+
+In Flutter, widgets wrapped in \`const\` are canonical and don't rebuild even
+when an ancestor \`ListenableBuilder\` emits. Reading tokens via
+\`AppTheme.of(context)\` (or the \`context.x\` extension) registers an
+\`InheritedNotifier\` dependency, so \`const\` widgets are correctly invalidated
+when modes change.
+`;
+  }
+
   return `# ${packageName}
 
 Generated Flutter design system. Do not edit by hand.
@@ -162,6 +218,9 @@ AppTheme.setColorTokenMode(ColorTokenMode.lightMode);
 Tokens are context-less (\`AppTheme.*\`). Flutter only updates the UI when widgets
 rebuild, and \`DesignSystemWrapper\` provides the official rebuild bridge via its
 \`builder\` callback.
+
+> ⚠️ Widgets wrapped in \`const\` won't rebuild on mode changes in this mode.
+> Switch to context mode in the export options if you need that.
 `;
 }
 

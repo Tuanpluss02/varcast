@@ -42,7 +42,17 @@ const toggles: ToggleEls = {
   colorStyles: byId('tColorStyles'),
   shadows: byId('tShadows'),
   textStyles: byId('tTextStyles'),
+  archContext: byId('tArchContext'),
 };
+
+const archCard = byId<HTMLDivElement>('archCard');
+
+function syncArchCardVisibility() {
+  // Architecture (context-based) is Flutter-specific. RN uses hooks/context
+  // by default — no static fallback to gate, so the card is hidden.
+  const isFlutter = (targetId.value || 'flutter') === 'flutter';
+  archCard.classList.toggle('hidden', !isFlutter);
+}
 
 const diffBar = byId<HTMLDivElement>('diffBar');
 const fileTree = byId<HTMLDivElement>('fileTree');
@@ -126,6 +136,7 @@ Object.values(toggles).forEach((el) => {
   el.addEventListener('input', updateMeta);
   el.addEventListener('change', updateMeta);
 });
+targetId.addEventListener('change', syncArchCardVisibility);
 
 byId<HTMLButtonElement>('reset').addEventListener('click', () => {
   targetId.value = 'flutter';
@@ -135,6 +146,8 @@ byId<HTMLButtonElement>('reset').addEventListener('click', () => {
   setToggle(toggles.colorStyles, true);
   setToggle(toggles.shadows, true);
   setToggle(toggles.textStyles, true);
+  setToggle(toggles.archContext, true);
+  syncArchCardVisibility();
   updateMeta();
 });
 
@@ -361,4 +374,5 @@ window.onmessage = (e: MessageEvent) => {
 };
 
 updateMeta();
+syncArchCardVisibility();
 go('home');

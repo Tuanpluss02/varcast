@@ -1,5 +1,17 @@
+export type ArchMode = 'context' | 'static';
+
 export interface ExportOptions {
   packageName: string;
+
+  /**
+   * Architecture for token access.
+   * - 'context': InheritedNotifier-based. Reads via `AppTheme.of(context)` or
+   *   `context.colorBasic` register a dependency, so widgets — including those
+   *   wrapped in `const` — rebuild when modes change.
+   * - 'static': singleton-only. `AppTheme.colorBasic.x` works from anywhere
+   *   (including non-widget code), but `const` widgets won't rebuild.
+   */
+  archMode: ArchMode;
 
   include: {
     primitives: boolean;
@@ -14,6 +26,7 @@ export interface ExportOptions {
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   packageName: 'design_system',
+  archMode: 'context',
   include: {
     primitives: true,
     tokens: true,
@@ -26,6 +39,8 @@ export function normalizeExportOptions(input: any): ExportOptions {
   if (input && typeof input === 'object') {
     if (typeof input.packageName === 'string' && input.packageName.trim())
       o.packageName = sanitizePackageName(input.packageName.trim());
+    if (input.archMode === 'static' || input.archMode === 'context')
+      o.archMode = input.archMode;
     if (input.include?.primitives === false) o.include.primitives = false;
     if (input.include?.tokens === false) o.include.tokens = false;
     if (input.include?.composites?.colorStyles === false)

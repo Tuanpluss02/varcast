@@ -1,10 +1,18 @@
 import { FILE_HEADER } from './emit_helpers';
+import type { ArchMode } from './options';
 import type { PreparedCollection } from './prepare';
 
 // Emit the singleton DesignSystemController. One block per collection wires
 // up: current/prev value, animation controller, mode setter, getter.
+//
+// In 'context' archMode, token concrete classes accept the controller via
+// constructor injection (`(this)`) so they don't reach for the singleton on
+// every read. Field initializers use `late` so `this` is in scope.
 
-export function emitController(collections: PreparedCollection[]): string {
+export function emitController(
+  collections: PreparedCollection[],
+  archMode: ArchMode = 'static',
+): string {
   let out = FILE_HEADER;
   out += `import 'package:flutter/animation.dart';\n`;
   out += `import 'package:flutter/foundation.dart';\n\n`;
@@ -18,7 +26,7 @@ export function emitController(collections: PreparedCollection[]): string {
   out += `  static final DesignSystemController instance = DesignSystemController._();\n\n`;
 
   for (const col of collections) {
-    out += controllerBlock(col);
+    out += controllerBlock(col, archMode);
   }
 
   out += `  Duration _animDuration = const Duration(milliseconds: 300);\n`;
@@ -73,8 +81,10 @@ export function emitController(collections: PreparedCollection[]): string {
   out += `    _vsyncAttached = false;\n`;
   for (const col of collections) {
     const def = defaultConcrete(col);
-    out += `    _${col.accessor} = ${def}();\n`;
-    out += `    _${col.accessor}Prev = ${def}();\n`;
+    const ctorArgs =
+      archMode === 'context' && collectionUsesAlias(col) ? '(this)' : '()';
+    out += `    _${col.accessor} = ${def}${ctorArgs};\n`;
+    out += `    _${col.accessor}Prev = ${def}${ctorArgs};\n`;
     out += `    current${col.className}Mode = ${col.className}Mode.${col.modes[col.defaultModeIndex].camel};\n`;
   }
   out += `  }\n`;
@@ -82,17 +92,27 @@ export function emitController(collections: PreparedCollection[]): string {
   return out;
 }
 
-function controllerBlock(col: PreparedCollection): string {
+function controllerBlock(
+  col: PreparedCollection,
+  archMode: ArchMode,
+): string {
   const accessor = col.accessor;
   const cls = col.className;
   const def = defaultConcrete(col);
   const modes = col.modes;
   const defaultMode = modes[col.defaultModeIndex];
 
+  // Token concrete classes that resolve aliases need `this` in context mode.
+  // `late` field initializers may reference `this`; plain ones may not.
+  const usesAlias = collectionUsesAlias(col);
+  const injectsController = archMode === 'context' && usesAlias;
+  const ctorArgs = injectsController ? '(this)' : '()';
+  const fieldPrefix = injectsController ? 'late ' : '';
+
   let out = '';
   out += `  // ${cls}\n`;
-  out += `  ${cls} _${accessor} = ${def}();\n`;
-  out += `  ${cls} _${accessor}Prev = ${def}();\n`;
+  out += `  ${fieldPrefix}${cls} _${accessor} = ${def}${ctorArgs};\n`;
+  out += `  ${fieldPrefix}${cls} _${accessor}Prev = ${def}${ctorArgs};\n`;
   out += `  AnimationController? _${accessor}Anim;\n`;
   out += `  ${cls}Mode current${cls}Mode = ${cls}Mode.${defaultMode.camel};\n\n`;
 
@@ -108,13 +128,19 @@ function controllerBlock(col: PreparedCollection): string {
   out += `    _${accessor}Prev = ${accessor};\n`;
   out += `    _${accessor} = switch (mode) {\n`;
   for (const m of modes) {
-    out += `      ${cls}Mode.${m.camel} => ${concreteClassName(cls, m.pascal)}(),\n`;
+    out += `      ${cls}Mode.${m.camel} => ${concreteClassName(cls, m.pascal)}${ctorArgs},\n`;
   }
   out += `    };\n`;
   out += `    _trigger(_${accessor}Anim);\n`;
   out += `  }\n\n`;
 
   return out;
+}
+
+function collectionUsesAlias(col: PreparedCollection): boolean {
+  return col.variables.some((v) =>
+    Object.values(v.valuesByMode).some((val) => val.kind === 'alias'),
+  );
 }
 
 function defaultConcrete(col: PreparedCollection): string {

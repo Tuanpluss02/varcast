@@ -6,6 +6,7 @@ import {
   stringLiteral,
   boolLiteral,
 } from './emit_helpers';
+import type { ArchMode } from './options';
 import type {
   PreparedCollection,
   PreparedVariable,
@@ -36,20 +37,28 @@ function flatGetterName(groupPath: string[], leafName: string): string {
 
 /**
  * Generates the Dart expression to access an aliased variable.
- * Example: `AppTheme.colorBasic.brand950`
+ *
+ * - 'static' mode → `AppTheme.colorBasic.brand950`
+ * - 'context' mode → `_c.colorBasic.brand950`. Tokens and composites in
+ *   context mode hold the controller as a constructor-injected `_c` field
+ *   instead of reaching for `DesignSystemController.instance` — that keeps
+ *   the singleton out of every reactive read path.
  */
 export function flatAliasExpr(
   collectionAccessor: string,
   groupPath: string[],
   leafName: string,
+  archMode: ArchMode = 'static',
 ): string {
   const getter = flatGetterName(groupPath, leafName);
-  return `AppTheme.${collectionAccessor}.${getter}`;
+  const root = archMode === 'context' ? '_c' : 'AppTheme';
+  return `${root}.${collectionAccessor}.${getter}`;
 }
 
 export function emitCollection(
   col: PreparedCollection,
   varIndex: Map<string, VarRef>,
+  archMode: ArchMode = 'static',
 ): string {
   const cn = col.className;
   const usesColor = collectionUsesColor(col);
@@ -68,7 +77,10 @@ export function emitCollection(
   }
   out += `import '../_internal/lerp.dart';\n`;
   if (usesAlias) {
-    out += `import '../theme.dart';\n`;
+    out +=
+      archMode === 'context'
+        ? `import '../_internal/controller.dart';\n`
+        : `import '../theme.dart';\n`;
   }
   out += '\n';
 
@@ -88,11 +100,21 @@ export function emitCollection(
   out += `      );\n}\n\n`;
 
   // ── Mode-specific concrete classes ─────────────────────────────────────────
+  // In context mode, classes that resolve aliases hold the controller as a
+  // ctor-injected `_c` field instead of reaching for `DesignSystemController.instance`.
+  // That makes alias getters depend only on what the wrapper hands down, not on
+  // a global service locator.
+  const injectsController = archMode === 'context' && usesAlias;
   for (const mode of col.modes) {
     const concreteName = concreteClassName(cn, mode.pascal);
     const ctorPrefix = isAllConst ? 'const ' : '';
     out += `class ${concreteName} extends ${cn} {\n`;
-    out += `  ${ctorPrefix}${concreteName}();\n`;
+    if (injectsController) {
+      out += `  ${concreteName}(this._c);\n`;
+      out += `  final DesignSystemController _c;\n`;
+    } else {
+      out += `  ${ctorPrefix}${concreteName}();\n`;
+    }
     for (const { v, getter } of vars) {
       const expr = emitValueExpr(v, mode.id);
       out += `  @override ${v.dartType} get ${getter} => ${expr};\n`;
@@ -130,7 +152,12 @@ export function emitCollection(
     if (val.kind === 'alias') {
       const ref = varIndex.get(val.targetVariableId);
       if (!ref) return defaultExprFor(v.dartType);
-      return flatAliasExpr(ref.collectionAccessor, ref.groupPath, ref.leafName);
+      return flatAliasExpr(
+        ref.collectionAccessor,
+        ref.groupPath,
+        ref.leafName,
+        archMode,
+      );
     }
     return literalFor(v.dartType, val);
   }
