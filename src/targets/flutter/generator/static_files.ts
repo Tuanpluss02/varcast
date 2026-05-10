@@ -153,40 +153,87 @@ export function readmeMd(
   if (archMode === 'context') {
     return `# ${packageName}
 
-Generated Flutter design system. Do not edit by hand.
+Generated Flutter design system package. Do not edit by hand.
 
-## Usage
+## Install
+
+Recommended: commit this generated package into your repo and add a path dependency.
+
+\`\`\`yaml
+dependencies:
+  ${packageName}:
+    path: ../packages/${packageName}
+\`\`\`
+
+Then:
+
+\`\`\`bash
+flutter pub get
+\`\`\`
+
+## Import
 
 \`\`\`dart
 import 'package:${packageName}/${packageName}.dart';
-
-void main() {
-  runApp(DesignSystemWrapper(builder: (_) => MyApp()));
-}
-
-// Inside a widget — read via context. Reads register a dependency on the
-// design system scope, so const widgets rebuild correctly on mode changes.
-@override
-Widget build(BuildContext context) {
-  final theme = AppTheme.of(context);
-  return Container(color: theme.colorToken.background.primary);
-}
-
-// Or use the BuildContext extension for shorter access.
-@override
-Widget build(BuildContext context) {
-  return Container(color: context.colorToken.background.primary);
-}
-
-// Switch mode at runtime (imperative — no context needed).
-AppTheme.setColorTokenMode(ColorTokenMode.lightMode);
 \`\`\`
+
+## Setup (put once near app root)
+
+\`\`\`dart
+void main() {
+  runApp(
+    DesignSystemWrapper(
+      // Optional: animate mode transitions
+      duration: const Duration(milliseconds: 200),
+      builder: (_) => const MyApp(),
+    ),
+  );
+}
+\`\`\`
+
+## Read tokens (context mode)
+
+Context mode is the default because it works correctly with \`const\` widgets.
+Reads register an \`InheritedNotifier\` dependency, so widgets are invalidated
+when modes change.
+
+\`\`\`dart
+@override
+Widget build(BuildContext context) {
+  // Full access
+  final theme = AppTheme.of(context);
+  final bg = theme.colorToken.background.primary;
+
+  // Shorter access via BuildContext extensions
+  final fg = context.colorToken.text.primary;
+
+  return Container(color: bg);
+}
+\`\`\`
+
+## Switch modes at runtime
+
+Each collection has an enum for its modes (e.g. \`ColorTokenMode\`).
+
+\`\`\`dart
+// Imperative — no context needed.
+AppTheme.setColorTokenMode(ColorTokenMode.darkMode);
+\`\`\`
+
+## What you can change
+
+These are controlled by export options in Varcast:
+- \`packageName\`: pub package name.
+- \`archMode\`: \`context\` (recommended) vs \`static\`.
+- \`include.primitives\`: include primitive collections.
+- \`include.tokens\`: include token collections.
+- \`include.composites.{colorStyles,shadows,textStyles}\`: include each composite file.
 
 ## Why context-based?
 
 In Flutter, widgets wrapped in \`const\` are canonical and don't rebuild even
 when an ancestor \`ListenableBuilder\` emits. Reading tokens via
-\`AppTheme.of(context)\` (or the \`context.x\` extension) registers an
+\`AppTheme.of(context)\` (or the \`context.x\` extensions) registers an
 \`InheritedNotifier\` dependency, so \`const\` widgets are correctly invalidated
 when modes change.
 `;
@@ -194,33 +241,75 @@ when modes change.
 
   return `# ${packageName}
 
-Generated Flutter design system. Do not edit by hand.
+Generated Flutter design system package. Do not edit by hand.
 
-## Usage
+## Install
+
+Add a path dependency (recommended):
+
+\`\`\`yaml
+dependencies:
+  ${packageName}:
+    path: ../packages/${packageName}
+\`\`\`
+
+Then:
+
+\`\`\`bash
+flutter pub get
+\`\`\`
+
+## Import
 
 \`\`\`dart
 import 'package:${packageName}/${packageName}.dart';
+\`\`\`
 
+## Setup (put once near app root)
+
+\`\`\`dart
 void main() {
-  runApp(DesignSystemWrapper(builder: (_) => MyApp()));
+  runApp(
+    DesignSystemWrapper(
+      duration: const Duration(milliseconds: 200),
+      builder: (_) => const MyApp(),
+    ),
+  );
 }
+\`\`\`
 
-// Read tokens from anywhere — no BuildContext needed.
+## Read tokens (static mode)
+
+Static mode exposes tokens off a singleton, so it works without a \`BuildContext\`.
+
+\`\`\`dart
 final bg = AppTheme.colorToken.background.primary;
 final r  = AppTheme.numberBasic.spacing.n16;
+\`\`\`
 
-// Switch mode at runtime.
-AppTheme.setColorTokenMode(ColorTokenMode.lightMode);
+## Switch modes at runtime
+
+\`\`\`dart
+AppTheme.setColorTokenMode(ColorTokenMode.darkMode);
 \`\`\`
 
 ## Rebuild on mode changes
 
-Tokens are context-less (\`AppTheme.*\`). Flutter only updates the UI when widgets
-rebuild, and \`DesignSystemWrapper\` provides the official rebuild bridge via its
-\`builder\` callback.
+In static mode, tokens are context-less (\`AppTheme.*\`). Flutter only updates the
+UI when widgets rebuild, and \`DesignSystemWrapper\` provides the official rebuild
+bridge via its \`builder\` callback.
 
-> ⚠️ Widgets wrapped in \`const\` won't rebuild on mode changes in this mode.
-> Switch to context mode in the export options if you need that.
+> Widgets wrapped in \`const\` won't rebuild on mode changes in this mode.
+> Use \`archMode: context\` in the export options if you need that.
+
+## What you can change
+
+These are controlled by export options in Varcast:
+- \`packageName\`: pub package name.
+- \`archMode\`: \`context\` (recommended) vs \`static\`.
+- \`include.primitives\`: include primitive collections.
+- \`include.tokens\`: include token collections.
+- \`include.composites.{colorStyles,shadows,textStyles}\`: include each composite file.
 `;
 }
 

@@ -48,14 +48,47 @@ export function tsconfigJson(): string {
 export function readmeMd(o: ReactNativeOptions): string {
   return `# ${o.packageName}
 
-Generated React Native design system. Do not edit by hand.
+Generated React Native design system package. Do not edit by hand.
 
-## Usage
+## What gets generated
+
+- \`src/tokens/**\`: per-collection token objects, grouped by mode (e.g. \`lightMode\`, \`darkMode\`).
+- \`src/runtime/**\`: a tiny runtime that selects the active mode per collection.
+- \`src/composites/**\` (optional): computed helpers for Figma styles (colors, shadows, text styles).
+
+The package builds TypeScript \`src/\` into \`dist/\` and exposes \`dist/index.js\` + \`dist/index.d.ts\`.
+
+## Install (recommended: monorepo / path dependency)
+
+1) Put the generated folder somewhere in your app repo (e.g. \`packages/${o.packageName}\`).
+
+2) Add it as a dependency.
+
+- **pnpm / yarn workspaces**: add it as a workspace package.
+- **npm**: use a local file dependency:
+
+\`\`\`json
+{
+  "dependencies": {
+    "${o.packageName}": "file:../packages/${o.packageName}"
+  }
+}
+\`\`\`
+
+3) Build the package once (and whenever you re-export):
+
+\`\`\`bash
+cd packages/${o.packageName}
+pnpm install
+pnpm build
+\`\`\`
+
+## Basic usage
 
 \`\`\`tsx
 import { ThemeProvider, useTheme } from '${o.packageName}';
 
-function App() {
+export function App() {
   return (
     <ThemeProvider>
       <Screen />
@@ -65,9 +98,44 @@ function App() {
 
 function Screen() {
   const theme = useTheme();
+
+  // Each collection becomes a getter on \`theme\`.
+  // Example: \`theme.colorToken\`, \`theme.numberBasic\`, ...
+  // (Exact names depend on your Figma collection names.)
   return null;
 }
 \`\`\`
+
+## Switching modes (dark/light, etc.)
+
+Each token collection has its own mode key. To switch a collection at runtime:
+
+\`\`\`ts
+import { setTokenMode } from '${o.packageName}';
+
+// collection = the collection getter name on \`theme\`
+// mode = a generated mode key like \`lightMode\` / \`darkMode\`
+setTokenMode(theme, 'colorToken', 'darkMode');
+\`\`\`
+
+Notes:
+- Default mode is the **first** mode in each collection (deterministic).
+- Mode keys are derived from the Figma mode name and normalized to a camelCase-ish \`*Mode\` key (e.g. "Dark" → \`darkMode\`).
+
+## Composites (if enabled)
+
+If you enable composites, the package also exports:
+- \`colorStyles\`: Figma paint styles resolved per mode (solid colors supported in v1).
+- \`shadows\`: drop shadow mapping to React Native shadow props per mode.
+- \`textStyles\`: basic text style mapping per mode.
+
+## What you can change
+
+These are controlled by export options in Varcast:
+- \`packageName\`: the npm package name (import path).
+- \`include.primitives\`: include primitive collections.
+- \`include.tokens\`: include token collections.
+- \`include.composites.{colorStyles,shadows,textStyles}\`: include each composite file.
 `;
 }
 
