@@ -33,6 +33,8 @@ const errList = byId<HTMLPreElement>('errList');
 
 const packageName = byId<HTMLInputElement>('packageName');
 const targetId = byId<HTMLSelectElement>('targetId');
+const rnFlavor = byId<HTMLSelectElement>('rnFlavor');
+const rnFlavorRow = byId<HTMLDivElement>('rnFlavorRow');
 const tokensCount = byId<HTMLSpanElement>('tokensCount');
 const compositesCount = byId<HTMLSpanElement>('compositesCount');
 
@@ -47,11 +49,12 @@ const toggles: ToggleEls = {
 
 const archCard = byId<HTMLDivElement>('archCard');
 
-function syncArchCardVisibility() {
-  // Architecture (context-based) is Flutter-specific. RN uses hooks/context
-  // by default — no static fallback to gate, so the card is hidden.
+function syncTargetSpecificUi() {
+  // Architecture (context-based) is Flutter-specific. The RN flavor select
+  // is RN-specific. Only one of the two cards is visible at a time.
   const isFlutter = (targetId.value || 'flutter') === 'flutter';
   archCard.classList.toggle('hidden', !isFlutter);
+  rnFlavorRow.classList.toggle('hidden', isFlutter);
 }
 
 const diffBar = byId<HTMLDivElement>('diffBar');
@@ -105,7 +108,7 @@ function startExport() {
   exportBtn.disabled = true;
   status.textContent = '';
   showLoading('Validating…', 'Reading tokens and styles from Figma.');
-  const options = collectOptions({ targetId, packageName, toggles });
+  const options = collectOptions({ targetId, rnFlavor, packageName, toggles });
   postToPlugin({ type: 'export', options });
 }
 
@@ -132,14 +135,15 @@ Object.values(toggles).forEach((el) => {
   });
 });
 
-[targetId, packageName].forEach((el) => {
+[targetId, rnFlavor, packageName].forEach((el) => {
   el.addEventListener('input', updateMeta);
   el.addEventListener('change', updateMeta);
 });
-targetId.addEventListener('change', syncArchCardVisibility);
+targetId.addEventListener('change', syncTargetSpecificUi);
 
 byId<HTMLButtonElement>('reset').addEventListener('click', () => {
   targetId.value = 'flutter';
+  rnFlavor.value = 'nativewind';
   packageName.value = 'design_system';
   setToggle(toggles.primitives, true);
   setToggle(toggles.tokens, true);
@@ -147,7 +151,7 @@ byId<HTMLButtonElement>('reset').addEventListener('click', () => {
   setToggle(toggles.shadows, true);
   setToggle(toggles.textStyles, true);
   setToggle(toggles.archContext, true);
-  syncArchCardVisibility();
+  syncTargetSpecificUi();
   updateMeta();
 });
 
@@ -374,5 +378,5 @@ window.onmessage = (e: MessageEvent) => {
 };
 
 updateMeta();
-syncArchCardVisibility();
+syncTargetSpecificUi();
 go('home');

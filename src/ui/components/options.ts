@@ -1,5 +1,7 @@
 export type ExportOptions = {
   targetId: string;
+  /** Picked when targetId === 'react_native'. Ignored otherwise. */
+  rnFlavor: 'nativewind' | 'unistyles';
   packageName: string;
   archMode: 'context' | 'static';
   include: {
@@ -36,12 +38,15 @@ export function toggleDataOn(el: HTMLElement) {
 
 export function collectOptions(opts: {
   targetId: HTMLSelectElement;
+  rnFlavor: HTMLSelectElement;
   packageName: HTMLInputElement;
   toggles: ToggleEls;
 }): ExportOptions {
-  const { targetId, packageName, toggles } = opts;
+  const { targetId, rnFlavor, packageName, toggles } = opts;
+  const flavor = rnFlavor.value === 'unistyles' ? 'unistyles' : 'nativewind';
   return {
     targetId: targetId.value || 'flutter',
+    rnFlavor: flavor,
     packageName: packageName.value || 'design_system',
     archMode: isToggleOn(toggles.archContext) ? 'context' : 'static',
     include: {
@@ -58,7 +63,12 @@ export function collectOptions(opts: {
 
 export function pillText(o: ExportOptions): string {
   const bits: string[] = [];
-  bits.push(o.targetId === 'flutter' ? 'Flutter' : 'React Native');
+  if (o.targetId === 'flutter') {
+    bits.push('Flutter');
+  } else {
+    bits.push(o.rnFlavor === 'unistyles' ? 'RN · Unistyles' : 'RN · NativeWind');
+  }
+
   if (o.include.primitives && o.include.tokens) bits.push('Full export');
   else if (o.include.tokens) bits.push('Tokens only');
   else if (o.include.primitives) bits.push('Primitives only');

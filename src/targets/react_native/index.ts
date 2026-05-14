@@ -1,105 +1,69 @@
+// React Native target dispatcher. Runs the shared `prepareRN` step exactly
+// once, then routes to the picked flavor's emit pipeline.
+//
+// One Target instance, two flavors — picked at export time via
+// `options.flavor` (decision #2 in the rewrite plan).
+
 import type { Manifest, ManifestTargetSection } from '../../core/manifest';
 import type { EmittedFile, PreparedIR, Target } from '../../core/target';
 import type { IR } from '../../ir/types';
-import { emitCollections } from './generator/emit_collections';
-import { emitComposites } from './generator/emit_composites';
-import { emitRuntime } from './generator/emit_runtime';
-import { prepareRN } from './generator/prepare';
+import { emitNativeWind } from './nativewind';
+import { emitUnistyles } from './unistyles';
 import { reactNativeIdentifierProfile } from './identifier';
-import type { ReactNativeOptions } from './options';
-import { DEFAULT_RN_OPTIONS } from './options';
-import { modesTs, packageJson, reactShimDts, readmeMd, runtimeIndexTs, themeProviderTsx, tsconfigJson } from './static_files';
+import { mergeRnOptions, type ReactNativeOptions } from './options';
+import { prepareRN, type PreparedRN } from './shared/prepare';
 import { reactNativeTypeMapping } from './type_mapping';
 
 export type PreparedReactNative = PreparedIR & {
-  nextManifestSection: ManifestTargetSection;
-  collections: ReturnType<typeof prepareRN>['collections'];
+  rn: PreparedRN;
 };
-
-function emptySection(): ManifestTargetSection {
-  return { variables: {}, collections: {} };
-}
 
 export const reactNativeTarget: Target = {
   id: 'react_native',
   profile: reactNativeIdentifierProfile,
   typeMapping: reactNativeTypeMapping,
 
-  prepare(_ir: IR, manifest: Manifest | null, _options: unknown): PreparedReactNative {
-    const prepared = prepareRN(_ir, manifest);
+  prepare(ir: IR, manifest: Manifest | null, _options: unknown): PreparedReactNative {
+    const rn = prepareRN(ir, manifest);
     return {
-      ...prepared,
-      nextManifestSection: prepared.nextManifestSection,
-    } as any;
+      rn,
+      nextManifestSection: rn.nextManifestSection,
+      warnings: rn.warnings,
+    };
   },
 
   emit(prepared: PreparedIR, options: unknown): EmittedFile[] {
     const o = mergeRnOptions(options);
-    const base: EmittedFile[] = [
-      { path: 'package.json', contents: packageJson(o) },
-      { path: 'tsconfig.json', contents: tsconfigJson() },
-      { path: 'README.md', contents: readmeMd(o) },
-      { path: 'src/index.ts', contents: runtimeIndexTs() },
-      { path: 'src/runtime/ThemeProvider.tsx', contents: themeProviderTsx() },
-      { path: 'src/runtime/modes.ts', contents: modesTs() },
-      { path: 'src/react-shim.d.ts', contents: reactShimDts() },
-    ];
-    // Filter collections by kind so toggling primitives/tokens off in the UI
-    // actually drops the corresponding collection files (and their imports
-    // in the generated runtime).
-    const filteredCollections = (prepared as PreparedReactNative).collections.filter((c) => {
-      if (c.kind === 'primitive' && !o.include.primitives) return false;
-      if (c.kind === 'token' && !o.include.tokens) return false;
-      return true;
-    });
-    const filtered = { ...prepared, collections: filteredCollections } as PreparedReactNative;
-    const colFiles = emitCollections(filtered as any);
-    const runtimeFiles = emitRuntime(filtered as any);
-    const compositeFiles = emitComposites(filtered as any).filter((f) => {
-      if (f.path.endsWith('colorStyles.ts')) return o.include.composites.colorStyles;
-      if (f.path.endsWith('shadows.ts')) return o.include.composites.shadows;
-      if (f.path.endsWith('textStyles.ts')) return o.include.composites.textStyles;
-      return true;
-    });
-    return [...base, ...runtimeFiles, ...compositeFiles, ...colFiles];
+    const rn = filteredPrepared((prepared as PreparedReactNative).rn, o);
+    return o.flavor === 'unistyles' ? emitUnistyles(rn, o) : emitNativeWind(rn, o);
   },
 };
 
-// Merge user-supplied RN options with defaults so partial inputs (e.g. just
-// `{ packageName }` from a test or older UI) still produce a fully-formed
-// options object.
-type RnIncludePartial = {
-  primitives?: boolean;
-  tokens?: boolean;
-  composites?: {
-    colorStyles?: boolean;
-    shadows?: boolean;
-    textStyles?: boolean;
-  };
-};
-
-type RnOptionsPartial = {
-  packageName?: string;
-  include?: RnIncludePartial;
-};
-
-function mergeRnOptions(options: unknown): ReactNativeOptions {
-  const partial: RnOptionsPartial = (options ?? {}) as RnOptionsPartial;
-  const includeIn: RnIncludePartial = partial.include ?? {};
-  const compositesIn = includeIn.composites ?? {};
+/**
+ * Apply include flags from the export UI by dropping collections / composites
+ * that the user opted out of. Each flavor receives the already-filtered IR
+ * so it doesn't have to re-implement the include logic.
+ */
+function filteredPrepared(rn: PreparedRN, o: ReactNativeOptions): PreparedRN {
+  const collections = rn.collections.filter((c) => {
+    if (c.kind === 'primitive' && !o.include.primitives) return false;
+    if (c.kind === 'token' && !o.include.tokens) return false;
+    return true;
+  });
   return {
-    packageName: partial.packageName ?? DEFAULT_RN_OPTIONS.packageName,
-    include: {
-      primitives: includeIn.primitives ?? DEFAULT_RN_OPTIONS.include.primitives,
-      tokens: includeIn.tokens ?? DEFAULT_RN_OPTIONS.include.tokens,
-      composites: {
-        colorStyles:
-          compositesIn.colorStyles ?? DEFAULT_RN_OPTIONS.include.composites.colorStyles,
-        shadows: compositesIn.shadows ?? DEFAULT_RN_OPTIONS.include.composites.shadows,
-        textStyles:
-          compositesIn.textStyles ?? DEFAULT_RN_OPTIONS.include.composites.textStyles,
-      },
-    },
+    ...rn,
+    collections,
+    paintStyles: o.include.composites.colorStyles ? rn.paintStyles : [],
+    effectStyles: o.include.composites.shadows ? rn.effectStyles : [],
+    textStyles: o.include.composites.textStyles ? rn.textStyles : [],
   };
 }
 
+// Re-export the merger so the plugin entry can normalize incoming options.
+export { mergeRnOptions } from './options';
+export type { ReactNativeFlavor, ReactNativeOptions } from './options';
+
+// Helper for the unused-section warning.
+export function emptyRnManifestSection(): ManifestTargetSection {
+  return { variables: {}, collections: {} };
+}

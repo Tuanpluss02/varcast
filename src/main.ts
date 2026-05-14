@@ -12,7 +12,7 @@ import { buildZip } from './zip';
 import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
 import { runEngine } from './core/emit_engine';
 import { flutterTarget } from './targets/flutter';
-import { reactNativeTarget } from './targets/react_native';
+import { mergeRnOptions, reactNativeTarget } from './targets/react_native';
 
 figma.showUI(__html__, { width: 440, height: 720, themeColors: false });
 
@@ -29,8 +29,20 @@ figma.ui.onmessage = async (msg: { type: string }) => {
   if (msg.type === 'export') {
     try {
       pending = null;
-      const options = normalizeExportOptions((msg as any).options ?? DEFAULT_EXPORT_OPTIONS);
-      const targetId = ((msg as any).options?.targetId as string | undefined) ?? 'flutter';
+      const rawOpts = (msg as any).options ?? DEFAULT_EXPORT_OPTIONS;
+      const targetId = (rawOpts.targetId as string | undefined) ?? 'flutter';
+      // Each target normalizes its own option shape — Flutter has archMode,
+      // RN has flavor, etc. The UI sends the raw form for both.
+      const flutterOptions =
+        targetId === 'flutter' ? normalizeExportOptions(rawOpts) : null;
+      const rnOptions =
+        targetId === 'react_native'
+          ? mergeRnOptions({
+              flavor: rawOpts.rnFlavor,
+              packageName: rawOpts.packageName,
+              include: rawOpts.include,
+            })
+          : null;
       const ir: IR = {
         version: '1.0',
         fileKey: figma.fileKey ?? 'unknown',
@@ -62,7 +74,9 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         ir,
         targets,
         oldManifest,
-        targetId === 'react_native' ? { react_native: options } : { flutter: options },
+        targetId === 'react_native'
+          ? { react_native: rnOptions }
+          : { flutter: flutterOptions },
       );
       const diff = diffManifest(oldManifest, nextManifest);
       const changelog = generateChangelog(diff);
@@ -76,10 +90,13 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         { path: 'CHANGELOG.md', contents: changelog + '\n' },
       ];
 
+      const packageName =
+        targetId === 'react_native' ? rnOptions!.packageName : flutterOptions!.packageName;
+
       pending = {
         files: allFiles,
         nextManifest,
-        packageName: options.packageName,
+        packageName,
       };
 
       const previewFiles = allFiles.map((f) => ({

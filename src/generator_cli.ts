@@ -16,7 +16,7 @@ import { generateChangelog } from './targets/flutter/generator/changelog';
 import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
 import { runEngine } from './core/emit_engine';
 import { flutterTarget } from './targets/flutter';
-import { reactNativeTarget } from './targets/react_native';
+import { mergeRnOptions, reactNativeTarget, type ReactNativeFlavor } from './targets/react_native';
 import { writePackage } from './targets/flutter/generator/write_node';
 
 interface Args {
@@ -24,6 +24,7 @@ interface Args {
   out: string;
   name?: string;
   target?: string;
+  flavor?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -34,10 +35,11 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--name') args.name = argv[++i];
     else if (a === '--target') args.target = argv[++i];
+    else if (a === '--flavor') args.flavor = argv[++i];
   }
   if (!args.ir || !args.out) {
     console.error(
-      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--name <package>]',
+      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--flavor <nativewind|unistyles>] [--name <package>]',
     );
     process.exit(2);
   }
@@ -71,14 +73,20 @@ function main() {
 
   const oldManifest = loadManifest(outDir);
   const targetId = args.target ?? 'flutter';
-  const options = { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' };
   const targets =
     targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
-  const { files, nextManifest } = runEngine(ir, targets, oldManifest, targetId === 'react_native' ? {
-    react_native: options,
-  } : {
-    flutter: options,
-  });
+  const optionsByTarget =
+    targetId === 'react_native'
+      ? {
+          react_native: mergeRnOptions({
+            flavor: (args.flavor as ReactNativeFlavor | undefined) ?? 'nativewind',
+            packageName: args.name ?? 'design-system',
+          }),
+        }
+      : {
+          flutter: { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' },
+        };
+  const { files, nextManifest } = runEngine(ir, targets, oldManifest, optionsByTarget);
   const diff = diffManifest(oldManifest, nextManifest);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
