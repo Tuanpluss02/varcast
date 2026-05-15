@@ -135,7 +135,6 @@ describe('Unistyles flavor — emit smoke', () => {
     expect(readme).toContain('StyleSheet.configure({');
     expect(readme).toContain('primary: buildTheme({ mode: "light", brand: "blue" })');
     expect(readme).toContain('alternate: buildTheme({ mode: "dark", brand: "purple" })');
-    expect(readme).toContain('react-native-nitro-modules@0.31.4');
     expect(readme).toContain('pnpm add ds-uni@workspace:*');
     expect(readme).toContain("themes: { designSystem: buildTheme() }");
     expect(readme).toContain("settings: { initialTheme: 'designSystem' }");
@@ -146,8 +145,16 @@ describe('Unistyles flavor — emit smoke', () => {
       'Use `adaptiveThemes: true` when the OS should control reserved `light`/`dark` themes',
     );
     expect(readme).toContain('Do not run `pnpm install` inside this folder');
-    expect(readme).toContain('There is no build step');
+    expect(readme).toContain('TypeScript source under `src/`');
+    // Augmentation is consumer-provided; README shows the required snippet.
+    expect(readme).toContain('Setup — TypeScript augmentation (required)');
     expect(readme).toContain("declare module 'react-native-unistyles'");
+    expect(readme).toContain('Compatibility');
+    expect(readme).toContain('Troubleshooting');
+    expect(readme).toContain('--install-links');
+    // Nitro-modules version is intentionally unpinned now.
+    expect(readme).not.toContain('react-native-nitro-modules@0.31.4');
+    expect(readme).toContain('expo install react-native-unistyles');
     expect(readme).not.toContain('pnpm build');
     expect(readme).not.toContain('UnistylesRegistry');
     expect(readme).not.toContain('lightBlueRounded');
@@ -172,7 +179,8 @@ describe('Unistyles flavor — emit smoke', () => {
   it('exposes light + dark + buildTheme + themes', () => {
     const idx = files.get('src/index.ts')!;
     expect(idx).not.toContain('/// <reference');
-    expect(idx).toContain("import './types';");
+    // P0: no side-effect import of types — the package does not augment.
+    expect(idx).not.toContain("import './types'");
     expect(idx).toContain('buildTheme');
     expect(idx).toContain('setDesignSystemModes');
     expect(idx).toContain('setModeMode');
@@ -204,16 +212,22 @@ describe('Unistyles flavor — emit smoke', () => {
     expect(files.get('src/composites/text-styles.ts')!).toContain('export const _textStyles');
   });
 
-  it('types.ts augments UnistylesThemes with only the shipped theme keys', () => {
+  it('types.ts does NOT augment UnistylesThemes — consumer owns that', () => {
     const types = files.get('src/types.ts')!;
-    expect(types).toContain("declare module 'react-native-unistyles'");
-    expect(types).toContain('export interface UnistylesThemes');
-    expect(types).toContain('light: Theme');
-    expect(types).toContain('dark: Theme');
-    // Custom theme keys are not augmented by the package — consumers add them.
-    expect(types).not.toMatch(/designSystem:\s*Theme/);
-    expect(types).not.toMatch(/primary:\s*Theme/);
-    expect(types).not.toMatch(/alternate:\s*Theme/);
+    expect(types).not.toContain("declare module 'react-native-unistyles'");
+    expect(types).not.toContain('UnistylesThemes');
+    // It still exports Theme and ThemeOptions for the consumer-side augmentation.
+    expect(types).toContain('export interface Theme');
+    expect(types).toContain('export interface ThemeOptions');
+  });
+
+  it('Theme types composites as objects keyed by getter name, not Record<string, ...>', () => {
+    const types = files.get('src/types.ts')!;
+    expect(types).not.toContain('Record<string, TextStyle>');
+    expect(types).not.toContain('Record<string, string | null>');
+    expect(types).toMatch(/textStyles:\s*\{/);
+    expect(types).toMatch(/shadows:\s*\{/);
+    expect(types).toMatch(/colorStyles:\s*\{/);
   });
 });
 
@@ -252,9 +266,10 @@ describe('Unistyles flavor — single mode IR', () => {
     expect(files.get('src/index.ts')!).toContain("export { theme } from './themes'");
     expect(files.get('src/themes.ts')!).toContain('export const theme: Theme = buildTheme()');
     const types = files.get('src/types.ts')!;
-    expect(types).toContain("declare module 'react-native-unistyles'");
-    expect(types).toContain('theme: Theme');
-    expect(types).not.toMatch(/designSystem:\s*Theme/);
+    expect(types).not.toContain("declare module 'react-native-unistyles'");
+    // README shows consumer how to declare the single `theme` key.
+    const readme = files.get('README.md')!;
+    expect(readme).toContain('theme: Theme;');
   });
 });
 

@@ -14,20 +14,6 @@ export function emitTypesTs(plan: ThemePlan): string {
     '',
     renderTheme(plan),
     '',
-    renderModuleAugmentation(plan),
-    '',
-  ].join('\n');
-}
-
-function renderModuleAugmentation(plan: ThemePlan): string {
-  const themeNames = plan.hasLightDark ? ['light', 'dark'] : ['theme'];
-  const themeLines = themeNames.map((name) => `    ${name}: Theme;`);
-  return [
-    "declare module 'react-native-unistyles' {",
-    '  export interface UnistylesThemes {',
-    ...themeLines,
-    '  }',
-    '}',
   ].join('\n');
 }
 
@@ -70,17 +56,31 @@ function renderTheme(plan: ThemePlan): string {
   for (const [key, node] of root.children) {
     lines.push(...renderNode(key, node, '  '));
   }
-  lines.push('  textStyles: Record<string, TextStyle>;');
-  lines.push('  shadows: Record<string, TextStyle>;');
-  lines.push('  colorStyles: Record<string, string | null>;');
+  lines.push(...renderCompositeBlock('textStyles', plan.textStyles.map((s) => s.getterName), 'TextStyle'));
+  lines.push(...renderCompositeBlock('shadows', plan.shadows.map((s) => s.getterName), 'TextStyle'));
+  lines.push(...renderCompositeBlock('colorStyles', plan.colorStyles.map((s) => s.getterName), 'string | null'));
   lines.push('}');
   return lines.join('\n');
+}
+
+function renderCompositeBlock(name: string, keys: string[], valueType: string): string[] {
+  // Composites are flattened by getterName across groups, mirroring the
+  // runtime emit. Same getterName from different groups overwrites at
+  // runtime (last write wins) — match that here by deduping the type keys.
+  const unique = Array.from(new Set(keys));
+  if (unique.length === 0) {
+    return [`  ${name}: {};`];
+  }
+  const lines = [`  ${name}: {`];
+  for (const k of unique) lines.push(`    ${JSON.stringify(k)}: ${valueType};`);
+  lines.push('  };');
+  return lines;
 }
 
 function renderNode(name: string, node: { children: Map<string, any>; leafType?: LeafTSType }, indent: string): string[] {
   const safeKey = JSON.stringify(name);
   if (node.leafType && node.children.size === 0) {
-    return [`${indent}${safeKey}: ${node.leafType};`];
+    return [`${indent}${safeKey}: ${renderLeafType(node.leafType)};`];
   }
   const lines: string[] = [`${indent}${safeKey}: {`];
   for (const [k, child] of node.children) {
@@ -88,4 +88,12 @@ function renderNode(name: string, node: { children: Map<string, any>; leafType?:
   }
   lines.push(`${indent}};`);
   return lines;
+}
+
+function renderLeafType(t: LeafTSType): string {
+  // FONT_WEIGHT-scoped variables hold values like 400 or "bold". Typing them
+  // as RN's TextStyle['fontWeight'] union (matches '100'…'900' | 'normal' |
+  // 'bold' | …) means consumers don't need to cast.
+  if (t === 'fontWeight') return "TextStyle['fontWeight']";
+  return t;
 }

@@ -32,7 +32,7 @@ import type {
   PreparedRNVariable,
 } from '../shared/prepare';
 
-export type LeafTSType = 'string' | 'number' | 'boolean';
+export type LeafTSType = 'string' | 'number' | 'boolean' | 'fontWeight';
 
 export interface ThemeLeaf {
   /** Path segments from the theme root, e.g. ['theme','colors','text']. */
@@ -232,7 +232,7 @@ function buildVariablePlan(
     id: v.id,
     path,
     leaf,
-    tsType: tsTypeFor(v.type),
+    tsType: tsTypeFor(v.type, v.scopes),
     rawByMode,
   };
 }
@@ -274,7 +274,11 @@ function rawLeafStartsWithDigit(figmaName: string): boolean {
   return /^\d$/.test(firstAlnum);
 }
 
-function tsTypeFor(t: PreparedRNVariable['type']): LeafTSType {
+function tsTypeFor(
+  t: PreparedRNVariable['type'],
+  scopes: PreparedRNVariable['scopes'],
+): LeafTSType {
+  if (scopes.includes('FONT_WEIGHT')) return 'fontWeight';
   switch (t) {
     case 'COLOR':
     case 'STRING':

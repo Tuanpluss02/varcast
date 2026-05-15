@@ -73,9 +73,17 @@ StyleSheet.configure({
   const collectionList =
     collectionRoots.length > 0 ? collectionRoots.map((k) => `\`${k}\``).join(', ') : '`theme`';
 
+  const augmentationSnippet = buildAugmentationSnippet(o, plan);
+
   return `# ${o.packageName}
 
 Generated React Native design tokens for [\`react-native-unistyles\` v3](https://www.npmjs.com/package/react-native-unistyles). Do not edit by hand.
+
+## Compatibility
+
+- React Native ≥ 0.72 (Babel must understand TypeScript — true by default since RN 0.71)
+- \`react-native-unistyles\` ^3.0.0
+- Works in bare RN, Expo SDK 50+, and any Metro-based tooling
 
 ## Install
 
@@ -87,13 +95,23 @@ pnpm add ${o.packageName}@workspace:*
 pnpm add ./packages/${o.packageName}
 \`\`\`
 
-Your app must also install and configure Unistyles v3 and its native dependencies according to the Unistyles documentation. At minimum, a React Native app needs:
+Your app must also install and configure Unistyles v3 and its native dependencies. Let your package manager pick versions compatible with your RN — for Expo:
 
 \`\`\`bash
-pnpm add react-native-unistyles react-native-edge-to-edge react-native-nitro-modules@0.31.4
+expo install react-native-unistyles react-native-edge-to-edge react-native-nitro-modules
 \`\`\`
 
-This package ships TypeScript source under \`src/\`. There is no build step — your app's Metro/Babel handles transpilation. **Do not run \`pnpm install\` inside this folder**: it pulls a duplicate copy of \`react-native\` into nested \`node_modules\` and crashes your app's Metro bundler.
+For bare RN, follow [the Unistyles 3 install guide](https://www.unistyl.es/v3/start/getting-started) to pick versions that match your RN release.
+
+> ⚠️ **Do not run \`pnpm install\` inside this folder.** This package ships TypeScript source under \`src/\` — there is no build step. Your app's Metro/Babel handles transpilation. Installing here pulls a duplicate \`react-native\` into nested \`node_modules\` and crashes the consumer app's Metro bundler.
+
+## Setup — TypeScript augmentation (required)
+
+Unistyles types \`theme.*\` from your app's \`UnistylesThemes\` interface. This package intentionally does not augment it, so you can register exactly the themes you use without TS errors. Add this once in your app (e.g. \`src/unistyles.d.ts\`):
+
+\`\`\`ts
+${augmentationSnippet}
+\`\`\`
 
 ## Usage
 
@@ -124,26 +142,35 @@ ${modeSwitchingSection}
 
 Token collections are exposed under collection roots to preserve every Figma variable, even when two collections use the same group path. This package exposes: ${collectionList}.
 
-## Module augmentation
-
-This package augments \`react-native-unistyles\` so \`theme.*\` autocompletes inside \`StyleSheet.create\`. No setup needed — importing anything from this package brings the augmentation along, and TypeScript picks it up for the rest of your program.
-
-The shipped augmentation covers ${plan.hasLightDark ? '`light` and `dark`' : '`theme`'}. If you register custom theme names with \`buildTheme()\` (e.g. \`primary\`, \`alternate\`, \`designSystem\`), add your own augmentation alongside them:
-
-\`\`\`ts
-import type { Theme } from '${o.packageName}';
-
-declare module 'react-native-unistyles' {
-  interface UnistylesThemes {
-    designSystem: Theme;
-  }
-}
-\`\`\`
-
 ## Composites
 
-\`textStyles\`, \`shadows\`, and \`colorStyles\` are exposed under the theme. Note: composites are resolved at codegen time using each token's first available mode — they do **not** update with axis switches at runtime. Compose dynamic styles from token collections if you need runtime reactivity.
+\`textStyles\`, \`shadows\`, and \`colorStyles\` are exposed under the theme as typed objects (each key matches a Figma style getter). Composites are resolved at codegen time using each token's first available mode — they do **not** update with axis switches at runtime. Compose dynamic styles from token collections if you need runtime reactivity.
+
+## Troubleshooting
+
+**TypeScript reports \`Cannot find module 'react-native'\`** — your install method symlinked this package outside the consumer's \`node_modules\`, so TS can't see the consumer's peer deps. Fix it by either:
+
+- Using a pnpm workspace (\`pnpm add ${o.packageName}@workspace:*\`), or
+- Copying instead of symlinking: \`npm install --install-links ./packages/${o.packageName}\`
+
+**Metro fails with \`Unable to determine event arguments for "..."\`** — there's a duplicate \`react-native\` inside this package's \`node_modules\`. Delete \`packages/${o.packageName}/node_modules\` and re-install from your app root.
 `;
+}
+
+function buildAugmentationSnippet(o: ReactNativeOptions, plan: ThemePlan): string {
+  const shipped = plan.hasLightDark ? ['light', 'dark'] : ['theme'];
+  const lines = [
+    `import type { Theme } from '${o.packageName}';`,
+    '',
+    "declare module 'react-native-unistyles' {",
+    '  interface UnistylesThemes {',
+    ...shipped.map((name) => `    ${name}: Theme;`),
+    '    // Add any custom theme names you register with buildTheme(), e.g.:',
+    '    // designSystem: Theme;',
+    '  }',
+    '}',
+  ];
+  return lines.join('\n');
 }
 
 function buildModeSwitchingSection(o: ReactNativeOptions, plan: ThemePlan): string {

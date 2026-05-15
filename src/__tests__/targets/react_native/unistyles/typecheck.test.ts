@@ -126,10 +126,13 @@ declare module 'react-native-unistyles' {
         `import { StyleSheet } from 'react-native-unistyles';
 import { buildTheme, light, dark, type Theme } from './index';
 
-// Custom theme keys (designSystem/primary/alternate) need a consumer-side
-// augmentation. The README documents this; we validate it compiles here.
+// The package no longer augments UnistylesThemes. The consumer declares
+// every theme name they register — including the shipped ones — exactly
+// once. The README shows this snippet.
 declare module 'react-native-unistyles' {
   interface UnistylesThemes {
+    light: Theme;
+    dark: Theme;
     designSystem: Theme;
     primary: Theme;
     alternate: Theme;

@@ -10,7 +10,6 @@ import type { ThemePlan } from './planner';
 export function emitBuildThemeTs(plan: ThemePlan): string {
   const optsType = renderOptsType(plan);
   const defaults = renderDefaults(plan);
-  const defaultThemeName = renderDefaultThemeName(plan);
   const axisSetters = renderAxisSetters(plan);
 
   return [
@@ -77,8 +76,11 @@ export function emitBuildThemeTs(plan: ThemePlan): string {
     'export function setDesignSystemModes(opts: Partial<ThemeOptions>): Theme {',
     '  _currentModes = { ..._currentModes, ...opts } as ThemeOptions;',
     '  const nextTheme = buildTheme(_currentModes);',
-    `  const themeName = UnistylesRuntime.themeName ?? ${defaultThemeName};`,
-    '  UnistylesRuntime.updateTheme(themeName, () => nextTheme);',
+    '  // Only push into Unistyles if a theme is actually active. Hardcoding a',
+    '  // fallback (e.g. "light") would crash when the consumer only registered',
+    '  // a custom theme name.',
+    '  const themeName = UnistylesRuntime.themeName;',
+    '  if (themeName) UnistylesRuntime.updateTheme(themeName, () => nextTheme);',
     '  return nextTheme;',
     '}',
     '',
@@ -97,11 +99,6 @@ function renderDefaults(plan: ThemePlan): string {
   const entries: string[] = [];
   for (const a of plan.axes) entries.push(`  ${JSON.stringify(a.keyCamel)}: ${JSON.stringify(plan.axisDefaults[a.keyCamel])}`);
   return `{\n${entries.join(',\n')}\n}`;
-}
-
-function renderDefaultThemeName(plan: ThemePlan): string {
-  if (!plan.hasLightDark || !plan.lightDarkAxisKey) return JSON.stringify('theme');
-  return `(_currentModes[${JSON.stringify(plan.lightDarkAxisKey)}] === 'dark' ? 'dark' : 'light')`;
 }
 
 function renderAxisSetters(plan: ThemePlan): string[] {

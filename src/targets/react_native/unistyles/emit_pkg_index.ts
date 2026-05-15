@@ -3,11 +3,7 @@
 import type { ThemePlan } from './planner';
 
 export function emitPackageIndexTs(plan: ThemePlan): string {
-  const lines = [
-    '// GENERATED FILE — do not edit by hand.',
-    "import './types';",
-    '',
-  ];
+  const lines = ['// GENERATED FILE — do not edit by hand.', ''];
 
   const runtimeExports = [
     'buildTheme',
