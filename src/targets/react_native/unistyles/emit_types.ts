@@ -14,6 +14,20 @@ export function emitTypesTs(plan: ThemePlan): string {
     '',
     renderTheme(plan),
     '',
+    renderModuleAugmentation(plan),
+    '',
+  ].join('\n');
+}
+
+function renderModuleAugmentation(plan: ThemePlan): string {
+  const themeNames = plan.hasLightDark ? ['light', 'dark'] : ['theme'];
+  const themeLines = themeNames.map((name) => `    ${name}: Theme;`);
+  return [
+    "declare module 'react-native-unistyles' {",
+    '  export interface UnistylesThemes {',
+    ...themeLines,
+    '  }',
+    '}',
   ].join('\n');
 }
 

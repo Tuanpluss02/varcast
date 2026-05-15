@@ -3,8 +3,8 @@
 //
 // The plan answers two questions per export:
 //
-//   1. Theme shape — for each leaf in the merged groupPath tree, which
-//      collection + variable owns it, and what's its TS type?
+//   1. Theme shape — for each leaf under its collection root, which variable
+//      owns it, and what's its TS type?
 //   2. Axis layout — which collections drive `buildTheme` axes (any with
 //      more than one mode), what default mode they each use, and which
 //      axis (if any) is the canonical light/dark.
@@ -12,6 +12,10 @@
 // Composites are resolved at codegen time using each variable's first
 // available mode (limitation noted in the package README).
 
+import {
+  splitWords,
+  toCamelCase,
+} from '../../../core/sanitize_base';
 import type { Axis } from '../shared/axes';
 import {
   resolveColorValue,
@@ -31,7 +35,7 @@ import type {
 export type LeafTSType = 'string' | 'number' | 'boolean';
 
 export interface ThemeLeaf {
-  /** Path segments from the merged tree root, e.g. ['colors','text','brand']. */
+  /** Path segments from the theme root, e.g. ['theme','colors','text']. */
   path: string[];
   /** Final identifier under the path. */
   leaf: string;
@@ -42,6 +46,8 @@ export interface ThemeLeaf {
 
 export interface CollectionPlan {
   id: string;
+  /** Collection root on the generated theme, e.g. `theme.allColors`. */
+  rootKey: string;
   /** Camel axis key — also matches `axes[i].keyCamel` when this collection is an axis. */
   axisKey: string | null;
   /** Mode keys, in declaration order (first = default). */
@@ -50,7 +56,7 @@ export interface CollectionPlan {
   modeIds: Record<string, string>;
   defaultModeKey: string;
   defaultModeId: string;
-  /** Variables owned by this collection, with their leaf path in the merged tree. */
+  /** Variables owned by this collection, with their leaf path under `rootKey`. */
   variables: Array<{
     id: string;
     path: string[];
@@ -109,8 +115,9 @@ export interface ThemePlan {
   hasLightDark: boolean;
   /** Light/dark axis key when `hasLightDark` is true; null otherwise. */
   lightDarkAxisKey: string | null;
-  /** Merged shape — the full set of leaves across all collections, in
-   *  iteration order with later collections overriding earlier paths. */
+  /** Full public theme shape. Every collection is rooted by its stable
+   *  collection key so same-named leaves in different collections do not
+   *  overwrite each other. */
   shape: ThemeLeaf[];
   /** Composites — resolved once at codegen time. */
   textStyles: CompositeTextPlan[];
@@ -166,12 +173,13 @@ function buildCollectionPlan(
     }
   }
 
-  const variables = c.variables
-    .map((v) => buildVariablePlan(v, modeKeys, modeIds))
-    .filter((v): v is NonNullable<typeof v> => v !== null);
+  const variables = dedupFlattenedVariables(c.variables
+    .map((v) => buildVariablePlan(c.exportNameCamel, v, modeKeys, modeIds))
+    .filter((v): v is NonNullable<typeof v> => v !== null));
 
   return {
     id: c.id,
+    rootKey: c.exportNameCamel,
     axisKey: axis?.keyCamel ?? null,
     modeKeys,
     modeIds,
@@ -182,6 +190,7 @@ function buildCollectionPlan(
 }
 
 function buildVariablePlan(
+  collectionRootKey: string,
   v: PreparedRNVariable,
   modeKeys: string[],
   modeIds: Record<string, string>,
@@ -192,8 +201,11 @@ function buildVariablePlan(
   tsType: LeafTSType;
   rawByMode: Record<string, RawSlot>;
 } | null {
-  // Drop variables with no useful path (defensive).
-  const path = v.groupCamel;
+  // Keep collection boundaries in the public theme, but match Flutter's
+  // collection API by flattening each variable path into one member name:
+  // `allColors.red950`, `theme.tokenColorsStateBaseWhite`, etc.
+  const path = [collectionRootKey];
+  const leaf = flattenedMemberName(v);
 
   const rawByMode: Record<string, RawSlot> = {};
   for (const key of modeKeys) {
@@ -219,10 +231,47 @@ function buildVariablePlan(
   return {
     id: v.id,
     path,
-    leaf: v.stableLeafKey,
+    leaf,
     tsType: tsTypeFor(v.type),
     rawByMode,
   };
+}
+
+function flattenedMemberName(v: PreparedRNVariable): string {
+  const parts = [...v.groupCamel, leafForFlatten(v)].filter(Boolean);
+  if (parts.length === 0) return v.stableLeafKey || 'unnamed';
+  const words = parts.flatMap((part) => splitWords(part));
+  return toCamelCase(words.join(' '));
+}
+
+function dedupFlattenedVariables<T extends { leaf: string }>(variables: T[]): T[] {
+  const used = new Set<string>();
+  return variables.map((v) => {
+    let leaf = v.leaf;
+    if (!used.has(leaf)) {
+      used.add(leaf);
+      return v;
+    }
+    let i = 2;
+    while (used.has(`${leaf}${i}`)) i++;
+    leaf = `${leaf}${i}`;
+    used.add(leaf);
+    return { ...v, leaf };
+  });
+}
+
+function leafForFlatten(v: PreparedRNVariable): string {
+  const leaf = v.stableLeafKey;
+  if (/^n\d/.test(leaf) && rawLeafStartsWithDigit(v.figmaName)) {
+    return leaf.slice(1);
+  }
+  return leaf;
+}
+
+function rawLeafStartsWithDigit(figmaName: string): boolean {
+  const rawLeaf = figmaName.split('/').map((s) => s.trim()).filter(Boolean).pop() ?? '';
+  const firstAlnum = rawLeaf.match(/[A-Za-z0-9]/)?.[0] ?? '';
+  return /^\d$/.test(firstAlnum);
 }
 
 function tsTypeFor(t: PreparedRNVariable['type']): LeafTSType {
@@ -238,16 +287,13 @@ function tsTypeFor(t: PreparedRNVariable['type']): LeafTSType {
 }
 
 function buildShape(collections: CollectionPlan[]): ThemeLeaf[] {
-  // Last write wins per leaf path. We track ordering via a Map that we
-  // rebuild as we encounter each variable.
-  const byKey = new Map<string, ThemeLeaf>();
+  const out: ThemeLeaf[] = [];
   for (const c of collections) {
     for (const v of c.variables) {
-      const key = `${v.path.join('/')}::${v.leaf}`;
-      byKey.set(key, { path: v.path, leaf: v.leaf, varId: v.id, tsType: v.tsType });
+      out.push({ path: v.path, leaf: v.leaf, varId: v.id, tsType: v.tsType });
     }
   }
-  return [...byKey.values()];
+  return out;
 }
 
 // ── Composite planning ────────────────────────────────────────────────────

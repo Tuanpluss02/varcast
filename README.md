@@ -11,7 +11,7 @@ Export Figma Variables and Styles to **Flutter** and **React Native** as fully-t
 - Two targets, one Figma file — Flutter (Dart) and React Native.
 - React Native ships **two flavors**, picked at export time:
   - **NativeWind preset** — Tailwind preset (CommonJS) + per-mode `.css` and `vars()` JS maps.
-  - **Unistyles 2** — typed `light`/`dark` themes, a `buildTheme({ ...axes })` factory, and a module augmentation for `react-native-unistyles`.
+  - **Unistyles 3** — typed `light`/`dark` themes, a `buildTheme({ ...axes })` factory, and a module augmentation for `react-native-unistyles`.
 - Aliases preserved as references; semantic tokens stay semantic in code. Cross-axis aliases resolve at runtime in the Unistyles flavor.
 - Per-target stable manifest — Figma renames never break consumer code.
 - Paint / Effect / Text styles compile into typed composite containers.

@@ -4,9 +4,8 @@ import { readEffectStyles } from './reader/effect_styles';
 import { readTextStyles } from './reader/text_styles';
 import { validate } from './ir/validate';
 import type { IR } from './ir/types';
-import { diffManifest } from './manifest';
 import type { Manifest } from './core/manifest';
-import { normalizeManifest } from './core/manifest';
+import { diffManifestForTarget, normalizeManifest } from './core/manifest';
 import { generateChangelog } from './targets/flutter/generator/changelog';
 import { buildZip } from './zip';
 import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
@@ -78,7 +77,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
           ? { react_native: rnOptions }
           : { flutter: flutterOptions },
       );
-      const diff = diffManifest(oldManifest, nextManifest);
+      const diff = diffManifestForTarget(oldManifest, nextManifest, targetId);
       const changelog = generateChangelog(diff);
 
       const allFiles = [

@@ -120,12 +120,12 @@ describe('NativeWind flavor — emit smoke', () => {
 
   it('emits the canonical file set', () => {
     const paths = [...files.keys()].sort();
-    // Expected: package.json, README.md, tailwind.preset.cjs, src/index.ts,
+    // Expected: package.json, README.md, tailwind.preset.cjs,
     // themes/index.{js,d.ts}, themes/{base,light,dark,brand-blue,brand-purple}.{css,vars.js}
     expect(paths).toContain('package.json');
     expect(paths).toContain('README.md');
     expect(paths).toContain('tailwind.preset.cjs');
-    expect(paths).toContain('src/index.ts');
+    expect(paths).toContain('tailwind.preset.d.ts');
     expect(paths).toContain('themes/index.js');
     expect(paths).toContain('themes/index.d.ts');
     expect(paths).toContain('themes/base.css');
@@ -134,6 +134,19 @@ describe('NativeWind flavor — emit smoke', () => {
     expect(paths).toContain('themes/dark.css');
     expect(paths).toContain('themes/brand-blue.css');
     expect(paths).toContain('themes/brand-purple.css');
+    expect(paths).not.toContain('src/index.ts');
+  });
+
+  it('package metadata separates the Tailwind preset root from the runtime theme subpath', () => {
+    const pkg = JSON.parse(files.get('package.json')!);
+    expect(pkg.main).toBe('tailwind.preset.cjs');
+    expect(pkg.types).toBe('tailwind.preset.d.ts');
+    expect(pkg.exports['.'].require).toBe('./tailwind.preset.cjs');
+    expect(pkg.exports['./themes'].require).toBe('./themes/index.js');
+    expect(pkg.exports['./themes'].types).toBe('./themes/index.d.ts');
+    const readme = files.get('README.md')!;
+    expect(readme).toContain("presets: [require('ds-nw')]");
+    expect(readme).toContain("import { themes } from 'ds-nw/themes'");
   });
 
   it('preset routes color tokens under colors and uses CSS-var references', () => {
@@ -266,5 +279,81 @@ describe('NativeWind flavor — composites', () => {
     expect(preset).toContain('fontFamily: "Inter"');
     expect(preset).toContain('fontSize: "16px"');
     expect(preset).toContain('lineHeight: "24px"'); // 150% of 16
+  });
+});
+
+describe('NativeWind flavor — collection boundary collisions', () => {
+  it('keeps duplicate group paths from different collections reachable', () => {
+    const ir: IR = {
+      version: '1.0',
+      fileKey: 'k',
+      generatedAt: new Date(0).toISOString(),
+      collections: [
+        {
+          id: 'col:primitive',
+          name: 'All Colors',
+          kind: 'primitive',
+          modes: [{ id: 'm:base', name: 'Base' }],
+          variables: [
+            {
+              id: 'v:primitive-alpha',
+              figmaName: 'alpha/white/100',
+              groupPath: ['alpha', 'white', '100'],
+              type: 'COLOR',
+              scopes: ['ALL_FILLS'],
+              hiddenFromPublishing: false,
+              emitToPublic: true,
+              valuesByMode: {
+                'm:base': { kind: 'literal', value: { r: 1, g: 1, b: 1, a: 1 } },
+              },
+            },
+          ],
+        },
+        {
+          id: 'col:semantic',
+          name: 'Theme',
+          kind: 'token',
+          modes: [
+            { id: 'm:light', name: 'Light' },
+            { id: 'm:dark', name: 'Dark' },
+          ],
+          variables: [
+            {
+              id: 'v:semantic-alpha',
+              figmaName: 'alpha/white/100',
+              groupPath: ['alpha', 'white', '100'],
+              type: 'COLOR',
+              scopes: ['ALL_FILLS'],
+              hiddenFromPublishing: false,
+              emitToPublic: true,
+              valuesByMode: {
+                'm:light': { kind: 'literal', value: { r: 0, g: 0, b: 0, a: 1 } },
+                'm:dark': { kind: 'literal', value: { r: 0.5, g: 0.5, b: 0.5, a: 1 } },
+              },
+            },
+          ],
+        },
+      ],
+      composites: { paintStyles: [], effectStyles: [], textStyles: [] },
+    };
+
+    const out = runEngine(ir, [reactNativeTarget], null, {
+      react_native: { flavor: 'nativewind', packageName: 'ds' },
+    });
+    const files = fileMap(out.files);
+    const preset = files.get('tailwind.preset.cjs')!;
+    const base = files.get('themes/base.css')!;
+    const light = files.get('themes/light.css')!;
+    const dark = files.get('themes/dark.css')!;
+
+    expect(preset).toContain('"all-colors":');
+    expect(preset).toContain('"theme":');
+    expect(preset).toContain('"100": "var(--ds-all-colors-alpha-white-100)"');
+    expect(preset).toContain('"100": "var(--ds-theme-alpha-white-100)"');
+    expect(base).toContain('--ds-all-colors-alpha-white-100: #FFFFFFFF;');
+    expect(light).toContain('--ds-theme-alpha-white-100: #000000FF;');
+    expect(dark).toContain('--ds-theme-alpha-white-100: #808080FF;');
+    expect(base).not.toContain('--ds-alpha-white-100');
+    expect(light).not.toContain('--ds-alpha-white-100');
   });
 });

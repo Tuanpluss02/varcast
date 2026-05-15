@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
-import { diffManifest } from './manifest';
+import { diffManifestForTarget } from './core/manifest';
 import { loadManifest, saveManifest } from './manifest_node';
 import { generateChangelog } from './targets/flutter/generator/changelog';
 import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
@@ -87,7 +87,7 @@ function main() {
           flutter: { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' },
         };
   const { files, nextManifest } = runEngine(ir, targets, oldManifest, optionsByTarget);
-  const diff = diffManifest(oldManifest, nextManifest);
+  const diff = diffManifestForTarget(oldManifest, nextManifest, targetId);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
   saveManifest(outDir, nextManifest);

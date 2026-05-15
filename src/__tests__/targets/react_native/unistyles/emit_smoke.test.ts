@@ -91,12 +91,18 @@ describe('Unistyles flavor — emit smoke', () => {
   it('emits the canonical file set', () => {
     const paths = [...files.keys()].sort();
     expect(paths).toEqual([
+      '.npmrc',
       'README.md',
       'package.json',
       'src/build-theme.ts',
+      'src/collections/brand.ts',
+      'src/collections/mode.ts',
+      'src/composites/color-styles.ts',
+      'src/composites/shadows.ts',
+      'src/composites/text-styles.ts',
+      'src/data/index.ts',
+      'src/data/types.ts',
       'src/index.ts',
-      'src/module-augmentation.d.ts',
-      'src/raw.ts',
       'src/themes.ts',
       'src/types.ts',
       'tsconfig.json',
@@ -104,7 +110,47 @@ describe('Unistyles flavor — emit smoke', () => {
   });
 
   it('package.json declares the unistyles peer dependency', () => {
-    expect(files.get('package.json')!).toContain('react-native-unistyles');
+    const pkg = files.get('package.json')!;
+    expect(pkg).toContain('react-native-unistyles');
+    expect(pkg).toContain('"react-native-unistyles": "^3.0.0"');
+  });
+
+  it('package.json ships TypeScript source with no build step', () => {
+    const pkg = JSON.parse(files.get('package.json')!);
+    expect(pkg.main).toBe('src/index.ts');
+    expect(pkg.types).toBe('src/index.ts');
+    expect(pkg.files).toEqual(['src']);
+    expect(pkg.scripts).toBeUndefined();
+    expect(pkg.devDependencies).toBeUndefined();
+  });
+
+  it('emits an .npmrc that disables peer auto-install', () => {
+    expect(files.get('.npmrc')).toBe('auto-install-peers=false\n');
+  });
+
+  it('README documents the Unistyles 3 configuration API', () => {
+    const readme = files.get('README.md')!;
+    expect(readme).toContain('react-native-unistyles` v3');
+    expect(readme).toContain("import { StyleSheet } from 'react-native-unistyles'");
+    expect(readme).toContain('StyleSheet.configure({');
+    expect(readme).toContain('primary: buildTheme({ mode: "light", brand: "blue" })');
+    expect(readme).toContain('alternate: buildTheme({ mode: "dark", brand: "purple" })');
+    expect(readme).toContain('react-native-nitro-modules@0.31.4');
+    expect(readme).toContain('pnpm add ds-uni@workspace:*');
+    expect(readme).toContain("themes: { designSystem: buildTheme() }");
+    expect(readme).toContain("settings: { initialTheme: 'designSystem' }");
+    expect(readme).toContain('setDesignSystemModes');
+    expect(readme).toContain('setModeMode("dark")');
+    expect(readme).toContain('setBrandMode("purple")');
+    expect(readme).toContain(
+      'Use `adaptiveThemes: true` when the OS should control reserved `light`/`dark` themes',
+    );
+    expect(readme).toContain('Do not run `pnpm install` inside this folder');
+    expect(readme).toContain('There is no build step');
+    expect(readme).toContain("declare module 'react-native-unistyles'");
+    expect(readme).not.toContain('pnpm build');
+    expect(readme).not.toContain('UnistylesRegistry');
+    expect(readme).not.toContain('lightBlueRounded');
   });
 
   it('emits typed ThemeOptions with both axis unions', () => {
@@ -114,24 +160,31 @@ describe('Unistyles flavor — emit smoke', () => {
     expect(types).toContain('brand: "blue" | "purple"');
   });
 
-  it('Theme interface mirrors merged groupPath shape', () => {
+  it('Theme interface roots variables by collection to avoid collisions', () => {
     const types = files.get('src/types.ts')!;
-    // colors namespace appears at the root with nested groups
-    expect(types).toMatch(/"colors":\s*\{/);
-    expect(types).toMatch(/"background":\s*\{[^}]*"primary":\s*string/);
-    expect(types).toMatch(/"brand":\s*\{[^}]*"default500":\s*string/);
+    expect(types).toMatch(/"mode":\s*\{/);
+    expect(types).toMatch(/"brand":\s*\{/);
+    expect(types).toMatch(/"colorsBackgroundPrimary":\s*string/);
+    expect(types).toMatch(/"colorsTextBrand":\s*string/);
+    expect(types).toMatch(/"colorsBrandDefault500":\s*string/);
   });
 
   it('exposes light + dark + buildTheme + themes', () => {
     const idx = files.get('src/index.ts')!;
-    expect(idx).toContain("export { buildTheme } from './build-theme'");
+    expect(idx).not.toContain('/// <reference');
+    expect(idx).toContain("import './types';");
+    expect(idx).toContain('buildTheme');
+    expect(idx).toContain('setDesignSystemModes');
+    expect(idx).toContain('setModeMode');
+    expect(idx).toContain('setBrandMode');
     expect(idx).toContain("export { light, dark, themes } from './themes'");
   });
 
   it('themes.ts pre-builds light and dark using the mode axis key', () => {
     const themes = files.get('src/themes.ts')!;
-    expect(themes).toContain("buildTheme({ mode: 'light' }");
-    expect(themes).toContain("buildTheme({ mode: 'dark' }");
+    expect(themes).toContain("buildTheme({ mode: 'light' })");
+    expect(themes).toContain("buildTheme({ mode: 'dark' })");
+    expect(themes).not.toContain('as any');
   });
 
   it('build-theme has a defaults object for every detected axis', () => {
@@ -140,17 +193,27 @@ describe('Unistyles flavor — emit smoke', () => {
     expect(bt).toContain('"brand": "blue"');
   });
 
-  it('raw.ts encodes alias references with $alias markers', () => {
-    const raw = files.get('src/raw.ts')!;
-    expect(raw).toContain('$alias');
-    expect(raw).toContain('"v:brandDefault"');
+  it('splits collection data and aggregate indexes into structured files', () => {
+    const mode = files.get('src/collections/mode.ts')!;
+    const dataIndex = files.get('src/data/index.ts')!;
+    expect(mode).toContain('$alias');
+    expect(mode).toContain('"v:brandDefault"');
+    expect(dataIndex).toContain("from '../collections/mode'");
+    expect(dataIndex).toContain("from '../collections/brand'");
+    expect(dataIndex).toContain('export const _vars');
+    expect(files.get('src/composites/text-styles.ts')!).toContain('export const _textStyles');
   });
 
-  it('module augmentation declares both light and dark for UnistylesThemes', () => {
-    const aug = files.get('src/module-augmentation.d.ts')!;
-    expect(aug).toContain("declare module 'react-native-unistyles'");
-    expect(aug).toContain('light: Theme');
-    expect(aug).toContain('dark: Theme');
+  it('types.ts augments UnistylesThemes with only the shipped theme keys', () => {
+    const types = files.get('src/types.ts')!;
+    expect(types).toContain("declare module 'react-native-unistyles'");
+    expect(types).toContain('export interface UnistylesThemes');
+    expect(types).toContain('light: Theme');
+    expect(types).toContain('dark: Theme');
+    // Custom theme keys are not augmented by the package — consumers add them.
+    expect(types).not.toMatch(/designSystem:\s*Theme/);
+    expect(types).not.toMatch(/primary:\s*Theme/);
+    expect(types).not.toMatch(/alternate:\s*Theme/);
   });
 });
 
@@ -188,6 +251,75 @@ describe('Unistyles flavor — single mode IR', () => {
     const files = fileMap(out.files);
     expect(files.get('src/index.ts')!).toContain("export { theme } from './themes'");
     expect(files.get('src/themes.ts')!).toContain('export const theme: Theme = buildTheme()');
-    expect(files.get('src/module-augmentation.d.ts')!).toContain('theme: Theme');
+    const types = files.get('src/types.ts')!;
+    expect(types).toContain("declare module 'react-native-unistyles'");
+    expect(types).toContain('theme: Theme');
+    expect(types).not.toMatch(/designSystem:\s*Theme/);
+  });
+});
+
+describe('Unistyles flavor — collection boundary collisions', () => {
+  it('keeps same group/leaf names from different collections reachable', () => {
+    const ir: IR = {
+      version: '1.0',
+      fileKey: 'k',
+      generatedAt: new Date(0).toISOString(),
+      collections: [
+        {
+          id: 'col:primitive',
+          name: 'All Colors',
+          kind: 'primitive',
+          modes: [{ id: 'm:base', name: 'Base' }],
+          variables: [
+            {
+              id: 'v:primitive-alpha',
+              figmaName: 'alpha/white/100',
+              groupPath: ['alpha', 'white', '100'],
+              type: 'COLOR',
+              scopes: ['ALL_FILLS'],
+              hiddenFromPublishing: false,
+              emitToPublic: true,
+              valuesByMode: {
+                'm:base': { kind: 'literal', value: { r: 1, g: 1, b: 1, a: 1 } },
+              },
+            },
+          ],
+        },
+        {
+          id: 'col:semantic',
+          name: 'Theme',
+          kind: 'token',
+          modes: [{ id: 'm:light', name: 'Light' }],
+          variables: [
+            {
+              id: 'v:semantic-alpha',
+              figmaName: 'alpha/white/100',
+              groupPath: ['alpha', 'white', '100'],
+              type: 'COLOR',
+              scopes: ['ALL_FILLS'],
+              hiddenFromPublishing: false,
+              emitToPublic: true,
+              valuesByMode: {
+                'm:light': { kind: 'literal', value: { r: 0, g: 0, b: 0, a: 1 } },
+              },
+            },
+          ],
+        },
+      ],
+      composites: { paintStyles: [], effectStyles: [], textStyles: [] },
+    };
+
+    const out = runEngine(ir, [reactNativeTarget], null, {
+      react_native: { flavor: 'unistyles', packageName: 'ds' },
+    });
+    const files = fileMap(out.files);
+    const types = files.get('src/types.ts')!;
+    const allColors = files.get('src/collections/all-colors.ts')!;
+    const theme = files.get('src/collections/theme.ts')!;
+
+    expect(types).toMatch(/"allColors":\s*\{[\s\S]*"alphaWhite100":\s*string/);
+    expect(types).toMatch(/"theme":\s*\{[\s\S]*"alphaWhite100":\s*string/);
+    expect(allColors).toContain('"v:primitive-alpha"');
+    expect(theme).toContain('"v:semantic-alpha"');
   });
 });

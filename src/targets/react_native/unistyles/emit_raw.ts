@@ -1,79 +1,161 @@
-// Emits `src/raw.ts` — flat tables of raw per-mode values + composite plans.
-// Aliases are preserved as `{ $alias: '<varId>' }` so the runtime resolver in
-// build-theme can follow them against the active axis combo.
+// Emits structured data modules for the Unistyles flavor.
+//
+// The generated package intentionally mirrors the Flutter output shape:
+// collection data lives under `src/collections/*`, shared raw-data contracts
+// under `src/data/*`, and composites under `src/composites/*`.
 
-import type { CompositeColorPlan, CompositeShadowPlan, CompositeTextPlan, ThemePlan } from './planner';
+import type {
+  CollectionPlan,
+  CompositeColorPlan,
+  CompositeShadowPlan,
+  CompositeTextPlan,
+  ThemePlan,
+} from './planner';
 
-export function emitRawTs(plan: ThemePlan): string {
+export function emitDataTypesTs(): string {
+  return [
+    '// GENERATED FILE — do not edit by hand.',
+    '',
+    'export type Alias = { $alias: string };',
+    'export type RawLeaf = string | number | boolean | Alias;',
+    'export type RawVariable = { c: string; v: Record<string, RawLeaf> };',
+    'export type RawCollection = {',
+    '  axis: string | null;',
+    '  modes: string[];',
+    '  defaultMode: string;',
+    '  shape: { path: string[]; leaf: string; varId: string }[];',
+    '};',
+    '',
+  ].join('\n');
+}
+
+export function emitCollectionDataTs(c: CollectionPlan): string {
   const lines: string[] = [];
   lines.push('// GENERATED FILE — do not edit by hand.');
   lines.push('');
-  lines.push("import type { TextStyle } from 'react-native';");
+  lines.push("import type { RawCollection, RawVariable } from '../data/types';");
   lines.push('');
 
-  // ── Type-only declarations ────────────────────────────────────────────
-  lines.push('export type Alias = { $alias: string };');
-  lines.push('export type RawLeaf = string | number | boolean | Alias;');
-  lines.push('');
-
-  // ── _vars: varId → { c: collectionId, v: { [modeKey]: RawLeaf } } ──────
-  lines.push('export const _vars: Record<string, { c: string; v: Record<string, RawLeaf> }> = {');
-  for (const c of plan.collections) {
-    for (const v of c.variables) {
-      const valueObj: string[] = [];
-      for (const [modeKey, slot] of Object.entries(v.rawByMode)) {
-        const rendered =
-          slot.kind === 'literal'
-            ? renderLiteral(slot.value)
-            : `{ $alias: ${JSON.stringify(slot.varId)} }`;
-        valueObj.push(`    ${JSON.stringify(modeKey)}: ${rendered},`);
-      }
-      lines.push(`  ${JSON.stringify(v.id)}: { c: ${JSON.stringify(c.id)}, v: {`);
-      lines.push(...valueObj);
-      lines.push('  } },');
+  lines.push('export const vars: Record<string, RawVariable> = {');
+  for (const v of c.variables) {
+    const valueObj: string[] = [];
+    for (const [modeKey, slot] of Object.entries(v.rawByMode)) {
+      const rendered =
+        slot.kind === 'literal'
+          ? renderLiteral(slot.value)
+          : `{ $alias: ${JSON.stringify(slot.varId)} }`;
+      valueObj.push(`    ${JSON.stringify(modeKey)}: ${rendered},`);
     }
+    lines.push(`  ${JSON.stringify(v.id)}: { c: ${JSON.stringify(c.id)}, v: {`);
+    lines.push(...valueObj);
+    lines.push('  } },');
   }
   lines.push('};');
   lines.push('');
 
-  // ── _collections: colId → { axis, modes, defaultMode, shape } ─────────
-  lines.push(
-    'export const _collections: Record<string, { axis: string | null; modes: string[]; defaultMode: string; shape: { path: string[]; leaf: string; varId: string }[] }> = {',
-  );
-  for (const c of plan.collections) {
-    lines.push(`  ${JSON.stringify(c.id)}: {`);
-    lines.push(`    axis: ${c.axisKey === null ? 'null' : JSON.stringify(c.axisKey)},`);
-    lines.push(`    modes: ${JSON.stringify(c.modeKeys)},`);
-    lines.push(`    defaultMode: ${JSON.stringify(c.defaultModeKey)},`);
-    lines.push('    shape: [');
-    for (const v of c.variables) {
-      lines.push(
-        `      { path: ${JSON.stringify(v.path)}, leaf: ${JSON.stringify(v.leaf)}, varId: ${JSON.stringify(v.id)} },`,
-      );
-    }
-    lines.push('    ],');
-    lines.push('  },');
+  lines.push('export const collection: RawCollection = {');
+  lines.push(`  axis: ${c.axisKey === null ? 'null' : JSON.stringify(c.axisKey)},`);
+  lines.push(`  modes: ${JSON.stringify(c.modeKeys)},`);
+  lines.push(`  defaultMode: ${JSON.stringify(c.defaultModeKey)},`);
+  lines.push('  shape: [');
+  for (const v of c.variables) {
+    lines.push(
+      `    { path: ${JSON.stringify(v.path)}, leaf: ${JSON.stringify(v.leaf)}, varId: ${JSON.stringify(v.id)} },`,
+    );
   }
-  lines.push('};');
-  lines.push('');
-
-  // ── Static composites (resolved at codegen) ───────────────────────────
-  lines.push('export const _textStyles: Record<string, TextStyle> = {');
-  for (const t of plan.textStyles) lines.push(`  ${JSON.stringify(t.getterName)}: ${renderTextStyle(t)},`);
-  lines.push('};');
-  lines.push('');
-
-  lines.push('export const _shadows: Record<string, TextStyle> = {');
-  for (const s of plan.shadows) lines.push(`  ${JSON.stringify(s.getterName)}: ${renderShadow(s)},`);
-  lines.push('};');
-  lines.push('');
-
-  lines.push('export const _colorStyles: Record<string, string | null> = {');
-  for (const c of plan.colorStyles) lines.push(`  ${JSON.stringify(c.getterName)}: ${renderColorStyle(c)},`);
+  lines.push('  ],');
   lines.push('};');
   lines.push('');
 
   return lines.join('\n');
+}
+
+export function emitDataIndexTs(plan: ThemePlan): string {
+  const imports: string[] = [];
+  const varsEntries: string[] = [];
+  const collectionEntries: string[] = [];
+
+  for (const c of plan.collections) {
+    const ident = identifierForCollection(c);
+    imports.push(
+      `import { vars as ${ident}Vars, collection as ${ident}Collection } from '../collections/${collectionFileBaseName(c)}';`,
+    );
+    varsEntries.push(`  ...${ident}Vars,`);
+    collectionEntries.push(`  ${JSON.stringify(c.id)}: ${ident}Collection,`);
+  }
+
+  return [
+    '// GENERATED FILE — do not edit by hand.',
+    '',
+    "import type { RawCollection, RawVariable } from './types';",
+    ...imports,
+    '',
+    'export const _vars: Record<string, RawVariable> = {',
+    ...varsEntries,
+    '};',
+    '',
+    'export const _collections: Record<string, RawCollection> = {',
+    ...collectionEntries,
+    '};',
+    '',
+  ].join('\n');
+}
+
+export function emitTextStylesTs(plan: ThemePlan): string {
+  const lines: string[] = [
+    '// GENERATED FILE — do not edit by hand.',
+    '',
+    "import type { TextStyle } from 'react-native';",
+    '',
+    'export const _textStyles: Record<string, TextStyle> = {',
+  ];
+  for (const t of plan.textStyles) {
+    lines.push(`  ${JSON.stringify(t.getterName)}: ${renderTextStyle(t)},`);
+  }
+  lines.push('};', '');
+  return lines.join('\n');
+}
+
+export function emitShadowsTs(plan: ThemePlan): string {
+  const lines: string[] = [
+    '// GENERATED FILE — do not edit by hand.',
+    '',
+    "import type { TextStyle } from 'react-native';",
+    '',
+    'export const _shadows: Record<string, TextStyle> = {',
+  ];
+  for (const s of plan.shadows) {
+    lines.push(`  ${JSON.stringify(s.getterName)}: ${renderShadow(s)},`);
+  }
+  lines.push('};', '');
+  return lines.join('\n');
+}
+
+export function emitColorStylesTs(plan: ThemePlan): string {
+  const lines: string[] = [
+    '// GENERATED FILE — do not edit by hand.',
+    '',
+    'export const _colorStyles: Record<string, string | null> = {',
+  ];
+  for (const c of plan.colorStyles) {
+    lines.push(`  ${JSON.stringify(c.getterName)}: ${renderColorStyle(c)},`);
+  }
+  lines.push('};', '');
+  return lines.join('\n');
+}
+
+export function collectionFileBaseName(c: CollectionPlan): string {
+  return c.rootKey
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'collection';
+}
+
+function identifierForCollection(c: CollectionPlan): string {
+  const raw = c.rootKey.replace(/[^a-zA-Z0-9_$]/g, '_') || 'collection';
+  const ident = /^[A-Za-z_$]/.test(raw) ? raw : `collection_${raw}`;
+  return `${ident}CollectionData`;
 }
 
 function renderLiteral(v: string | number | boolean): string {

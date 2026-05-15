@@ -10,16 +10,24 @@ import type { ThemePlan } from './planner';
 export function emitBuildThemeTs(plan: ThemePlan): string {
   const optsType = renderOptsType(plan);
   const defaults = renderDefaults(plan);
+  const defaultThemeName = renderDefaultThemeName(plan);
+  const axisSetters = renderAxisSetters(plan);
 
   return [
     '// GENERATED FILE — do not edit by hand.',
     '',
     "import type { Theme, ThemeOptions } from './types';",
-    "import { _collections, _vars, _textStyles, _shadows, _colorStyles, type Alias, type RawLeaf } from './raw';",
+    "import { UnistylesRuntime } from 'react-native-unistyles';",
+    "import { _collections, _vars } from './data';",
+    "import type { Alias, RawLeaf } from './data/types';",
+    "import { _textStyles } from './composites/text-styles';",
+    "import { _shadows } from './composites/shadows';",
+    "import { _colorStyles } from './composites/color-styles';",
     '',
     `${optsType}`,
     '',
     'export const _defaults = ' + defaults + ' as const;',
+    'let _currentModes: ThemeOptions = { ..._defaults } as ThemeOptions;',
     '',
     'export function buildTheme(opts: Partial<ThemeOptions> = {}): Theme {',
     '  const axisModeKey: Record<string, string> = { ..._defaults, ...opts };',
@@ -62,6 +70,19 @@ export function emitBuildThemeTs(plan: ThemePlan): string {
     '  return tree as unknown as Theme;',
     '}',
     '',
+    'export function getDesignSystemModes(): ThemeOptions {',
+    '  return { ..._currentModes };',
+    '}',
+    '',
+    'export function setDesignSystemModes(opts: Partial<ThemeOptions>): Theme {',
+    '  _currentModes = { ..._currentModes, ...opts } as ThemeOptions;',
+    '  const nextTheme = buildTheme(_currentModes);',
+    `  const themeName = UnistylesRuntime.themeName ?? ${defaultThemeName};`,
+    '  UnistylesRuntime.updateTheme(themeName, () => nextTheme);',
+    '  return nextTheme;',
+    '}',
+    '',
+    ...axisSetters,
   ].join('\n');
 }
 
@@ -76,4 +97,27 @@ function renderDefaults(plan: ThemePlan): string {
   const entries: string[] = [];
   for (const a of plan.axes) entries.push(`  ${JSON.stringify(a.keyCamel)}: ${JSON.stringify(plan.axisDefaults[a.keyCamel])}`);
   return `{\n${entries.join(',\n')}\n}`;
+}
+
+function renderDefaultThemeName(plan: ThemePlan): string {
+  if (!plan.hasLightDark || !plan.lightDarkAxisKey) return JSON.stringify('theme');
+  return `(_currentModes[${JSON.stringify(plan.lightDarkAxisKey)}] === 'dark' ? 'dark' : 'light')`;
+}
+
+function renderAxisSetters(plan: ThemePlan): string[] {
+  if (plan.axes.length === 0) return [];
+  const lines: string[] = [];
+  for (const axis of plan.axes) {
+    const fnName = `set${pascal(axis.keyCamel)}Mode`;
+    const key = JSON.stringify(axis.keyCamel);
+    lines.push(`export function ${fnName}(mode: ThemeOptions[${key}]): Theme {`);
+    lines.push(`  return setDesignSystemModes({ ${key}: mode } as Partial<ThemeOptions>);`);
+    lines.push('}');
+    lines.push('');
+  }
+  return lines;
+}
+
+function pascal(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : 'Mode';
 }

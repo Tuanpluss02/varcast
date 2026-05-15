@@ -12,8 +12,19 @@ export function packageJson(o: ReactNativeOptions): string {
         // Tailwind preset is the package's default export when consumed via
         // `require('<pkg>')` from `tailwind.config.js`.
         main: 'tailwind.preset.cjs',
-        types: 'themes/index.d.ts',
-        files: ['tailwind.preset.cjs', 'themes', 'src'],
+        types: 'tailwind.preset.d.ts',
+        files: ['tailwind.preset.cjs', 'tailwind.preset.d.ts', 'themes'],
+        exports: {
+          '.': {
+            require: './tailwind.preset.cjs',
+            default: './tailwind.preset.cjs',
+          },
+          './themes': {
+            require: './themes/index.js',
+            types: './themes/index.d.ts',
+          },
+          './themes/*': './themes/*',
+        },
         peerDependencies: {
           tailwindcss: '>=3.0',
           nativewind: '>=4.0',
@@ -23,6 +34,15 @@ export function packageJson(o: ReactNativeOptions): string {
       2,
     ) + '\n'
   );
+}
+
+export function tailwindPresetDts(): string {
+  return [
+    '// GENERATED FILE — do not edit by hand.',
+    'declare const preset: unknown;',
+    'export = preset;',
+    '',
+  ].join('\n');
 }
 
 export function readmeMd(o: ReactNativeOptions): string {
@@ -68,7 +88,7 @@ For React Native, switch themes at the View level via NativeWind's \`vars()\` he
 
 \`\`\`tsx
 import { vars } from 'nativewind';
-import { themes } from '${o.packageName}';
+import { themes } from '${o.packageName}/themes';
 
 <View style={vars(themes.dark)}>
   {/* children render in the dark theme */}

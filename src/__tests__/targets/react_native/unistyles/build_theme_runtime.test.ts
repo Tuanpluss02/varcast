@@ -1,4 +1,4 @@
-// Materializes the generated `raw.ts` + `build-theme.ts` into a real JS
+// Materializes the generated data modules + `build-theme.ts` into a real JS
 // module via esbuild and exercises `buildTheme(opts)` to verify the
 // runtime resolver (axis-driven mode lookup + alias resolution +
 // cross-axis aliases).
@@ -17,7 +17,7 @@ function fileMap(files: { path: string; contents: string }[]) {
 
 /**
  * Compile a generated TS file to CommonJS via esbuild and `eval` it inside a
- * fresh module scope. We rewire relative imports (`./raw`, `./build-theme`)
+ * fresh module scope. We rewire relative imports (`./data`, `./build-theme`)
  * to module references the harness controls.
  */
 function evalGenerated(
@@ -35,6 +35,16 @@ function evalGenerated(
     // The generated raw.ts imports `react-native` for a TextStyle type only;
     // at runtime nothing is read from it. Stub with an empty object.
     if (name === 'react-native') return {};
+    if (name === 'react-native-unistyles') {
+      return {
+        UnistylesRuntime: {
+          themeName: 'light',
+          updateTheme() {
+            // overwritten by individual tests when needed
+          },
+        },
+      };
+    }
     throw new Error(`Unexpected require('${name}') from generated code`);
   };
   // eslint-disable-next-line no-new-func
@@ -45,12 +55,41 @@ function evalGenerated(
 
 function loadGenerated(files: Map<string, string>): {
   buildTheme: (opts?: any) => any;
+  getDesignSystemModes: () => any;
+  setDesignSystemModes: (opts: any) => any;
+  setBrandMode: (mode: any) => any;
   themes: Record<string, any>;
+  runtime: { themeName?: string; updateTheme: (name: string, updater: (theme: any) => any) => void };
 } {
-  const raw = evalGenerated(files.get('src/raw.ts')!);
-  const bt = evalGenerated(files.get('src/build-theme.ts')!, { './raw': raw });
+  const modeCollection = evalGenerated(files.get('src/collections/mode.ts')!);
+  const brandCollection = evalGenerated(files.get('src/collections/brand.ts')!);
+  const data = evalGenerated(files.get('src/data/index.ts')!, {
+    '../collections/mode': modeCollection,
+    '../collections/brand': brandCollection,
+  });
+  const textStyles = evalGenerated(files.get('src/composites/text-styles.ts')!);
+  const shadows = evalGenerated(files.get('src/composites/shadows.ts')!);
+  const colorStyles = evalGenerated(files.get('src/composites/color-styles.ts')!);
+  const runtime = {
+    themeName: 'light' as string | undefined,
+    updateTheme(_name: string, _updater: (theme: any) => any) {},
+  };
+  const bt = evalGenerated(files.get('src/build-theme.ts')!, {
+    './data': data,
+    './composites/text-styles': textStyles,
+    './composites/shadows': shadows,
+    './composites/color-styles': colorStyles,
+    'react-native-unistyles': { UnistylesRuntime: runtime },
+  });
   const themes = evalGenerated(files.get('src/themes.ts')!, { './build-theme': bt });
-  return { buildTheme: bt.buildTheme as any, themes: themes as any };
+  return {
+    buildTheme: bt.buildTheme as any,
+    getDesignSystemModes: bt.getDesignSystemModes as any,
+    setDesignSystemModes: bt.setDesignSystemModes as any,
+    setBrandMode: bt.setBrandMode as any,
+    themes: themes as any,
+    runtime,
+  };
 }
 
 function multiAxisIR(): IR {
@@ -130,30 +169,48 @@ describe('Unistyles flavor — runtime buildTheme', () => {
   const out = runEngine(multiAxisIR(), [reactNativeTarget], null, {
     react_native: { flavor: 'unistyles', packageName: 'ds-uni' },
   });
-  const { buildTheme, themes } = loadGenerated(fileMap(out.files));
+  const generated = loadGenerated(fileMap(out.files));
+  const { buildTheme, themes } = generated;
 
-  it('builds the merged tree from all collections', () => {
+  it('builds a collection-rooted tree from all collections', () => {
     const t = buildTheme();
-    expect(t.colors.background.primary).toBeDefined();
-    expect(t.colors.text.brand).toBeDefined();
-    expect(t.colors.brand.default500).toBeDefined();
+    expect(t.mode.colorsBackgroundPrimary).toBeDefined();
+    expect(t.mode.colorsTextBrand).toBeDefined();
+    expect(t.brand.colorsBrandDefault500).toBeDefined();
   });
 
   it('axis switch on `mode` flips axis-owned values', () => {
-    expect(buildTheme({ mode: 'light' }).colors.background.primary).toBe('#FFFFFFFF');
-    expect(buildTheme({ mode: 'dark' }).colors.background.primary).toBe('#000000FF');
+    expect(buildTheme({ mode: 'light' }).mode.colorsBackgroundPrimary).toBe('#FFFFFFFF');
+    expect(buildTheme({ mode: 'dark' }).mode.colorsBackgroundPrimary).toBe('#000000FF');
   });
 
   it('cross-axis alias respects the target axis at runtime', () => {
-    expect(buildTheme({ brand: 'blue' }).colors.text.brand).toBe('#0000FFFF');
-    expect(buildTheme({ brand: 'purple' }).colors.text.brand).toBe('#800080FF');
+    expect(buildTheme({ brand: 'blue' }).mode.colorsTextBrand).toBe('#0000FFFF');
+    expect(buildTheme({ brand: 'purple' }).mode.colorsTextBrand).toBe('#800080FF');
     // Alias should not depend on the mode axis (textBrand aliases brand500
     // which only varies along the `brand` axis).
-    expect(buildTheme({ mode: 'dark', brand: 'purple' }).colors.text.brand).toBe('#800080FF');
+    expect(buildTheme({ mode: 'dark', brand: 'purple' }).mode.colorsTextBrand).toBe('#800080FF');
   });
 
   it('exposes light + dark as named exports computed from defaults', () => {
-    expect(themes.light.colors.background.primary).toBe('#FFFFFFFF');
-    expect(themes.dark.colors.background.primary).toBe('#000000FF');
+    expect(themes.light.mode.colorsBackgroundPrimary).toBe('#FFFFFFFF');
+    expect(themes.dark.mode.colorsBackgroundPrimary).toBe('#000000FF');
+  });
+
+  it('updates the active Unistyles theme when generated mode setters are called', () => {
+    const updates: Array<{ name: string; theme: any }> = [];
+    generated.runtime.updateTheme = (name, updater) => {
+      updates.push({ name, theme: updater({}) });
+    };
+
+    const next = generated.setDesignSystemModes({ mode: 'dark', brand: 'purple' });
+    expect(next.mode.colorsBackgroundPrimary).toBe('#000000FF');
+    expect(next.mode.colorsTextBrand).toBe('#800080FF');
+    expect(updates[0].name).toBe('light');
+    expect(updates[0].theme.mode.colorsTextBrand).toBe('#800080FF');
+    expect(generated.getDesignSystemModes()).toEqual({ mode: 'dark', brand: 'purple' });
+
+    generated.setBrandMode('blue');
+    expect(updates[1].theme.mode.colorsTextBrand).toBe('#0000FFFF');
   });
 });

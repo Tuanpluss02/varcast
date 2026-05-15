@@ -44,9 +44,8 @@ export interface TokenPlan {
   varId: string;
   /** CSS variable name, e.g. `--ds-text-brand-default500`. */
   cssVarName: string;
-  /** Group path segments (kebab), used to nest under the Tailwind preset bucket. */
-  groupKebab: string[];
-  leafKebab: string;
+  /** Path segments used to nest under the Tailwind preset bucket. */
+  presetPathKebab: string[];
   bucket: TailwindBucket | null;
   /** TS/CSS hint for value formatting (e.g., px suffix for spacing). */
   type: PreparedRNVariable['type'];
@@ -96,23 +95,19 @@ export function buildNativeWindPlan(prepared: PreparedRN): NativeWindPlan {
     });
   }
 
+  const tokenAddresses = buildTokenAddresses(prepared);
+
   // 1) Per-collection token plans (CSS var + per-mode assignment)
   const tokens: TokenPlan[] = [];
-  // Maps cssVarName → first owning token. Later collections that hit the
-  // same path are flagged but we still emit their assignments — the user's
-  // import order picks the winner.
-  const seenByCssVar = new Map<string, TokenPlan>();
 
   for (const c of prepared.collections) {
     const axis = axisByCollection.get(c.id) ?? null;
     for (const v of c.variables) {
-      const cssVarName = buildCssVarName(v);
-      const existing = seenByCssVar.get(cssVarName);
-      const t: TokenPlan = existing ?? {
+      const address = tokenAddresses.get(v.id) ?? tokenAddressFor(c, v, false);
+      const t: TokenPlan = {
         varId: v.id,
-        cssVarName,
-        groupKebab: v.groupKebab,
-        leafKebab: v.leafKebab,
+        cssVarName: address.cssVarName,
+        presetPathKebab: address.presetPathKebab,
         bucket: v.tailwindBucket,
         type: v.type,
         collectionId: c.id,
@@ -129,14 +124,11 @@ export function buildNativeWindPlan(prepared: PreparedRN): NativeWindPlan {
             value: formatLiteralForCss(literal, v.type),
           };
         } else {
-          const ref = lookupCssVarById(irValue.targetVariableId, prepared.collections);
+          const ref = lookupCssVarById(irValue.targetVariableId, tokenAddresses);
           t.perMode[m.keyCamel] = { value: ref ? `var(${ref})` : 'initial' };
         }
       }
-      if (!existing) {
-        seenByCssVar.set(cssVarName, t);
-        tokens.push(t);
-      }
+      tokens.push(t);
     }
   }
 
@@ -156,21 +148,70 @@ export function buildNativeWindPlan(prepared: PreparedRN): NativeWindPlan {
   };
 }
 
-function buildCssVarName(v: PreparedRNVariable): string {
-  const parts = [...v.groupKebab, v.leafKebab].filter(Boolean);
-  return `--ds-${parts.join('-')}`;
+interface TokenAddress {
+  cssVarName: string;
+  presetPathKebab: string[];
+}
+
+function buildTokenAddresses(prepared: PreparedRN): Map<string, TokenAddress> {
+  const baseKeyCounts = new Map<string, number>();
+  const entries: Array<{
+    collection: PreparedRNCollection;
+    variable: PreparedRNVariable;
+    baseKey: string;
+  }> = [];
+
+  for (const collection of prepared.collections) {
+    for (const variable of collection.variables) {
+      const baseKey = tokenBaseParts(variable).join('\u0000');
+      entries.push({ collection, variable, baseKey });
+      baseKeyCounts.set(baseKey, (baseKeyCounts.get(baseKey) ?? 0) + 1);
+    }
+  }
+
+  const out = new Map<string, TokenAddress>();
+  for (const entry of entries) {
+    out.set(
+      entry.variable.id,
+      tokenAddressFor(
+        entry.collection,
+        entry.variable,
+        (baseKeyCounts.get(entry.baseKey) ?? 0) > 1,
+      ),
+    );
+  }
+  return out;
+}
+
+function tokenAddressFor(
+  collection: PreparedRNCollection,
+  variable: PreparedRNVariable,
+  includeCollectionRoot: boolean,
+): TokenAddress {
+  const root = camelKeyToKebab(collection.exportNameCamel);
+  const parts = [
+    ...(includeCollectionRoot ? [root] : []),
+    ...tokenBaseParts(variable),
+  ].filter(Boolean);
+  return {
+    cssVarName: `--ds-${parts.join('-')}`,
+    presetPathKebab: parts,
+  };
 }
 
 function lookupCssVarById(
   id: string,
-  collections: PreparedRNCollection[],
+  addresses: Map<string, TokenAddress>,
 ): string | null {
-  for (const c of collections) {
-    for (const v of c.variables) {
-      if (v.id === id) return buildCssVarName(v);
-    }
-  }
-  return null;
+  return addresses.get(id)?.cssVarName ?? null;
+}
+
+function tokenBaseParts(v: PreparedRNVariable): string[] {
+  return [...v.groupKebab, v.leafKebab].filter(Boolean);
+}
+
+function camelKeyToKebab(s: string): string {
+  return s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
 
 function formatLiteralForCss(

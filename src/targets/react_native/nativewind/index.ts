@@ -3,7 +3,6 @@
 import type { EmittedFile } from '../../../core/target';
 import type { ReactNativeOptions } from '../options';
 import type { PreparedRN } from '../shared/prepare';
-import { emitPackageIndexTs } from './emit_pkg_index';
 import { emitTailwindPresetCjs } from './emit_preset';
 import { emitThemeCss } from './emit_themes_css';
 import {
@@ -12,7 +11,7 @@ import {
   emitThemesIndexJs,
 } from './emit_themes_js';
 import { buildNativeWindPlan } from './planner';
-import { packageJson, readmeMd } from './static_files';
+import { packageJson, readmeMd, tailwindPresetDts } from './static_files';
 
 export function emitNativeWind(prepared: PreparedRN, options: ReactNativeOptions): EmittedFile[] {
   const plan = buildNativeWindPlan(prepared);
@@ -21,7 +20,7 @@ export function emitNativeWind(prepared: PreparedRN, options: ReactNativeOptions
     { path: 'package.json', contents: packageJson(options) },
     { path: 'README.md', contents: readmeMd(options) },
     { path: 'tailwind.preset.cjs', contents: emitTailwindPresetCjs(plan) },
-    { path: 'src/index.ts', contents: emitPackageIndexTs() },
+    { path: 'tailwind.preset.d.ts', contents: tailwindPresetDts() },
     { path: 'themes/index.js', contents: emitThemesIndexJs(plan) },
     { path: 'themes/index.d.ts', contents: emitThemesIndexDts(plan) },
   ];

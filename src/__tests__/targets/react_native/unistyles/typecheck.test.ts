@@ -67,9 +67,10 @@ function multiAxisIR(): IR {
 }
 
 describe('Unistyles flavor — generated package typechecks', () => {
-  // Stub `react-native` types because the generated package's tsconfig has
-  // no peer-deps installed. We provide a minimal declaration file so the
-  // `import type { TextStyle } from 'react-native'` line resolves.
+  // Stub `react-native` and `react-native-unistyles` because the generated
+  // package's tsconfig has no peer-deps installed. The generated `types.ts`
+  // augments `UnistylesThemes` — our stub here declares the bare interface
+  // so the augmentation has something to extend.
   const REACT_NATIVE_STUB = `declare module 'react-native' {
   export interface TextStyle {
     color?: string;
@@ -85,6 +86,23 @@ describe('Unistyles flavor — generated package typechecks', () => {
     shadowRadius?: number;
     shadowOpacity?: number;
   }
+}
+
+declare module 'react-native-unistyles' {
+  export interface UnistylesThemes {}
+  export const UnistylesRuntime: {
+    themeName?: string;
+    updateTheme(themeName: string, updater: (currentTheme: any) => any): void;
+  };
+  export const StyleSheet: {
+    configure(config: {
+      themes?: Partial<UnistylesThemes>;
+      settings?: {
+        initialTheme?: keyof UnistylesThemes & string;
+        adaptiveThemes?: boolean;
+      };
+    }): void;
+  };
 }
 `;
 
@@ -103,6 +121,36 @@ describe('Unistyles flavor — generated package typechecks', () => {
       // Drop in a stub for `react-native` and reference it from tsconfig.
       mkdirSync(join(root, 'src', 'stubs'), { recursive: true });
       writeFileSync(join(root, 'src', 'stubs', 'react-native.d.ts'), REACT_NATIVE_STUB, 'utf8');
+      writeFileSync(
+        join(root, 'src', 'consumer-examples.ts'),
+        `import { StyleSheet } from 'react-native-unistyles';
+import { buildTheme, light, dark, type Theme } from './index';
+
+// Custom theme keys (designSystem/primary/alternate) need a consumer-side
+// augmentation. The README documents this; we validate it compiles here.
+declare module 'react-native-unistyles' {
+  interface UnistylesThemes {
+    designSystem: Theme;
+    primary: Theme;
+    alternate: Theme;
+  }
+}
+
+StyleSheet.configure({ themes: { light, dark }, settings: { adaptiveThemes: true } });
+StyleSheet.configure({
+  themes: { designSystem: buildTheme() },
+  settings: { initialTheme: 'designSystem' },
+});
+StyleSheet.configure({
+  themes: {
+    primary: buildTheme({ mode: 'light' }),
+    alternate: buildTheme({ mode: 'dark' }),
+  },
+  settings: { initialTheme: 'primary' },
+});
+`,
+        'utf8',
+      );
       const result = runTsc(root);
       if (!result.ok) {
         throw new Error(`tsc failed:\n${result.output}`);

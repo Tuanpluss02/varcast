@@ -16,7 +16,7 @@ export function emitTailwindPresetCjs(plan: NativeWindPlan): string {
   for (const t of plan.tokens) {
     if (!t.bucket) continue;
     const target = (buckets[t.bucket] ??= {});
-    placeNested(target, [...t.groupKebab, t.leafKebab], `var(${t.cssVarName})`);
+    placeNested(target, t.presetPathKebab, `var(${t.cssVarName})`);
   }
 
   // Shadows go into `boxShadow` as literal default-mode values (NativeWind
