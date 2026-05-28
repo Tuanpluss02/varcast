@@ -19,7 +19,7 @@ export function emitThemesIndexJs(plan: NativeWindPlan): string {
 
   const lines: string[] = ['// GENERATED FILE — do not edit by hand.', ''];
   for (const f of aliased) {
-    lines.push(`const ${slugIdent(f.slug)} = require('./${f.slug}.vars.js');`);
+    lines.push(`const ${slugIdent(f.slug)} = require('./native/${f.slug}.vars.js');`);
   }
   lines.push('');
   lines.push('module.exports = {');

@@ -11,19 +11,21 @@ export function packageJson(o: ReactNativeOptions): string {
         version: '0.1.0',
         // Tailwind preset is the package's default export when consumed via
         // `require('<pkg>')` from `tailwind.config.js`.
-        main: 'tailwind.preset.cjs',
-        types: 'tailwind.preset.d.ts',
-        files: ['tailwind.preset.cjs', 'tailwind.preset.d.ts', 'themes'],
+        main: 'preset/index.cjs',
+        types: 'preset/index.d.ts',
+        files: ['preset', 'themes'],
         exports: {
           '.': {
-            require: './tailwind.preset.cjs',
-            default: './tailwind.preset.cjs',
+            types: './preset/index.d.ts',
+            require: './preset/index.cjs',
+            default: './preset/index.cjs',
           },
           './themes': {
             require: './themes/index.js',
             types: './themes/index.d.ts',
           },
-          './themes/*': './themes/*',
+          './themes/css/*': './themes/css/*',
+          './themes/native/*': './themes/native/*',
         },
         peerDependencies: {
           tailwindcss: '>=3.0',
@@ -77,9 +79,9 @@ Each theme file scopes its variables under \`:root[data-theme="<slug>"]\`. Switc
 @tailwind components;
 @tailwind utilities;
 
-@import '${o.packageName}/themes/base.css';
-@import '${o.packageName}/themes/light.css';
-@import '${o.packageName}/themes/dark.css';
+@import '${o.packageName}/themes/css/base.css';
+@import '${o.packageName}/themes/css/light.css';
+@import '${o.packageName}/themes/css/dark.css';
 \`\`\`
 
 ## Themes — native (NativeWind \`vars()\`)

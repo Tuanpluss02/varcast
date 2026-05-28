@@ -19,15 +19,15 @@ export function emitNativeWind(prepared: PreparedRN, options: ReactNativeOptions
   const out: EmittedFile[] = [
     { path: 'package.json', contents: packageJson(options) },
     { path: 'README.md', contents: readmeMd(options) },
-    { path: 'tailwind.preset.cjs', contents: emitTailwindPresetCjs(plan) },
-    { path: 'tailwind.preset.d.ts', contents: tailwindPresetDts() },
+    { path: 'preset/index.cjs', contents: emitTailwindPresetCjs(plan) },
+    { path: 'preset/index.d.ts', contents: tailwindPresetDts() },
     { path: 'themes/index.js', contents: emitThemesIndexJs(plan) },
     { path: 'themes/index.d.ts', contents: emitThemesIndexDts(plan) },
   ];
 
   for (const tf of plan.themeFiles) {
-    out.push({ path: `themes/${tf.slug}.css`, contents: emitThemeCss(tf) });
-    out.push({ path: `themes/${tf.slug}.vars.js`, contents: emitThemeVarsJs(tf) });
+    out.push({ path: `themes/css/${tf.slug}.css`, contents: emitThemeCss(tf) });
+    out.push({ path: `themes/native/${tf.slug}.vars.js`, contents: emitThemeVarsJs(tf) });
   }
 
   return out;

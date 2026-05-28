@@ -120,37 +120,42 @@ describe('NativeWind flavor — emit smoke', () => {
 
   it('emits the canonical file set', () => {
     const paths = [...files.keys()].sort();
-    // Expected: package.json, README.md, tailwind.preset.cjs,
-    // themes/index.{js,d.ts}, themes/{base,light,dark,brand-blue,brand-purple}.{css,vars.js}
+    // Expected: package.json, README.md, preset/index.{cjs,d.ts},
+    // themes/index.{js,d.ts}, themes/css/*.css, themes/native/*.vars.js
     expect(paths).toContain('package.json');
     expect(paths).toContain('README.md');
-    expect(paths).toContain('tailwind.preset.cjs');
-    expect(paths).toContain('tailwind.preset.d.ts');
+    expect(paths).toContain('preset/index.cjs');
+    expect(paths).toContain('preset/index.d.ts');
     expect(paths).toContain('themes/index.js');
     expect(paths).toContain('themes/index.d.ts');
-    expect(paths).toContain('themes/base.css');
-    expect(paths).toContain('themes/base.vars.js');
-    expect(paths).toContain('themes/light.css');
-    expect(paths).toContain('themes/dark.css');
-    expect(paths).toContain('themes/brand-blue.css');
-    expect(paths).toContain('themes/brand-purple.css');
+    expect(paths).toContain('themes/css/base.css');
+    expect(paths).toContain('themes/native/base.vars.js');
+    expect(paths).toContain('themes/css/light.css');
+    expect(paths).toContain('themes/css/dark.css');
+    expect(paths).toContain('themes/css/brand-blue.css');
+    expect(paths).toContain('themes/css/brand-purple.css');
     expect(paths).not.toContain('src/index.ts');
   });
 
   it('package metadata separates the Tailwind preset root from the runtime theme subpath', () => {
     const pkg = JSON.parse(files.get('package.json')!);
-    expect(pkg.main).toBe('tailwind.preset.cjs');
-    expect(pkg.types).toBe('tailwind.preset.d.ts');
-    expect(pkg.exports['.'].require).toBe('./tailwind.preset.cjs');
+    expect(pkg.main).toBe('preset/index.cjs');
+    expect(pkg.types).toBe('preset/index.d.ts');
+    expect(pkg.files).toEqual(['preset', 'themes']);
+    expect(pkg.exports['.'].require).toBe('./preset/index.cjs');
+    expect(pkg.exports['.'].types).toBe('./preset/index.d.ts');
     expect(pkg.exports['./themes'].require).toBe('./themes/index.js');
     expect(pkg.exports['./themes'].types).toBe('./themes/index.d.ts');
+    expect(pkg.exports['./themes/css/*']).toBe('./themes/css/*');
+    expect(pkg.exports['./themes/native/*']).toBe('./themes/native/*');
     const readme = files.get('README.md')!;
     expect(readme).toContain("presets: [require('ds-nw')]");
     expect(readme).toContain("import { themes } from 'ds-nw/themes'");
+    expect(readme).toContain("@import 'ds-nw/themes/css/light.css'");
   });
 
   it('preset routes color tokens under colors and uses CSS-var references', () => {
-    const preset = files.get('tailwind.preset.cjs')!;
+    const preset = files.get('preset/index.cjs')!;
     expect(preset).toContain('"colors":');
     expect(preset).toContain('"background":');
     expect(preset).toContain('"primary": "var(--ds-background-primary)"');
@@ -159,7 +164,7 @@ describe('NativeWind flavor — emit smoke', () => {
   });
 
   it('preset routes float tokens via scope-based bucket inference', () => {
-    const preset = files.get('tailwind.preset.cjs')!;
+    const preset = files.get('preset/index.cjs')!;
     expect(preset).toContain('"borderRadius":');
     expect(preset).toContain('"md": "var(--ds-radius-md)"');
     expect(preset).toContain('"spacing":');
@@ -167,7 +172,7 @@ describe('NativeWind flavor — emit smoke', () => {
   });
 
   it('light.css scopes assignments under [data-theme="light"]', () => {
-    const css = files.get('themes/light.css')!;
+    const css = files.get('themes/css/light.css')!;
     expect(css).toContain(':root[data-theme="light"]');
     expect(css).toContain('--ds-background-primary: #FFFFFFFF;');
     // Aliases preserve cross-axis routing as var(--…) references.
@@ -175,39 +180,39 @@ describe('NativeWind flavor — emit smoke', () => {
   });
 
   it('dark.css carries the dark-mode literal', () => {
-    const css = files.get('themes/dark.css')!;
+    const css = files.get('themes/css/dark.css')!;
     expect(css).toContain('--ds-background-primary: #000000FF;');
   });
 
   it('brand-blue.css carries the brand-axis literal', () => {
-    const css = files.get('themes/brand-blue.css')!;
+    const css = files.get('themes/css/brand-blue.css')!;
     expect(css).toContain('--ds-brand-default-500: #0000FFFF;');
   });
 
   it('base.css holds single-mode primitives under :root', () => {
-    const css = files.get('themes/base.css')!;
+    const css = files.get('themes/css/base.css')!;
     expect(css).toContain(':root {');
     expect(css).toContain('--ds-space-4: 4;');
   });
 
   it('numeric leaves stay as bare digits (no `n` prefix) for JS-friendly keys', () => {
-    const preset = files.get('tailwind.preset.cjs')!;
+    const preset = files.get('preset/index.cjs')!;
     expect(preset).toContain('"4": "var(--ds-space-4)"');
     expect(preset).not.toContain('"n4":');
   });
 
   it('themes/index.js aggregates per-axis-mode vars maps (skipping base)', () => {
     const idx = files.get('themes/index.js')!;
-    expect(idx).toContain("require('./light.vars.js')");
-    expect(idx).toContain("require('./dark.vars.js')");
-    expect(idx).toContain("require('./brand-blue.vars.js')");
-    expect(idx).not.toContain("require('./base.vars.js')");
+    expect(idx).toContain("require('./native/light.vars.js')");
+    expect(idx).toContain("require('./native/dark.vars.js')");
+    expect(idx).toContain("require('./native/brand-blue.vars.js')");
+    expect(idx).not.toContain("require('./native/base.vars.js')");
     expect(idx).toContain('"light":');
     expect(idx).toContain('"brand-blue":');
   });
 
   it('themes vars.js uses string keys + values (vars()-compatible)', () => {
-    const vars = files.get('themes/dark.vars.js')!;
+    const vars = files.get('themes/native/dark.vars.js')!;
     expect(vars).toContain('"--ds-background-primary": "#000000FF"');
     expect(vars).toContain('"--ds-text-brand": "var(--ds-brand-default-500)"');
   });
@@ -272,7 +277,7 @@ describe('NativeWind flavor — composites', () => {
       react_native: { flavor: 'nativewind', packageName: 'ds' },
     });
     const files = fileMap(out.files);
-    const preset = files.get('tailwind.preset.cjs')!;
+    const preset = files.get('preset/index.cjs')!;
     expect(preset).toContain('boxShadow:');
     expect(preset).toContain('"md": "0px 2px 8px #00000080"');
     expect(preset).toContain("'.type-h3':");
@@ -341,10 +346,10 @@ describe('NativeWind flavor — collection boundary collisions', () => {
       react_native: { flavor: 'nativewind', packageName: 'ds' },
     });
     const files = fileMap(out.files);
-    const preset = files.get('tailwind.preset.cjs')!;
-    const base = files.get('themes/base.css')!;
-    const light = files.get('themes/light.css')!;
-    const dark = files.get('themes/dark.css')!;
+    const preset = files.get('preset/index.cjs')!;
+    const base = files.get('themes/css/base.css')!;
+    const light = files.get('themes/css/light.css')!;
+    const dark = files.get('themes/css/dark.css')!;
 
     expect(preset).toContain('"all-colors":');
     expect(preset).toContain('"theme":');
