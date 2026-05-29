@@ -35,6 +35,10 @@ const packageName = byId<HTMLInputElement>('packageName');
 const targetId = byId<HTMLSelectElement>('targetId');
 const rnFlavor = byId<HTMLSelectElement>('rnFlavor');
 const rnFlavorRow = byId<HTMLDivElement>('rnFlavorRow');
+const androidFlavor = byId<HTMLSelectElement>('androidFlavor');
+const androidFlavorRow = byId<HTMLDivElement>('androidFlavorRow');
+const androidNamespace = byId<HTMLInputElement>('androidNamespace');
+const androidNamespaceRow = byId<HTMLDivElement>('androidNamespaceRow');
 const tokensCount = byId<HTMLSpanElement>('tokensCount');
 const compositesCount = byId<HTMLSpanElement>('compositesCount');
 
@@ -51,10 +55,15 @@ const archCard = byId<HTMLDivElement>('archCard');
 
 function syncTargetSpecificUi() {
   // Architecture (context-based) is Flutter-specific. The RN flavor select
-  // is RN-specific. Only one of the two cards is visible at a time.
-  const isFlutter = (targetId.value || 'flutter') === 'flutter';
+  // and Android namespace/flavor controls are target-specific.
+  const selectedTarget = targetId.value || 'flutter';
+  const isFlutter = selectedTarget === 'flutter';
+  const isReactNative = selectedTarget === 'react_native';
+  const isAndroid = selectedTarget === 'android';
   archCard.classList.toggle('hidden', !isFlutter);
-  rnFlavorRow.classList.toggle('hidden', isFlutter);
+  rnFlavorRow.classList.toggle('hidden', !isReactNative);
+  androidFlavorRow.classList.toggle('hidden', !isAndroid);
+  androidNamespaceRow.classList.toggle('hidden', !isAndroid);
 }
 
 const diffBar = byId<HTMLDivElement>('diffBar');
@@ -108,7 +117,14 @@ function startExport() {
   exportBtn.disabled = true;
   status.textContent = '';
   showLoading('Validating…', 'Reading tokens and styles from Figma.');
-  const options = collectOptions({ targetId, rnFlavor, packageName, toggles });
+  const options = collectOptions({
+    targetId,
+    rnFlavor,
+    androidFlavor,
+    androidNamespace,
+    packageName,
+    toggles,
+  });
   postToPlugin({ type: 'export', options });
 }
 
@@ -135,7 +151,7 @@ Object.values(toggles).forEach((el) => {
   });
 });
 
-[targetId, rnFlavor, packageName].forEach((el) => {
+[targetId, rnFlavor, androidFlavor, androidNamespace, packageName].forEach((el) => {
   el.addEventListener('input', updateMeta);
   el.addEventListener('change', updateMeta);
 });
@@ -144,6 +160,8 @@ targetId.addEventListener('change', syncTargetSpecificUi);
 byId<HTMLButtonElement>('reset').addEventListener('click', () => {
   targetId.value = 'flutter';
   rnFlavor.value = 'nativewind';
+  androidFlavor.value = 'compose';
+  androidNamespace.value = 'com.varcast.designsystem';
   packageName.value = 'design_system';
   setToggle(toggles.primitives, true);
   setToggle(toggles.tokens, true);

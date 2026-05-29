@@ -21,6 +21,7 @@
                 <select id="targetId">
                   <option value="flutter" selected>Flutter</option>
                   <option value="react_native">React Native</option>
+                  <option value="android">Android</option>
                 </select>
                 <svg class="select__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
                   <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
@@ -40,6 +41,25 @@
                   <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
               </div>
+            </div>
+          </div>
+          <div class="card__row hidden" id="androidFlavorRow">
+            <div class="field" style="flex: 1">
+              <label for="androidFlavor">Android flavor</label>
+              <div class="select">
+                <select id="androidFlavor">
+                  <option value="compose" selected>Jetpack Compose</option>
+                </select>
+                <svg class="select__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                  <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div class="card__row hidden" id="androidNamespaceRow">
+            <div class="field" style="flex: 1">
+              <label for="androidNamespace">Android namespace</label>
+              <input id="androidNamespace" type="text" placeholder="com.varcast.designsystem" value="com.varcast.designsystem" autocomplete="off" spellcheck="false" />
             </div>
           </div>
         </div>

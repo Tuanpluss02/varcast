@@ -17,6 +17,7 @@ import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
 import { runEngine } from './core/emit_engine';
 import { flutterTarget } from './targets/flutter';
 import { mergeRnOptions, reactNativeTarget, type ReactNativeFlavor } from './targets/react_native';
+import { androidTarget, mergeAndroidOptions } from './targets/android';
 import { writePackage } from './targets/flutter/generator/write_node';
 
 interface Args {
@@ -25,6 +26,7 @@ interface Args {
   name?: string;
   target?: string;
   flavor?: string;
+  namespace?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -36,10 +38,11 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--name') args.name = argv[++i];
     else if (a === '--target') args.target = argv[++i];
     else if (a === '--flavor') args.flavor = argv[++i];
+    else if (a === '--namespace') args.namespace = argv[++i];
   }
   if (!args.ir || !args.out) {
     console.error(
-      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--flavor <nativewind|unistyles>] [--name <package>]',
+      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--flavor <nativewind|unistyles|compose>] [--namespace <android.namespace>] [--name <package>]',
     );
     process.exit(2);
   }
@@ -74,7 +77,11 @@ function main() {
   const oldManifest = loadManifest(outDir);
   const targetId = args.target ?? 'flutter';
   const targets =
-    targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
+    targetId === 'react_native'
+      ? [reactNativeTarget]
+      : targetId === 'android'
+        ? [androidTarget]
+        : [flutterTarget];
   const optionsByTarget =
     targetId === 'react_native'
       ? {
@@ -83,6 +90,14 @@ function main() {
             packageName: args.name ?? 'design-system',
           }),
         }
+      : targetId === 'android'
+        ? {
+            android: mergeAndroidOptions({
+              flavor: 'compose',
+              packageName: args.name ?? 'design_system_android',
+              androidNamespace: args.namespace,
+            }),
+          }
       : {
           flutter: { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' },
         };

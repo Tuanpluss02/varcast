@@ -2,6 +2,10 @@ export type ExportOptions = {
   targetId: string;
   /** Picked when targetId === 'react_native'. Ignored otherwise. */
   rnFlavor: 'nativewind' | 'unistyles';
+  /** Picked when targetId === 'android'. Ignored otherwise. */
+  androidFlavor: 'compose';
+  /** Used as both Gradle namespace and Kotlin package for Android exports. */
+  androidNamespace: string;
   packageName: string;
   archMode: 'context' | 'static';
   include: {
@@ -39,14 +43,18 @@ export function toggleDataOn(el: HTMLElement) {
 export function collectOptions(opts: {
   targetId: HTMLSelectElement;
   rnFlavor: HTMLSelectElement;
+  androidFlavor: HTMLSelectElement;
+  androidNamespace: HTMLInputElement;
   packageName: HTMLInputElement;
   toggles: ToggleEls;
 }): ExportOptions {
-  const { targetId, rnFlavor, packageName, toggles } = opts;
+  const { targetId, rnFlavor, androidNamespace, packageName, toggles } = opts;
   const flavor = rnFlavor.value === 'unistyles' ? 'unistyles' : 'nativewind';
   return {
     targetId: targetId.value || 'flutter',
     rnFlavor: flavor,
+    androidFlavor: 'compose',
+    androidNamespace: androidNamespace.value || 'com.varcast.designsystem',
     packageName: packageName.value || 'design_system',
     archMode: isToggleOn(toggles.archContext) ? 'context' : 'static',
     include: {
@@ -65,8 +73,10 @@ export function pillText(o: ExportOptions): string {
   const bits: string[] = [];
   if (o.targetId === 'flutter') {
     bits.push('Flutter');
-  } else {
+  } else if (o.targetId === 'react_native') {
     bits.push(o.rnFlavor === 'unistyles' ? 'RN · Unistyles' : 'RN · NativeWind');
+  } else {
+    bits.push('Android · Compose');
   }
 
   if (o.include.primitives && o.include.tokens) bits.push('Full export');

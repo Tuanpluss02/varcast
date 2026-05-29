@@ -12,6 +12,7 @@ import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './targets/flutte
 import { runEngine } from './core/emit_engine';
 import { flutterTarget } from './targets/flutter';
 import { mergeRnOptions, reactNativeTarget } from './targets/react_native';
+import { androidTarget, mergeAndroidOptions } from './targets/android';
 
 figma.showUI(__html__, { width: 440, height: 720, themeColors: false });
 
@@ -42,6 +43,15 @@ figma.ui.onmessage = async (msg: { type: string }) => {
               include: rawOpts.include,
             })
           : null;
+      const androidOptions =
+        targetId === 'android'
+          ? mergeAndroidOptions({
+              flavor: rawOpts.androidFlavor,
+              packageName: rawOpts.packageName,
+              androidNamespace: rawOpts.androidNamespace,
+              include: rawOpts.include,
+            })
+          : null;
       const ir: IR = {
         version: '1.0',
         fileKey: figma.fileKey ?? 'unknown',
@@ -68,13 +78,19 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         (await figma.clientStorage.getAsync('manifest_v1'));
       const oldManifest = normalizeManifest(rawManifest);
       const targets =
-        targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
+        targetId === 'react_native'
+          ? [reactNativeTarget]
+          : targetId === 'android'
+            ? [androidTarget]
+            : [flutterTarget];
       const { files, nextManifest } = runEngine(
         ir,
         targets,
         oldManifest,
         targetId === 'react_native'
           ? { react_native: rnOptions }
+          : targetId === 'android'
+            ? { android: androidOptions }
           : { flutter: flutterOptions },
       );
       const diff = diffManifestForTarget(oldManifest, nextManifest, targetId);
@@ -90,7 +106,11 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       ];
 
       const packageName =
-        targetId === 'react_native' ? rnOptions!.packageName : flutterOptions!.packageName;
+        targetId === 'react_native'
+          ? rnOptions!.packageName
+          : targetId === 'android'
+            ? androidOptions!.packageName
+            : flutterOptions!.packageName;
 
       pending = {
         files: allFiles,
