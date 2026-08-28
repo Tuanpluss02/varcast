@@ -314,13 +314,18 @@ These are controlled by export options in Varcast:
 }
 
 export function smokeTestDartFile(packageName = 'design_system'): string {
+  // Note: This smoke test works for both static and context modes.
+  // In static mode: AppTheme is the main class
+  // In context mode: AppTheme is the base, AppThemeData holds runtime values
   return `import 'package:flutter_test/flutter_test.dart';
 import 'package:${packageName}/${packageName}.dart';
 
 void main() {
   test('design system package loads', () {
-    // Access something to ensure generated symbols exist.
+    // AppTheme exists in both modes (base class in context, main class in static)
     expect(AppTheme, isNotNull);
+    // DesignSystemWrapper for the widget tree
+    expect(DesignSystemWrapper, isNotNull);
   });
 }
 `;

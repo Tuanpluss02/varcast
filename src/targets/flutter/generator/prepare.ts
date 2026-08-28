@@ -53,7 +53,8 @@ export interface PreparedCollection {
 }
 
 export interface VarRef {
-  collectionAccessor: string;
+  collectionAccessor: string; // camelCase, e.g. "colorBasic"
+  collectionClassName: string; // PascalCase, e.g. "ColorBasic"
   groupPath: string[]; // PascalCase
   leafName: string; // camelCase
   dartType: DartType;
@@ -104,6 +105,8 @@ export interface PreparedIR {
   varIndex: Map<string, VarRef>;
   nextManifest: Manifest;
   warnings: PreparedWarning[];
+  /** Original IR for debug artifacts (ir.json) */
+  ir?: IR;
 }
 
 export function prepareIR(
@@ -120,6 +123,7 @@ export function prepareIR(
     for (const v of col.variables) {
       varIndex.set(v.id, {
         collectionAccessor: col.accessor,
+        collectionClassName: col.className,
         groupPath: v.groupPath,
         leafName: v.leafName,
         dartType: v.dartType,
@@ -150,6 +154,7 @@ export function prepareIR(
     varIndex,
     nextManifest,
     warnings,
+    ir,
   };
 }
 

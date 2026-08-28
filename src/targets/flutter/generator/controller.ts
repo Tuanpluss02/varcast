@@ -17,7 +17,10 @@ export function emitController(
   out += `import 'package:flutter/animation.dart';\n`;
   out += `import 'package:flutter/foundation.dart';\n\n`;
   for (const col of collections) {
-    out += `import '../${collectionDir(col)}/${col.fileBaseName}.dart';\n`;
+    // Controller is at lib/src/_internal/, collections are at lib/{Collection}/
+    // So path is ../../{Collection}/{file}
+    // Base file already exports mode files, so no need to import them separately
+    out += `import '../../${col.className}/${col.className}.dart';\n`;
   }
   out += `\n`;
 
@@ -128,13 +131,42 @@ function controllerBlock(
   out += `    _${accessor}Prev = ${accessor};\n`;
   out += `    _${accessor} = switch (mode) {\n`;
   for (const m of modes) {
-    out += `      ${cls}Mode.${m.camel} => ${concreteClassName(cls, m.pascal)}${ctorArgs},\n`;
+    const modeClassName = `${cls}${modeClassSuffix(m.pascal)}Mode`;
+    out += `      ${cls}Mode.${m.camel} => ${modeClassName}${ctorArgs},\n`;
   }
   out += `    };\n`;
   out += `    _trigger(_${accessor}Anim);\n`;
   out += `  }\n\n`;
 
   return out;
+}
+
+/**
+ * Converts a mode name to kebab-case for file naming.
+ * E.g., "Light" -> "light", "DarkMode" -> "dark-mode", "XS" -> "xs"
+ */
+function modeToKebabCase(modeName: string): string {
+  // Handle already kebab-case
+  if (modeName.includes('-')) return modeName.toLowerCase();
+  // Handle PascalCase or camelCase: insert hyphens before uppercase letters
+  // and convert to lowercase
+  return modeName
+    .replace(/([a-z])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+}
+
+/**
+ * Gets the mode class name suffix from the PascalCase mode name.
+ * E.g., "Light" -> "Light", "DarkMode" -> "Dark", "XS" -> "XS"
+ * This avoids naming collisions like "_FooModeMode".
+ */
+function modeClassSuffix(modePascal: string): string {
+  // If mode name ends with "Mode", strip it to avoid doubling
+  if (modePascal.endsWith('Mode')) {
+    return modePascal.slice(0, -4);
+  }
+  return modePascal;
 }
 
 function collectionUsesAlias(col: PreparedCollection): boolean {
@@ -144,23 +176,12 @@ function collectionUsesAlias(col: PreparedCollection): boolean {
 }
 
 function defaultConcrete(col: PreparedCollection): string {
-  return concreteClassName(col.className, col.modes[col.defaultModeIndex].pascal);
+  return concreteClassName(col);
 }
 
-function concreteClassName(collectionClassName: string, modePascal: string): string {
-  const candidate = `${collectionClassName}${modePascal}`;
-  if (candidate === `${collectionClassName}Mode`) return `${candidate}Value`;
-  return candidate;
+function concreteClassName(col: PreparedCollection): string {
+  const cls = col.className;
+  const modePascal = col.modes[col.defaultModeIndex].pascal;
+  // Mode classes are named with "Mode" suffix (without underscore for library privacy)
+  return `${cls}${modeClassSuffix(modePascal)}Mode`;
 }
-
-function collectionDir(col: PreparedCollection): 'primitives' | 'tokens' {
-  for (const v of col.variables) {
-    for (const val of Object.values(v.valuesByMode)) {
-      if (val.kind === 'alias') return 'tokens';
-    }
-  }
-  return 'primitives';
-}
-
-export { collectionDir };
-

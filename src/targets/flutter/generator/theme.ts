@@ -1,5 +1,4 @@
 import { FILE_HEADER } from './emit_helpers';
-import { collectionDir } from './controller';
 import type { ArchMode } from './options';
 import type { PreparedCollection } from './prepare';
 
@@ -47,7 +46,7 @@ function emitStaticTheme(
   if (hasComposites.effectStyles) out += `import 'composites/shadows.dart';\n`;
   if (hasComposites.textStyles) out += `import 'composites/text_styles.dart';\n`;
   for (const col of collections) {
-    out += `import '${collectionDir(col)}/${col.fileBaseName}.dart';\n`;
+    out += `import '../${col.className}/${col.className}.dart';\n`;
   }
   out += `\n`;
 
@@ -97,7 +96,7 @@ function emitContextTheme(
   if (hasComposites.effectStyles) out += `import 'composites/shadows.dart';\n`;
   if (hasComposites.textStyles) out += `import 'composites/text_styles.dart';\n`;
   for (const col of collections) {
-    out += `import '${collectionDir(col)}/${col.fileBaseName}.dart';\n`;
+    out += `import '../${col.className}/${col.className}.dart';\n`;
   }
   out += `\n`;
 

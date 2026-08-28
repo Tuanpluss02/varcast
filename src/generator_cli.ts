@@ -8,22 +8,26 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { runEngine } from './core/emit_engine';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
-import { diffManifest } from './manifest';
 import { loadManifest, saveManifest } from './manifest_node';
+import { flutterTarget } from './targets/flutter';
 import { generateChangelog } from './targets/flutter/generator/changelog';
 import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
-import { runEngine } from './core/emit_engine';
-import { flutterTarget } from './targets/flutter';
-import { reactNativeTarget } from './targets/react_native';
 import { writePackage } from './targets/flutter/generator/write_node';
+import { reactNativeTarget } from './targets/react_native';
+
+import type { ArchMode } from './targets/flutter/generator/options';
 
 interface Args {
   ir: string;
   out: string;
   name?: string;
   target?: string;
+  flavor?: string;
+  namespace?: string;
+  archMode?: ArchMode;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -34,10 +38,20 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--name') args.name = argv[++i];
     else if (a === '--target') args.target = argv[++i];
+    else if (a === '--flavor') args.flavor = argv[++i];
+    else if (a === '--namespace') args.namespace = argv[++i];
+    else if (a === '--arch-mode') {
+      const mode = argv[++i];
+      if (mode !== 'context' && mode !== 'static') {
+        console.error('Invalid arch-mode. Use: context or static');
+        process.exit(2);
+      }
+      args.archMode = mode;
+    }
   }
   if (!args.ir || !args.out) {
     console.error(
-      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--name <package>]',
+      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--flavor <nativewind|unistyles|compose>] [--namespace <android.namespace>] [--name <package>] [--arch-mode <context|static>]',
     );
     process.exit(2);
   }
@@ -73,13 +87,36 @@ function main() {
   const targetId = args.target ?? 'flutter';
   const options = { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' };
   const targets =
-    targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
-  const { files, nextManifest } = runEngine(ir, targets, oldManifest, targetId === 'react_native' ? {
-    react_native: options,
-  } : {
-    flutter: options,
-  });
-  const diff = diffManifest(oldManifest, nextManifest);
+    targetId === 'react_native'
+      ? [reactNativeTarget]
+      : targetId === 'android'
+        ? [androidTarget]
+        : [flutterTarget];
+  const optionsByTarget =
+    targetId === 'react_native'
+      ? {
+        react_native: mergeRnOptions({
+          flavor: (args.flavor as ReactNativeFlavor | undefined) ?? 'nativewind',
+          packageName: args.name ?? 'design-system',
+        }),
+      }
+      : targetId === 'android'
+        ? {
+          android: mergeAndroidOptions({
+            flavor: 'compose',
+            packageName: args.name ?? 'design_system_android',
+            androidNamespace: args.namespace,
+          }),
+        }
+        : {
+          flutter: {
+            ...DEFAULT_EXPORT_OPTIONS,
+            packageName: args.name ?? 'design_system',
+            archMode: args.archMode ?? DEFAULT_EXPORT_OPTIONS.archMode,
+          },
+        };
+  const { files, nextManifest } = runEngine(ir, targets, oldManifest, optionsByTarget);
+  const diff = diffManifestForTarget(oldManifest, nextManifest, targetId);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
   saveManifest(outDir, nextManifest);

@@ -115,34 +115,41 @@ describe('Flutter archMode emission', () => {
     });
 
     it('token concrete classes hold an injected controller — no singleton reads', () => {
-      const tokenFile = files.get('lib/src/tokens/color_token.dart')!;
+      // Mode class is in separate file: lib/ColorToken/light-mode.dart
+      const lightFile = files.get('lib/ColorToken/light-mode.dart')!;
       // Concrete class takes the controller via ctor and stores it as `_c`.
-      expect(tokenFile).toMatch(/ColorTokenLightMode\(this\._c\);/);
-      expect(tokenFile).toContain('final DesignSystemController _c;');
+      expect(lightFile).toMatch(/ColorTokenLightMode\(this\._c\);/);
+      expect(lightFile).toContain('final DesignSystemController _c;');
       // Alias goes through the field, not `DesignSystemController.instance`
       // and not the static `AppTheme` facade.
-      expect(tokenFile).toContain('_c.colorBasic.backgroundPrimary');
-      expect(tokenFile).not.toContain('DesignSystemController.instance');
-      expect(tokenFile).not.toContain('AppTheme.colorBasic');
+      expect(lightFile).toContain('_c.colorBasic.backgroundPrimary');
+      expect(lightFile).not.toContain('DesignSystemController.instance');
+      expect(lightFile).not.toContain('AppTheme.colorBasic');
     });
 
     it('primitive concrete classes stay const (no _c needed)', () => {
-      const basicFile = files.get('lib/src/primitives/color_basic.dart')!;
+      // New path: lib/ColorBasic/ColorBasic.dart with exports
+      const basicFile = files.get('lib/ColorBasic/ColorBasic.dart')!;
+      // Mode class is in separate file, exported from base
+      expect(basicFile).toContain("export 'value.dart'");
       // Primitive collection is literal-only — must remain const-constructible.
-      expect(basicFile).toContain('const ColorBasicValue();');
-      expect(basicFile).not.toContain('final DesignSystemController _c;');
+      // Uses {Collection}{Mode} naming for mode classes (no underscore prefix)
+      const valueFile = files.get('lib/ColorBasic/value.dart')!;
+      expect(valueFile).toContain('const ColorBasicValueMode();');
+      expect(valueFile).not.toContain('final DesignSystemController _c;');
     });
 
     it('controller passes `this` when constructing token concretes', () => {
       const ctrl = files.get('lib/src/_internal/controller.dart')!;
       // `late` because field initializers may reference `this` only when
       // the field is `late`.
+      // Mode classes have no underscore prefix
       expect(ctrl).toMatch(/late ColorToken _colorToken = ColorTokenLightMode\(this\);/);
       expect(ctrl).toMatch(/late ColorToken _colorTokenPrev = ColorTokenLightMode\(this\);/);
       // Switch arm in setColorTokenMode also passes `this`.
       expect(ctrl).toContain('ColorTokenMode.lightMode => ColorTokenLightMode(this)');
       // Primitives don't need injection — no `late` and no `(this)` for them.
-      expect(ctrl).toMatch(/ColorBasic _colorBasic = ColorBasicValue\(\);/);
+      expect(ctrl).toMatch(/ColorBasic _colorBasic = ColorBasicValueMode\(\);/);
       expect(ctrl).not.toMatch(/late ColorBasic _colorBasic/);
     });
 
@@ -194,10 +201,11 @@ describe('Flutter archMode emission', () => {
     });
 
     it('alias references in token concrete classes still go through AppTheme; no _c injection', () => {
-      const tokenFile = files.get('lib/src/tokens/color_token.dart')!;
-      expect(tokenFile).toContain('AppTheme.colorBasic');
-      expect(tokenFile).not.toContain('_c.colorBasic');
-      expect(tokenFile).not.toContain('final DesignSystemController _c;');
+      // Mode class is in separate file (light-mode.dart)
+      const lightFile = files.get('lib/ColorToken/light-mode.dart')!;
+      expect(lightFile).toContain('AppTheme.colorBasic');
+      expect(lightFile).not.toContain('_c.colorBasic');
+      expect(lightFile).not.toContain('final DesignSystemController _c;');
     });
 
     it('composites stay const; no controller injection', () => {
@@ -209,6 +217,7 @@ describe('Flutter archMode emission', () => {
 
     it('controller field initializers stay non-late and ctor calls have no args', () => {
       const ctrl = files.get('lib/src/_internal/controller.dart')!;
+      // Mode classes have no underscore prefix
       expect(ctrl).toMatch(/ColorToken _colorToken = ColorTokenLightMode\(\);/);
       expect(ctrl).not.toContain('late ColorToken');
       expect(ctrl).toContain('ColorTokenMode.lightMode => ColorTokenLightMode()');

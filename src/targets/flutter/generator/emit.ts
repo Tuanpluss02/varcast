@@ -7,7 +7,7 @@ import { prepareIR } from './prepare';
 import type { PreparedIR } from './prepare';
 import type { ExportOptions } from './options';
 import { DEFAULT_EXPORT_OPTIONS } from './options';
-import { emitCollection } from './collection';
+import { emitCollection, type CollectionFile } from './collection';
 import {
   emitColorStyles,
   emitShadows,
@@ -16,7 +16,7 @@ import {
   effectStylesUseAlias,
   textStylesUseAlias,
 } from './composites';
-import { emitController, collectionDir } from './controller';
+import { emitController } from './controller';
 import { emitTheme } from './theme';
 import { emitBarrel } from './barrel';
 import { emitScope } from './scope';
@@ -52,13 +52,20 @@ export function emitPreparedPackage(
 
   const files: EmittedFile[] = [];
 
-  // Per-collection files
+  // Get all collection names for cross-collection imports
+  const allCollectionNames = collections.map((c) => c.className);
+
+  // Per-collection files - new collection-based structure
   for (const col of collections) {
-    const dir = collectionDir(col);
-    files.push({
-      path: `lib/src/${dir}/${col.fileBaseName}.dart`,
-      contents: emitCollection(col, prepared.varIndex, archMode),
-    });
+    const colFiles = emitCollection(col, prepared.varIndex, allCollectionNames, archMode);
+    for (const colFile of colFiles) {
+      // Each collection gets its own folder named exactly as the collection name
+      // e.g., lib/ColorToken/ColorToken.dart or lib/ColorToken/light.dart
+      files.push({
+        path: `lib/${col.className}/${colFile.fileName}`,
+        contents: colFile.contents,
+      });
+    }
   }
 
   // Composite files (skip when no styles)
@@ -139,6 +146,16 @@ export function emitPreparedPackage(
     contents: smokeTestDartFile(packageName),
   });
 
+  // Debug artifact: ir.json (original Figma data for reference/debugging)
+  // Stored in _meta/ folder for cleaner package structure
+  // Note: manifest.json is saved by CLI (via saveManifest), not here
+  if (prepared.ir) {
+    files.push({
+      path: '_meta/ir.json',
+      contents: JSON.stringify(prepared.ir, null, 2),
+    });
+  }
+
   return { files, nextManifest: prepared.nextManifest };
 }
 
@@ -150,4 +167,3 @@ export function emitPackage(
   const prepared = prepareIR(ir, manifest, options);
   return emitPreparedPackage(prepared, options);
 }
-

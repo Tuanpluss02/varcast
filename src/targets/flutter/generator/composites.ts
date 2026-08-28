@@ -24,6 +24,7 @@ import type {
 } from './prepare';
 
 function aliasRootImport(archMode: ArchMode): string {
+  // Files in lib/src/composites/ need ../_internal/ from there
   return archMode === 'context'
     ? `import '../_internal/controller.dart';\n`
     : `import '../theme.dart';\n`;

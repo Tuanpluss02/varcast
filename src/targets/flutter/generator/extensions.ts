@@ -1,5 +1,4 @@
 import { FILE_HEADER } from './emit_helpers';
-import { collectionDir } from './controller';
 import type { PreparedCollection } from './prepare';
 
 // Emit `lib/src/extensions.dart` — sugar for `AppTheme.of(context).x`.
@@ -16,7 +15,8 @@ export function emitExtensions(
   out += `import 'package:flutter/widgets.dart';\n`;
   out += `import 'theme.dart';\n`;
   for (const col of collections) {
-    out += `import '${collectionDir(col)}/${col.fileBaseName}.dart';\n`;
+    // Use the new collection folder structure
+    out += `import '../${col.className}/${col.className}.dart';\n`;
   }
   if (hasComposites.paintStyles) out += `import 'composites/color_styles.dart';\n`;
   if (hasComposites.effectStyles) out += `import 'composites/shadows.dart';\n`;
