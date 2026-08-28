@@ -1,7 +1,7 @@
 // CLI: read IR JSON, validate, write a Flutter package.
 //
 // Usage:
-//   npx tsx src/generator_cli.ts --ir path/to/ir.json --out path/to/out [--name design_system]
+//   npx tsx src/generator_cli.ts --ir path/to/ir.json --out path/to/out [--name design_system] [--collections col1,col2]
 //
 // Or after `npm run build:cli` (esbuild bundle to dist/cli.js):
 //   node dist/cli.js --ir path/to/ir.json --out path/to/out
@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { runEngine } from './core/emit_engine';
+import { diffManifestForTarget } from './core/manifest';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
 import { loadManifest, saveManifest } from './manifest_node';
@@ -17,17 +18,14 @@ import { generateChangelog } from './targets/flutter/generator/changelog';
 import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
 import { writePackage } from './targets/flutter/generator/write_node';
 import { reactNativeTarget } from './targets/react_native';
-
-import type { ArchMode } from './targets/flutter/generator/options';
+import { DEFAULT_RN_OPTIONS } from './targets/react_native/options';
 
 interface Args {
   ir: string;
   out: string;
   name?: string;
   target?: string;
-  flavor?: string;
-  namespace?: string;
-  archMode?: ArchMode;
+  collections?: string[];
 }
 
 function parseArgs(argv: string[]): Args {
@@ -38,20 +36,15 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--name') args.name = argv[++i];
     else if (a === '--target') args.target = argv[++i];
-    else if (a === '--flavor') args.flavor = argv[++i];
-    else if (a === '--namespace') args.namespace = argv[++i];
-    else if (a === '--arch-mode') {
-      const mode = argv[++i];
-      if (mode !== 'context' && mode !== 'static') {
-        console.error('Invalid arch-mode. Use: context or static');
-        process.exit(2);
-      }
-      args.archMode = mode;
-    }
+    else if (a === '--collections')
+      args.collections = argv[++i]
+        ?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
   }
   if (!args.ir || !args.out) {
     console.error(
-      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--flavor <nativewind|unistyles|compose>] [--namespace <android.namespace>] [--name <package>] [--arch-mode <context|static>]',
+      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--name <package>] [--collections <id1,id2>]',
     );
     process.exit(2);
   }
@@ -85,34 +78,26 @@ function main() {
 
   const oldManifest = loadManifest(outDir);
   const targetId = args.target ?? 'flutter';
-  const options = { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' };
   const targets =
     targetId === 'react_native'
       ? [reactNativeTarget]
-      : targetId === 'android'
-        ? [androidTarget]
-        : [flutterTarget];
+      : [flutterTarget];
   const optionsByTarget =
     targetId === 'react_native'
       ? {
-        react_native: mergeRnOptions({
-          flavor: (args.flavor as ReactNativeFlavor | undefined) ?? 'nativewind',
-          packageName: args.name ?? 'design-system',
-        }),
-      }
-      : targetId === 'android'
-        ? {
-          android: mergeAndroidOptions({
-            flavor: 'compose',
-            packageName: args.name ?? 'design_system_android',
-            androidNamespace: args.namespace,
-          }),
+          react_native: {
+            ...DEFAULT_RN_OPTIONS,
+            packageName: args.name ?? 'design-system',
+          },
         }
-        : {
+      : {
           flutter: {
             ...DEFAULT_EXPORT_OPTIONS,
             packageName: args.name ?? 'design_system',
-            archMode: args.archMode ?? DEFAULT_EXPORT_OPTIONS.archMode,
+            include: {
+              ...DEFAULT_EXPORT_OPTIONS.include,
+              collections: args.collections,
+            },
           },
         };
   const { files, nextManifest } = runEngine(ir, targets, oldManifest, optionsByTarget);

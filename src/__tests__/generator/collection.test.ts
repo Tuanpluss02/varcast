@@ -108,21 +108,20 @@ describe('emitCollection (golden)', () => {
   it('emits primitive collection with nesting + reserved leaf', () => {
     const prepared = prepareIR(buildIr());
     const col = prepared.collections.find((c) => c.className === 'ColorBasic')!;
-    // Always returns multiple files: base + one per mode
     const files = emitCollection(col, prepared.varIndex);
     expect(files.length).toBeGreaterThanOrEqual(1);
-    // Find base file
-    const baseFile = files.find((f) => f.fileName === 'ColorBasic.dart');
+    // Base file is snake_case
+    const baseFile = files.find((f) => f.fileName === 'color_basic.dart');
     expect(baseFile).toBeDefined();
   });
 
-  it('emits token collection with AppTheme alias getters (non-const concretes)', () => {
+  it('emits token collection with AppTheme alias getters', () => {
     const prepared = prepareIR(buildIr());
     const col = prepared.collections.find((c) => c.className === 'ColorToken')!;
     const files = emitCollection(col, prepared.varIndex);
     expect(files.length).toBeGreaterThanOrEqual(1);
-    // Find mode file (alias is in the mode implementation, not base)
-    const modeFile = files.find((f) => f.fileName === 'light-mode.dart');
+    // Mode file is snake_case
+    const modeFile = files.find((f) => f.fileName === 'light_mode.dart');
     expect(modeFile).toBeDefined();
     expect(modeFile!.contents).toContain('AppTheme.colorBasic');
   });
@@ -130,11 +129,10 @@ describe('emitCollection (golden)', () => {
   it('emits multi-mode collection with separate mode files', () => {
     const prepared = prepareIR(buildIr());
     const col = prepared.collections.find((c) => c.className === 'Size')!;
-    // Multi-mode collections return multiple files: base + one per mode
     const files = emitCollection(col, prepared.varIndex);
-    expect(files.length).toBe(3); // Size.dart + xs.dart + s.dart
+    expect(files.length).toBe(3); // size.dart + xs.dart + s.dart
 
-    const baseFile = files.find((f) => f.fileName === 'Size.dart');
+    const baseFile = files.find((f) => f.fileName === 'size.dart');
     expect(baseFile).toBeDefined();
 
     const xsFile = files.find((f) => f.fileName === 'xs.dart');
@@ -149,24 +147,21 @@ describe('emitCollection (golden)', () => {
     const col = prepared.collections.find((c) => c.className === 'FontFamily')!;
     const files = emitCollection(col, prepared.varIndex);
     expect(files.length).toBeGreaterThanOrEqual(1);
-    // Find base file
-    const baseFile = files.find((f) => f.fileName === 'FontFamily.dart');
+
+    const baseFile = files.find((f) => f.fileName === 'font_family.dart');
     expect(baseFile).toBeDefined();
-    // The base class should exist
     expect(baseFile!.contents).toContain('abstract class FontFamily');
-    // The lerp class should exist
     expect(baseFile!.contents).toContain('class _FontFamilyLerp extends FontFamily');
   });
 
-  it('creates folder per collection in file names', () => {
+  it('collection file names use snake_case', () => {
     const prepared = prepareIR(buildIr());
     const col = prepared.collections.find((c) => c.className === 'ColorBasic')!;
     const files = emitCollection(col, prepared.varIndex);
-    // File name should be the collection name + .dart
-    expect(files[0].fileName).toBe('ColorBasic.dart');
+    expect(files[0].fileName).toBe('color_basic.dart');
   });
 
-  it('mode files are named in kebab-case', () => {
+  it('mode files are named in snake_case', () => {
     const prepared = prepareIR(buildIr());
     const col = prepared.collections.find((c) => c.className === 'Size')!;
     const files = emitCollection(col, prepared.varIndex);

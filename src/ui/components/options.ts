@@ -1,25 +1,14 @@
 export type ExportOptions = {
   targetId: string;
   packageName: string;
-  archMode: 'context' | 'static';
   include: {
-    primitives: boolean;
-    tokens: boolean;
+    collections?: string[];
     composites: {
       colorStyles: boolean;
       shadows: boolean;
       textStyles: boolean;
     };
   };
-};
-
-export type ToggleEls = {
-  primitives: HTMLElement;
-  tokens: HTMLElement;
-  colorStyles: HTMLElement;
-  shadows: HTMLElement;
-  textStyles: HTMLElement;
-  archContext: HTMLElement;
 };
 
 export function isToggleOn(el: HTMLElement) {
@@ -37,32 +26,38 @@ export function toggleDataOn(el: HTMLElement) {
 export function collectOptions(opts: {
   targetId: HTMLSelectElement;
   packageName: HTMLInputElement;
-  toggles: ToggleEls;
+  getSelectedCollectionIds?: () => string[];
+  getCompositeSelection?: () => {
+    colorStyles: boolean;
+    shadows: boolean;
+    textStyles: boolean;
+  };
 }): ExportOptions {
-  const { targetId, packageName, toggles } = opts;
+  const { targetId, packageName, getSelectedCollectionIds, getCompositeSelection } = opts;
+  const selectedCols = getSelectedCollectionIds ? getSelectedCollectionIds() : undefined;
+  const composites = getCompositeSelection
+    ? getCompositeSelection()
+    : { colorStyles: true, shadows: true, textStyles: true };
+
   return {
     targetId: targetId.value || 'flutter',
     packageName: packageName.value || 'design_system',
-    archMode: isToggleOn(toggles.archContext) ? 'context' : 'static',
     include: {
-      primitives: isToggleOn(toggles.primitives),
-      tokens: isToggleOn(toggles.tokens),
-      composites: {
-        colorStyles: isToggleOn(toggles.colorStyles),
-        shadows: isToggleOn(toggles.shadows),
-        textStyles: isToggleOn(toggles.textStyles),
-      },
+      collections: selectedCols,
+      composites,
     },
   };
 }
 
-export function pillText(o: ExportOptions): string {
+export function pillText(o: ExportOptions, totalCollections?: number): string {
   const bits: string[] = [];
   bits.push(o.targetId === 'flutter' ? 'Flutter' : 'React Native');
-  if (o.include.primitives && o.include.tokens) bits.push('Full export');
-  else if (o.include.tokens) bits.push('Tokens only');
-  else if (o.include.primitives) bits.push('Primitives only');
-  else bits.push('Custom');
+  if (o.include.collections && totalCollections !== undefined) {
+    if (o.include.collections.length === totalCollections) bits.push('All collections');
+    else bits.push(`${o.include.collections.length}/${totalCollections} collections`);
+  } else {
+    bits.push('All collections');
+  }
 
   const customized =
     !o.include.composites.colorStyles ||
@@ -70,8 +65,5 @@ export function pillText(o: ExportOptions): string {
     !o.include.composites.textStyles;
 
   bits.push(customized ? 'customized' : 'defaults');
-  if (o.targetId === 'flutter') {
-    bits.push(o.archMode === 'context' ? 'context' : 'static');
-  }
   return bits.join(' · ');
 }

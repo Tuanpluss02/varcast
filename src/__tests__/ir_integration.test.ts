@@ -56,7 +56,7 @@ describe('Flutter Output Generation', () => {
     // Group files by collection folder
     const collectionFolders = new Set<string>();
     out.files.forEach((f) => {
-      const match = f.path.match(/^lib\/([^\/]+)\//);
+      const match = f.path.match(/^lib\/src\/collections\/([^\/]+)\//);
       if (match) {
         collectionFolders.add(match[1]);
       }
@@ -64,8 +64,8 @@ describe('Flutter Output Generation', () => {
 
     console.log(`Collection folders: ${[...collectionFolders].length}`);
     [...collectionFolders].sort().forEach((folder) => {
-      const folderFiles = out.files.filter((f) => f.path.startsWith(`lib/${folder}/`));
-      console.log(`  ${folder}/ (${folderFiles.length} files)`);
+      const folderFiles = out.files.filter((f) => f.path.startsWith(`lib/src/collections/${folder}/`));
+      console.log(`  src/collections/${folder}/ (${folderFiles.length} files)`);
       folderFiles.forEach((f) => {
         console.log(`    - ${path.basename(f.path)}`);
       });
@@ -84,22 +84,23 @@ describe('Flutter Output Generation', () => {
     const out = emitPackage(ir, null, DEFAULT_EXPORT_OPTIONS);
     const files = fileMap(out.files);
 
-    // Check each collection - sanitize collection name like the generator does
+    // Check each collection - convert collection name to snake_case like the generator does
     ir.collections.forEach((col) => {
-      // Generator sanitizes: removes [1], [2] prefixes and converts to PascalCase
-      const folderName = sanitizeCollectionName(col.name);
-      const baseFilePath = `lib/${folderName}/${folderName}.dart`;
+      let pascal = sanitizeCollectionName(col.name);
+      if (pascal === 'FontWeight') pascal = 'FontWeightTokens';
+      const folderName = toSnakeCase(pascal);
+      const baseFilePath = `lib/src/collections/${folderName}/${folderName}.dart`;
 
       if (files.has(baseFilePath)) {
         console.log(`✓ ${col.name} -> ${folderName}: base file exists`);
 
-        // Check mode files for multi-mode collections
+        // Check mode files for collections
         col.modes.forEach((mode) => {
-          const modeFileName = toKebabCase(mode.name) + '.dart';
-          const modeFilePath = `lib/${folderName}/${modeFileName}`;
+          const modeFileName = toSnakeCase(mode.name) + '.dart';
+          const modeFilePath = `lib/src/collections/${folderName}/${modeFileName}`;
           if (files.has(modeFilePath)) {
             console.log(`  ✓ Mode "${mode.name}" -> ${modeFileName}`);
-          } else if (col.modes.length > 1) {
+          } else {
             console.log(`  ⚠ Mode "${mode.name}" file not found at ${modeFilePath}`);
           }
         });
@@ -117,16 +118,12 @@ describe('Flutter Output Generation', () => {
     const tokenCollections = ir.collections.filter((c) => c.kind === 'token');
 
     tokenCollections.forEach((col) => {
-      const folderName = sanitizeCollectionName(col.name);
-      const baseFilePath = `lib/${folderName}/${folderName}.dart`;
-      const baseFile = files.get(baseFilePath);
+      const folderName = toSnakeCase(sanitizeCollectionName(col.name));
+      const modeFiles = out.files.filter((f) => f.path.startsWith(`lib/src/collections/${folderName}/`));
 
-      if (baseFile) {
-        // Check if file contains alias references
-        const hasAlias = baseFile.includes('alias') || baseFile.includes('target');
-        if (hasAlias) {
-          console.log(`✓ ${col.name}: contains alias references`);
-        }
+      const hasAlias = modeFiles.some((f) => f.contents.includes('AppTheme.'));
+      if (hasAlias) {
+        console.log(`✓ ${col.name}: contains alias references via AppTheme`);
       }
     });
   });
@@ -277,6 +274,13 @@ function sanitizeToPascalCase(str: string): string {
   // Remove [1], [2], etc. prefixes
   const cleaned = str.replace(/^\[[\d]+\]\s*/, '');
   return toPascalCase(cleaned);
+}
+
+function toSnakeCase(str: string): string {
+  return str
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[\s-]+/g, '_')
+    .toLowerCase();
 }
 
 // Sanitize collection name for folder/file naming

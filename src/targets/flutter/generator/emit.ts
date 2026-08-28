@@ -7,20 +7,15 @@ import { prepareIR } from './prepare';
 import type { PreparedIR } from './prepare';
 import type { ExportOptions } from './options';
 import { DEFAULT_EXPORT_OPTIONS } from './options';
-import { emitCollection, type CollectionFile } from './collection';
+import { emitCollection } from './collection';
 import {
   emitColorStyles,
   emitShadows,
   emitTextStyles,
-  paintStylesUseAlias,
-  effectStylesUseAlias,
-  textStylesUseAlias,
 } from './composites';
 import { emitController } from './controller';
 import { emitTheme } from './theme';
 import { emitBarrel } from './barrel';
-import { emitScope } from './scope';
-import { emitExtensions } from './extensions';
 import {
   lerpDartFile,
   wrapperDartFile,
@@ -40,29 +35,36 @@ export function emitPreparedPackage(
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): { files: EmittedFile[]; nextManifest: Manifest } {
   const packageName = options.packageName;
-  const archMode = options.archMode;
+
+  // Filter collections
+  const selectedColIds = options.include?.collections
+    ? new Set(options.include.collections)
+    : null;
 
   // Drop empty collections — they would emit invalid Dart (zero-arm switch).
   const collections = prepared.collections.filter((c) => {
     if (c.variables.length === 0 || c.modes.length === 0) return false;
-    if (c.kind === 'primitive' && !options.include.primitives) return false;
-    if (c.kind === 'token' && !options.include.tokens) return false;
+    if (selectedColIds) {
+      return (
+        selectedColIds.has(c.id) ||
+        selectedColIds.has(c.className) ||
+        selectedColIds.has(c.fileBaseName)
+      );
+    }
+    if (c.kind === 'primitive' && options.include?.primitives === false) return false;
+    if (c.kind === 'token' && options.include?.tokens === false) return false;
     return true;
   });
 
+  const exportedColIds = new Set(collections.map((c) => c.id));
   const files: EmittedFile[] = [];
 
-  // Get all collection names for cross-collection imports
-  const allCollectionNames = collections.map((c) => c.className);
-
-  // Per-collection files - new collection-based structure
+  // Per-collection files - stored in lib/src/collections/<col_snake_case>/
   for (const col of collections) {
-    const colFiles = emitCollection(col, prepared.varIndex, allCollectionNames, archMode);
+    const colFiles = emitCollection(col, prepared.varIndex, exportedColIds, prepared.ir);
     for (const colFile of colFiles) {
-      // Each collection gets its own folder named exactly as the collection name
-      // e.g., lib/ColorToken/ColorToken.dart or lib/ColorToken/light.dart
       files.push({
-        path: `lib/${col.className}/${colFile.fileName}`,
+        path: `lib/src/collections/${col.fileBaseName}/${colFile.fileName}`,
         contents: colFile.contents,
       });
     }
@@ -80,29 +82,23 @@ export function emitPreparedPackage(
     effectStyles: hasEffect,
     textStyles: hasText,
   };
-  // Whether each composite needs the controller injected via ctor in context
-  // mode. Mirrors the decision composites.ts makes when emitting the class.
-  const compositesUseAlias = {
-    paintStyles: hasPaint && paintStylesUseAlias(prepared.paintStyles),
-    effectStyles: hasEffect && effectStylesUseAlias(prepared.effectStyles),
-    textStyles: hasText && textStylesUseAlias(prepared.textStyles),
-  };
+
   if (hasPaint) {
     files.push({
       path: 'lib/src/composites/color_styles.dart',
-      contents: emitColorStyles(prepared.paintStyles, prepared.varIndex, archMode),
+      contents: emitColorStyles(prepared.paintStyles, prepared.varIndex, exportedColIds, prepared.ir),
     });
   }
   if (hasEffect) {
     files.push({
       path: 'lib/src/composites/shadows.dart',
-      contents: emitShadows(prepared.effectStyles, prepared.varIndex, archMode),
+      contents: emitShadows(prepared.effectStyles, prepared.varIndex, exportedColIds, prepared.ir),
     });
   }
   if (hasText) {
     files.push({
       path: 'lib/src/composites/text_styles.dart',
-      contents: emitTextStyles(prepared.textStyles, prepared.varIndex, archMode),
+      contents: emitTextStyles(prepared.textStyles, prepared.varIndex, exportedColIds, prepared.ir),
     });
   }
 
@@ -110,45 +106,31 @@ export function emitPreparedPackage(
   files.push({ path: 'lib/src/_internal/lerp.dart', contents: lerpDartFile() });
   files.push({
     path: 'lib/src/_internal/controller.dart',
-    contents: emitController(collections, archMode),
+    contents: emitController(collections),
   });
-  if (archMode === 'context') {
-    files.push({
-      path: 'lib/src/_internal/scope.dart',
-      contents: emitScope(),
-    });
-  }
   files.push({
     path: 'lib/src/theme.dart',
-    contents: emitTheme(collections, hasComposites, archMode, compositesUseAlias),
+    contents: emitTheme(collections, hasComposites),
   });
-  if (archMode === 'context') {
-    files.push({
-      path: 'lib/src/extensions.dart',
-      contents: emitExtensions(collections, hasComposites),
-    });
-  }
   files.push({
     path: 'lib/src/wrapper.dart',
-    contents: wrapperDartFile(archMode),
+    contents: wrapperDartFile(),
   });
   files.push({ path: 'lib/src/design_system.dart', contents: publicApiDartFile() });
   files.push({
     path: `lib/${packageName}.dart`,
-    contents: emitBarrel(collections, hasComposites, archMode),
+    contents: emitBarrel(collections, hasComposites),
   });
 
   // Package metadata
   files.push({ path: 'pubspec.yaml', contents: pubspecYaml(packageName) });
-  files.push({ path: 'README.md', contents: readmeMd(packageName, archMode) });
+  files.push({ path: 'README.md', contents: readmeMd(packageName) });
   files.push({
     path: 'test/smoke_test.dart',
     contents: smokeTestDartFile(packageName),
   });
 
   // Debug artifact: ir.json (original Figma data for reference/debugging)
-  // Stored in _meta/ folder for cleaner package structure
-  // Note: manifest.json is saved by CLI (via saveManifest), not here
   if (prepared.ir) {
     files.push({
       path: '_meta/ir.json',

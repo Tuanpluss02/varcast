@@ -1,21 +1,10 @@
-export type ArchMode = 'context' | 'static';
-
 export interface ExportOptions {
   packageName: string;
 
-  /**
-   * Architecture for token access.
-   * - 'context': InheritedNotifier-based. Reads via `AppTheme.of(context)` or
-   *   `context.colorBasic` register a dependency, so widgets — including those
-   *   wrapped in `const` — rebuild when modes change.
-   * - 'static': singleton-only. `AppTheme.colorBasic.x` works from anywhere
-   *   (including non-widget code), but `const` widgets won't rebuild.
-   */
-  archMode: ArchMode;
-
   include: {
-    primitives: boolean;
-    tokens: boolean;
+    collections?: string[]; // Array of selected collection IDs or names (if undefined, all collections are included)
+    primitives?: boolean; // legacy compat
+    tokens?: boolean; // legacy compat
     composites: {
       colorStyles: boolean;
       shadows: boolean;
@@ -26,10 +15,7 @@ export interface ExportOptions {
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   packageName: 'design_system',
-  archMode: 'context',
   include: {
-    primitives: true,
-    tokens: true,
     composites: { colorStyles: true, shadows: true, textStyles: true },
   },
 };
@@ -39,10 +25,13 @@ export function normalizeExportOptions(input: any): ExportOptions {
   if (input && typeof input === 'object') {
     if (typeof input.packageName === 'string' && input.packageName.trim())
       o.packageName = sanitizePackageName(input.packageName.trim());
-    if (input.archMode === 'static' || input.archMode === 'context')
-      o.archMode = input.archMode;
-    if (input.include?.primitives === false) o.include.primitives = false;
-    if (input.include?.tokens === false) o.include.tokens = false;
+    if (Array.isArray(input.include?.collections)) {
+      o.include.collections = input.include.collections.filter(
+        (x: any) => typeof x === 'string' && x.trim().length > 0,
+      );
+    }
+    if (input.include?.primitives !== undefined) o.include.primitives = input.include.primitives;
+    if (input.include?.tokens !== undefined) o.include.tokens = input.include.tokens;
     if (input.include?.composites?.colorStyles === false)
       o.include.composites.colorStyles = false;
     if (input.include?.composites?.shadows === false)
@@ -63,4 +52,3 @@ function sanitizePackageName(name: string): string {
       .replace(/^_+|_+$/g, '') || 'design_system'
   );
 }
-

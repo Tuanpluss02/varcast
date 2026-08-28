@@ -53,6 +53,7 @@ export interface PreparedCollection {
 }
 
 export interface VarRef {
+  collectionId: string;
   collectionAccessor: string; // camelCase, e.g. "colorBasic"
   collectionClassName: string; // PascalCase, e.g. "ColorBasic"
   groupPath: string[]; // PascalCase
@@ -122,6 +123,7 @@ export function prepareIR(
   for (const col of collections) {
     for (const v of col.variables) {
       varIndex.set(v.id, {
+        collectionId: col.id,
         collectionAccessor: col.accessor,
         collectionClassName: col.className,
         groupPath: v.groupPath,

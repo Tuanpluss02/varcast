@@ -2,7 +2,6 @@
 // the wrapper widget, pubspec, and the README scaffold.
 
 import { FILE_HEADER } from './emit_helpers';
-import type { ArchMode } from './options';
 
 export function lerpDartFile(): string {
   return (
@@ -32,25 +31,12 @@ extension LerpImageFilter on ImageFilter {
   );
 }
 
-export function wrapperDartFile(archMode: ArchMode = 'static'): string {
-  const extraImport =
-    archMode === 'context' ? `import '_internal/scope.dart';\n` : '';
-  const buildBody =
-    archMode === 'context'
-      ? `    return DesignSystemScope(
-      controller: DesignSystemController.instance,
-      child: Builder(builder: widget.builder),
-    );`
-      : `    return ListenableBuilder(
-      listenable: DesignSystemController.instance,
-      builder: (context, _) => widget.builder(context),
-    );`;
-
+export function wrapperDartFile(): string {
   return (
     FILE_HEADER +
     `import 'package:flutter/widgets.dart';
 import '_internal/controller.dart';
-${extraImport}
+
 /// Place once near the root of your widget tree, above [MaterialApp].
 ///
 /// This widget attaches vsync for animated mode transitions and sets the
@@ -96,7 +82,10 @@ class _DesignSystemWrapperState extends State<DesignSystemWrapper>
 
   @override
   Widget build(BuildContext context) {
-${buildBody}
+    return ListenableBuilder(
+      listenable: DesignSystemController.instance,
+      builder: (context, _) => widget.builder(context),
+    );
   }
 }
 `
@@ -146,99 +135,7 @@ flutter:
 `;
 }
 
-export function readmeMd(
-  packageName = 'design_system',
-  archMode: ArchMode = 'static',
-): string {
-  if (archMode === 'context') {
-    return `# ${packageName}
-
-Generated Flutter design system package. Do not edit by hand.
-
-## Install
-
-Recommended: commit this generated package into your repo and add a path dependency.
-
-\`\`\`yaml
-dependencies:
-  ${packageName}:
-    path: ../packages/${packageName}
-\`\`\`
-
-Then:
-
-\`\`\`bash
-flutter pub get
-\`\`\`
-
-## Import
-
-\`\`\`dart
-import 'package:${packageName}/${packageName}.dart';
-\`\`\`
-
-## Setup (put once near app root)
-
-\`\`\`dart
-void main() {
-  runApp(
-    DesignSystemWrapper(
-      // Optional: animate mode transitions
-      duration: const Duration(milliseconds: 200),
-      builder: (_) => const MyApp(),
-    ),
-  );
-}
-\`\`\`
-
-## Read tokens (context mode)
-
-Context mode is the default because it works correctly with \`const\` widgets.
-Reads register an \`InheritedNotifier\` dependency, so widgets are invalidated
-when modes change.
-
-\`\`\`dart
-@override
-Widget build(BuildContext context) {
-  // Full access
-  final theme = AppTheme.of(context);
-  final bg = theme.colorToken.background.primary;
-
-  // Shorter access via BuildContext extensions
-  final fg = context.colorToken.text.primary;
-
-  return Container(color: bg);
-}
-\`\`\`
-
-## Switch modes at runtime
-
-Each collection has an enum for its modes (e.g. \`ColorTokenMode\`).
-
-\`\`\`dart
-// Imperative — no context needed.
-AppTheme.setColorTokenMode(ColorTokenMode.darkMode);
-\`\`\`
-
-## What you can change
-
-These are controlled by export options in Varcast:
-- \`packageName\`: pub package name.
-- \`archMode\`: \`context\` (recommended) vs \`static\`.
-- \`include.primitives\`: include primitive collections.
-- \`include.tokens\`: include token collections.
-- \`include.composites.{colorStyles,shadows,textStyles}\`: include each composite file.
-
-## Why context-based?
-
-In Flutter, widgets wrapped in \`const\` are canonical and don't rebuild even
-when an ancestor \`ListenableBuilder\` emits. Reading tokens via
-\`AppTheme.of(context)\` (or the \`context.x\` extensions) registers an
-\`InheritedNotifier\` dependency, so \`const\` widgets are correctly invalidated
-when modes change.
-`;
-  }
-
+export function readmeMd(packageName = 'design_system'): string {
   return `# ${packageName}
 
 Generated Flutter design system package. Do not edit by hand.
@@ -278,13 +175,13 @@ void main() {
 }
 \`\`\`
 
-## Read tokens (static mode)
+## Read tokens
 
-Static mode exposes tokens off a singleton, so it works without a \`BuildContext\`.
+Access tokens anywhere via \`AppTheme\`.
 
 \`\`\`dart
-final bg = AppTheme.colorToken.background.primary;
-final r  = AppTheme.numberBasic.spacing.n16;
+final bg = AppTheme.colorToken.backgroundPrimary;
+final r  = AppTheme.numberBasic.spacingN16;
 \`\`\`
 
 ## Switch modes at runtime
@@ -295,18 +192,12 @@ AppTheme.setColorTokenMode(ColorTokenMode.darkMode);
 
 ## Rebuild on mode changes
 
-In static mode, tokens are context-less (\`AppTheme.*\`). Flutter only updates the
-UI when widgets rebuild, and \`DesignSystemWrapper\` provides the official rebuild
-bridge via its \`builder\` callback.
-
-> Widgets wrapped in \`const\` won't rebuild on mode changes in this mode.
-> Use \`archMode: context\` in the export options if you need that.
+Tokens are read via \`AppTheme.*\`. \`DesignSystemWrapper\` provides the rebuild bridge via its \`builder\` callback whenever modes transition.
 
 ## What you can change
 
 These are controlled by export options in Varcast:
 - \`packageName\`: pub package name.
-- \`archMode\`: \`context\` (recommended) vs \`static\`.
 - \`include.primitives\`: include primitive collections.
 - \`include.tokens\`: include token collections.
 - \`include.composites.{colorStyles,shadows,textStyles}\`: include each composite file.
@@ -314,20 +205,14 @@ These are controlled by export options in Varcast:
 }
 
 export function smokeTestDartFile(packageName = 'design_system'): string {
-  // Note: This smoke test works for both static and context modes.
-  // In static mode: AppTheme is the main class
-  // In context mode: AppTheme is the base, AppThemeData holds runtime values
   return `import 'package:flutter_test/flutter_test.dart';
 import 'package:${packageName}/${packageName}.dart';
 
 void main() {
   test('design system package loads', () {
-    // AppTheme exists in both modes (base class in context, main class in static)
     expect(AppTheme, isNotNull);
-    // DesignSystemWrapper for the widget tree
     expect(DesignSystemWrapper, isNotNull);
   });
 }
 `;
 }
-
