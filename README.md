@@ -31,11 +31,21 @@ Export Figma Variables and Styles to **Flutter** and **React Native** as fully-t
 ```bash
 pnpm install
 pnpm build          # production bundle → dist/
-pnpm test           # vitest
-pnpm typecheck
+pnpm test           # vitest unit & integration tests
+pnpm typecheck      # typescript validation
 ```
 
 Load in Figma Desktop: `Plugins → Development → Import plugin from manifest…` → pick `manifest.json`.
+
+## Testing & Quality Assurance
+
+Varcast uses `sample/design_system_v5` as its **Golden Reference** (Ground Truth) for testing.
+
+- **Unit tests**: `pnpm test` (or `pnpm test flutter`)
+- **Integration tests**: `pnpm vitest run src/__tests__/ir_integration.test.ts`
+- **E2E validation**: `bash scripts/e2e.sh` (runs full build, CLI package generation, `flutter analyze`, and `flutter test`).
+
+For complete testing architecture and guidelines, see [docs/testing.md](../docs/testing.md).
 
 ## License
 

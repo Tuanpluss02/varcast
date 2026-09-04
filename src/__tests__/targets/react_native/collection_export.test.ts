@@ -1,8 +1,8 @@
 // Tests for React Native collection-based output structure.
 // Verifies that:
-// 1. NativeWind preset uses collection-based class names
-// 2. Unistyles themes organized by collection
-// 3. Alias references preserved in JS/TS output
+// 1. Collections are placed under src/tokens/primitives/ and src/tokens/tokens/
+// 2. Token files export typed collections and mode types
+// 3. Alias references are preserved with variable ID
 
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../../../core/emit_engine';
@@ -79,75 +79,46 @@ function collectionBasedIR(): IR {
   };
 }
 
-describe('NativeWind collection-based output', () => {
+describe('React Native collection-based output', () => {
   const out = runEngine(collectionBasedIR(), [reactNativeTarget], null, {
-    react_native: { flavor: 'nativewind', packageName: 'ds-nw' },
+    react_native: { packageName: 'ds-rn' },
   });
   const files = fileMap(out.files);
 
-  it('emits collection-based JS files with collection names', () => {
-    // Each collection gets its own file
-    expect(files.has('themes/color-basic.js')).toBe(true);
-    expect(files.has('themes/color-token.js')).toBe(true);
+  it('emits collection-based TS files with proper paths', () => {
+    expect(files.has('src/tokens/primitives/color-basic.ts')).toBe(true);
+    expect(files.has('src/tokens/tokens/color-token.ts')).toBe(true);
   });
 
-  it('collection file exports object with collection name', () => {
-    const colorBasic = files.get('themes/color-basic.js')!;
-    expect(colorBasic).toContain('export const ColorBasic = {');
-    expect(colorBasic).toContain("'white':");
-    expect(colorBasic).toContain("'neutral-900':");
-    expect(colorBasic).toContain('#FFFFFFFF');
+  it('collection file exports object with camelCase name and PascalCase type', () => {
+    const colorBasic = files.get('src/tokens/primitives/color-basic.ts')!;
+    expect(colorBasic).toContain('export const colorBasic =');
+    expect(colorBasic).toContain('export type ColorBasicMode =');
+    expect(colorBasic).toContain('export type ColorBasic =');
+    expect(colorBasic).toContain('"white":');
+    expect(colorBasic).toContain('"neutral900":');
   });
 
-  it('collection file preserves alias references as CollectionName.variableName format', () => {
-    const colorToken = files.get('themes/color-token.js')!;
-    // Alias should be preserved as cross-collection reference
-    expect(colorToken).toContain('ColorBasic.neutral900');
+  it('collection file preserves alias references in raw data', () => {
+    const colorToken = files.get('src/tokens/tokens/color-token.ts')!;
+    expect(colorToken).toContain('export const colorToken =');
+    expect(colorToken).toContain('export type ColorTokenMode =');
+    expect(colorToken).toContain('export type ColorToken =');
+    expect(colorToken).toContain('"v:neutral900"');
   });
 
-  it('emits barrel file exporting all collections', () => {
-    const collections = files.get('themes/collections.js')!;
-    expect(collections).toContain('ColorBasic');
-    expect(collections).toContain('ColorToken');
-    expect(collections).toContain("require('./color-basic.js')");
-    expect(collections).toContain("require('./color-token.js')");
-  });
-});
-
-describe('Unistyles collection-based output', () => {
-  const out = runEngine(collectionBasedIR(), [reactNativeTarget], null, {
-    react_native: { flavor: 'unistyles', packageName: 'ds-uni' },
-  });
-  const files = fileMap(out.files);
-
-  it('emits collection-based theme files with collection names', () => {
-    // Each collection gets its own theme file
-    expect(files.has('src/themes/ColorBasic.ts')).toBe(true);
-    expect(files.has('src/themes/ColorToken.ts')).toBe(true);
-  });
-
-  it('collection theme file exports mode-specific themes', () => {
-    const colorToken = files.get('src/themes/ColorToken.ts')!;
-    expect(colorToken).toContain('export const ColorTokenLight = {');
-    expect(colorToken).toContain('export const ColorTokenDark = {');
-  });
-
-  it('single-mode collection emits single theme object', () => {
-    const colorBasic = files.get('src/themes/ColorBasic.ts')!;
-    // Single-mode collection uses 'BaseMode' suffix
-    expect(colorBasic).toContain('export const ColorBasicBaseMode = {');
-  });
-
-  it('alias references are preserved with variable ID', () => {
-    const colorToken = files.get('src/themes/ColorToken.ts')!;
-    // Alias should include the target variable ID
-    expect(colorToken).toContain("kind: 'alias'");
-    expect(colorToken).toContain('target: "v:neutral900"');
+  it('emits runtime files and package manifest', () => {
+    expect(files.has('package.json')).toBe(true);
+    expect(files.has('tsconfig.json')).toBe(true);
+    expect(files.has('src/index.ts')).toBe(true);
+    expect(files.has('src/runtime/createTheme.ts')).toBe(true);
+    expect(files.has('src/runtime/modes.ts')).toBe(true);
+    expect(files.has('src/runtime/ThemeProvider.tsx')).toBe(true);
   });
 });
 
 describe('Alias resolution across collections', () => {
-  it('NativeWind preserves cross-collection alias references', () => {
+  it('preserves cross-collection alias references with variable ID', () => {
     const ir: IR = {
       version: '1.0',
       fileKey: 'k',
@@ -195,28 +166,18 @@ describe('Alias resolution across collections', () => {
       composites: { paintStyles: [], effectStyles: [], textStyles: [] },
     };
 
-    // NativeWind
-    const nwOut = runEngine(ir, [reactNativeTarget], null, {
-      react_native: { flavor: 'nativewind', packageName: 'ds-nw' },
+    const out = runEngine(ir, [reactNativeTarget], null, {
+      react_native: { packageName: 'ds-rn' },
     });
-    const nwFiles = fileMap(nwOut.files);
+    const files = fileMap(out.files);
 
-    const semantic = nwFiles.get('themes/semantic.js')!;
-    expect(semantic).toContain('Primitives.red500');
-
-    // Unistyles
-    const uniOut = runEngine(ir, [reactNativeTarget], null, {
-      react_native: { flavor: 'unistyles', packageName: 'ds-uni' },
-    });
-    const uniFiles = fileMap(uniOut.files);
-
-    const uniSemantic = uniFiles.get('src/themes/Semantic.ts')!;
-    expect(uniSemantic).toContain("target: \"v:prim-red\"");
+    const semantic = files.get('src/tokens/tokens/semantic.ts')!;
+    expect(semantic).toContain('"v:prim-red"');
   });
 });
 
 describe('Collection naming preserved from Figma', () => {
-  it('preserves exact collection name as PascalCase', () => {
+  it('preserves exact collection name as kebab-case file path and PascalCase type', () => {
     const ir: IR = {
       version: '1.0',
       fileKey: 'k',
@@ -244,22 +205,15 @@ describe('Collection naming preserved from Figma', () => {
       composites: { paintStyles: [], effectStyles: [], textStyles: [] },
     };
 
-    // NativeWind
-    const nwOut = runEngine(ir, [reactNativeTarget], null, {
-      react_native: { flavor: 'nativewind', packageName: 'ds-nw' },
+    const out = runEngine(ir, [reactNativeTarget], null, {
+      react_native: { packageName: 'ds-rn' },
     });
-    const nwFiles = fileMap(nwOut.files);
+    const files = fileMap(out.files);
 
-    expect(nwFiles.has('themes/my-fancy-collection.js')).toBe(true);
-    const collectionFile = nwFiles.get('themes/my-fancy-collection.js')!;
-    expect(collectionFile).toContain('export const MyFancyCollection = {');
-
-    // Unistyles
-    const uniOut = runEngine(ir, [reactNativeTarget], null, {
-      react_native: { flavor: 'unistyles', packageName: 'ds-uni' },
-    });
-    const uniFiles = fileMap(uniOut.files);
-
-    expect(uniFiles.has('src/themes/MyFancyCollection.ts')).toBe(true);
+    expect(files.has('src/tokens/primitives/my-fancy-collection.ts')).toBe(true);
+    const collectionFile = files.get('src/tokens/primitives/my-fancy-collection.ts')!;
+    expect(collectionFile).toContain('export const myFancyCollection =');
+    expect(collectionFile).toContain('export type MyFancyCollectionMode =');
+    expect(collectionFile).toContain('export type MyFancyCollection =');
   });
 });
