@@ -36,12 +36,19 @@ export function emitTheme(
   out += `\n`;
 
   for (const col of collections) {
-    out += `  static void set${col.className}Mode(${col.className}Mode m) =>\n`;
-    out += `      DesignSystemController.instance.set${col.className}Mode(m);\n\n`;
+    out += `  static void set${col.className}Mode(${col.className}Mode m, {Duration? duration}) =>\n`;
+    out += `      DesignSystemController.instance.set${col.className}Mode(m, duration: duration);\n\n`;
   }
 
-  out += `  static void setAnimationDuration(Duration d) =>\n`;
-  out += `      DesignSystemController.instance.setAnimationDuration(d);\n\n`;
+  out += `  /// Default animation duration for mode transitions. Defaults to [Duration.zero].\n`;
+  out += `  static Duration get defaultDuration =>\n`;
+  out += `      DesignSystemController.instance.defaultDuration;\n\n`;
+  out += `  static set defaultDuration(Duration d) {\n`;
+  out += `    assert(!d.isNegative, 'defaultDuration must not be negative');\n`;
+  out += `    DesignSystemController.instance.defaultDuration = d;\n`;
+  out += `  }\n\n`;
+
+  out += `  static void setAnimationDuration(Duration d) => defaultDuration = d;\n\n`;
 
   for (const col of collections) {
     out += `  static ${col.className}Mode get current${col.className}Mode =>\n`;

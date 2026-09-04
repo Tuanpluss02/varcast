@@ -198,11 +198,17 @@ function prepareCollection(
   }
   className = resolveStableCollectionName(col.id, className, manifest);
   const accessor = lowerFirst(className);
-  const modes: PreparedMode[] = col.modes.map((m) => ({
-    id: m.id,
-    pascal: sanitizeIdentifier(m.name, 'pascal'),
-    camel: sanitizeIdentifier(m.name, 'camel'),
-  }));
+  const modes: PreparedMode[] = col.modes.map((m) => {
+    // "Mode" conflicts with the enum naming pattern (FontFamilyMode.mode looks like enum ref)
+    // Rename to "default" for safety
+    let rawName = m.name;
+    if (rawName === 'Mode') rawName = 'default';
+    return {
+      id: m.id,
+      pascal: sanitizeIdentifier(rawName, 'pascal'),
+      camel: sanitizeIdentifier(rawName, 'camel'),
+    };
+  });
 
   // Sanitize each variable's path. Dedup is per-collection (a fresh ctx).
   const ctx = newSanitizeContext();

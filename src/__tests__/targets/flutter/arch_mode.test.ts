@@ -84,10 +84,11 @@ describe('Flutter static non-context emission', () => {
     expect(theme).toContain('static ColorTokenMode get currentColorTokenMode');
   });
 
-  it('wrapper uses ListenableBuilder without DesignSystemScope', () => {
+  it('wrapper uses _DSRebuildScope without DesignSystemScope', () => {
     const wrap = files.get('lib/src/wrapper.dart')!;
-    expect(wrap).toContain('ListenableBuilder(');
-    expect(wrap).toContain('listenable: DesignSystemController.instance');
+    expect(wrap).toContain('_DSRebuildScope');
+    expect(wrap).toContain('_DSRebuildElement');
+    expect(wrap).toContain('DesignSystemController.instance');
     expect(wrap).not.toContain('DesignSystemScope(');
   });
 

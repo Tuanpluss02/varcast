@@ -34,23 +34,22 @@ extension LerpImageFilter on ImageFilter {
 export function wrapperDartFile(): string {
   return (
     FILE_HEADER +
-    `import 'package:flutter/widgets.dart';
+    `import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 import '_internal/controller.dart';
 
 /// Place once near the root of your widget tree, above [MaterialApp].
 ///
-/// This widget attaches vsync for animated mode transitions and sets the
-/// animation duration. It does NOT force a subtree reset.
+/// This widget attaches vsync for animated mode transitions and rebuilds
+/// the entire subtree when modes change.
 class DesignSystemWrapper extends StatefulWidget {
   const DesignSystemWrapper({
     super.key,
-    required this.builder,
-    this.duration = Duration.zero,
+    required this.child,
   });
 
-  /// A builder callback that is re-evaluated when modes change.
-  final WidgetBuilder builder;
-  final Duration duration;
+  /// The root child widget (typically [MaterialApp]).
+  final Widget child;
 
   @override
   State<DesignSystemWrapper> createState() => _DesignSystemWrapperState();
@@ -62,30 +61,51 @@ class _DesignSystemWrapperState extends State<DesignSystemWrapper>
   void initState() {
     super.initState();
     DesignSystemController.instance
-      ..setAnimationDuration(widget.duration)
-      ..attachVsync(this);
+      ..attachVsync(this)
+      ..addListener(_onControllerChanged);
   }
 
-  @override
-  void didUpdateWidget(covariant DesignSystemWrapper old) {
-    super.didUpdateWidget(old);
-    if (old.duration != widget.duration) {
-      DesignSystemController.instance.setAnimationDuration(widget.duration);
-    }
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    DesignSystemController.instance.detachVsync();
+    DesignSystemController.instance
+      ..removeListener(_onControllerChanged)
+      ..detachVsync();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: DesignSystemController.instance,
-      builder: (context, _) => widget.builder(context),
-    );
+  Widget build(BuildContext context) => _DSRebuildScope(child: widget.child);
+}
+
+class _DSRebuildScope extends SingleChildRenderObjectWidget {
+  const _DSRebuildScope({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => RenderProxyBox();
+
+  @override
+  SingleChildRenderObjectElement createElement() => _DSRebuildElement(this);
+}
+
+class _DSRebuildElement extends SingleChildRenderObjectElement {
+  _DSRebuildElement(super.widget);
+
+  @override
+  void update(SingleChildRenderObjectWidget newWidget) {
+    super.update(newWidget);
+    _markNeedsBuildRecursive(this);
+  }
+
+  void _markNeedsBuildRecursive(Element element) {
+    if (!element.mounted) return;
+    if (element is ComponentElement) {
+      element.markNeedsBuild();
+    }
+    element.visitChildren(_markNeedsBuildRecursive);
   }
 }
 `
@@ -167,9 +187,8 @@ import 'package:${packageName}/${packageName}.dart';
 \`\`\`dart
 void main() {
   runApp(
-    DesignSystemWrapper(
-      duration: const Duration(milliseconds: 200),
-      builder: (_) => const MyApp(),
+    const DesignSystemWrapper(
+      child: MyApp(),
     ),
   );
 }
@@ -187,12 +206,22 @@ final r  = AppTheme.numberBasic.spacingN16;
 ## Switch modes at runtime
 
 \`\`\`dart
+// Instant mode switch (default: Duration.zero)
 AppTheme.setColorTokenMode(ColorTokenMode.darkMode);
+
+// Or with smooth transition animation
+AppTheme.setColorTokenMode(
+  ColorTokenMode.darkMode,
+  duration: const Duration(milliseconds: 200),
+);
+
+// Or configure global default duration
+AppTheme.defaultDuration = const Duration(milliseconds: 200);
 \`\`\`
 
 ## Rebuild on mode changes
 
-Tokens are read via \`AppTheme.*\`. \`DesignSystemWrapper\` provides the rebuild bridge via its \`builder\` callback whenever modes transition.
+Tokens are read via \`AppTheme.*\`. \`DesignSystemWrapper\` ensures that all widgets (including \`const\` widgets) are properly rebuilt whenever modes transition.
 
 ## What you can change
 

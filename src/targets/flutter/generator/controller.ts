@@ -24,26 +24,16 @@ export function emitController(
     out += controllerBlock(col);
   }
 
-  out += `  Duration _animDuration = const Duration(milliseconds: 300);\n`;
-  out += `  Duration get animDuration => _animDuration;\n\n`;
+  out += `  Duration defaultDuration = Duration.zero;\n\n`;
 
-  out += `  void setAnimationDuration(Duration d) {\n`;
-  out += `    _animDuration = d;\n`;
-  out += `    for (final c in _allAnims) c.duration = d;\n`;
-  out += `  }\n\n`;
-
-  out += `  List<AnimationController> get _allAnims => [\n`;
-  for (const col of collections) {
-    out += `    if (_${col.accessor}Anim != null) _${col.accessor}Anim!,\n`;
-  }
-  out += `  ];\n\n`;
+  out += `  void setAnimationDuration(Duration d) => defaultDuration = d;\n\n`;
 
   out += `  bool _vsyncAttached = false;\n\n`;
 
   out += `  void attachVsync(TickerProvider vsync) {\n`;
   out += `    if (_vsyncAttached) _detachControllers();\n`;
   out += `    _vsyncAttached = true;\n`;
-  out += `    AnimationController make() => AnimationController(vsync: vsync, duration: _animDuration)\n`;
+  out += `    AnimationController make() => AnimationController(vsync: vsync)\n`;
   out += `      ..addListener(notifyListeners);\n`;
   for (const col of collections) {
     out += `    _${col.accessor}Anim = make();\n`;
@@ -63,11 +53,13 @@ export function emitController(
   }
   out += `  }\n\n`;
 
-  out += `  void _trigger(AnimationController? anim) {\n`;
-  out += `    if (anim == null || _animDuration == Duration.zero) {\n`;
+  out += `  void _trigger(AnimationController? anim, Duration duration) {\n`;
+  out += `    if (anim == null || duration == Duration.zero) {\n`;
+  out += `      anim?.stop();\n`;
   out += `      notifyListeners();\n`;
   out += `      return;\n`;
   out += `    }\n`;
+  out += `    anim.duration = duration;\n`;
   out += `    anim.forward(from: 0);\n`;
   out += `  }\n\n`;
 
@@ -75,6 +67,7 @@ export function emitController(
   out += `  void resetForTest() {\n`;
   out += `    _detachControllers();\n`;
   out += `    _vsyncAttached = false;\n`;
+  out += `    defaultDuration = Duration.zero;\n`;
   for (const col of collections) {
     const def = defaultConcrete(col);
     out += `    _${col.accessor} = ${def}();\n`;
@@ -108,7 +101,7 @@ function controllerBlock(
   out += `    return _${accessor};\n`;
   out += `  }\n\n`;
 
-  out += `  void set${cls}Mode(${cls}Mode mode) {\n`;
+  out += `  void set${cls}Mode(${cls}Mode mode, {Duration? duration}) {\n`;
   out += `    if (mode == current${cls}Mode) return;\n`;
   out += `    current${cls}Mode = mode;\n`;
   out += `    _${accessor}Prev = ${accessor};\n`;
@@ -118,7 +111,7 @@ function controllerBlock(
     out += `      ${cls}Mode.${m.camel} => ${modeClassName}(),\n`;
   }
   out += `    };\n`;
-  out += `    _trigger(_${accessor}Anim);\n`;
+  out += `    _trigger(_${accessor}Anim, duration ?? defaultDuration);\n`;
   out += `  }\n\n`;
 
   return out;
