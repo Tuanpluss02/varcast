@@ -183,7 +183,6 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
 
 function modeKey(modeName: string): string {
   const base = camel(modeName);
-  // prefer explicit semantic keys like `darkMode`/`lightMode`
   return /mode$/i.test(base) ? base : `${base}Mode`;
 }
 
@@ -294,13 +293,10 @@ function dedupCompositeGetters<T extends { getterName: string }>(
     }
     const next = n + 1;
     used.set(key, next);
-    // JS/TS camelCase: keep digits attached (no underscore separator).
     it.getterName = `${base}${next}`;
   }
   return items;
 }
-
-// ── Variable literal resolver (for composites) ─────────────────────────────
 
 type Primitive = string | number | boolean;
 
@@ -308,7 +304,6 @@ function resolveAllVariableLiterals(ir: IR): Record<string, Record<string, Primi
   const allVars = new Map<string, IRVariable>();
   for (const c of ir.collections) for (const v of c.variables) allVars.set(v.id, v);
 
-  // Collect all modeIds from IR (across collections).
   const modeIds = new Set<string>();
   for (const c of ir.collections) for (const m of c.modes) modeIds.add(m.id);
 
@@ -333,9 +328,9 @@ function resolveValue(
   seen: Set<string>,
 ): Primitive | undefined {
   if (v.kind === 'literal') {
-    const x = v.value as any;
+    const x = v.value;
     if (typeof x === 'number' || typeof x === 'string' || typeof x === 'boolean') return x;
-    return rgbaToRRGGBBAA(x as RGBA);
+    return rgbaToRRGGBBAA(x);
   }
   const targetId = v.targetVariableId;
   if (seen.has(targetId)) return undefined;
@@ -352,7 +347,7 @@ export function resolveColorValueToHex(
   c: IRColorValue,
   resolvedVarByMode: Record<string, Record<string, Primitive>>,
 ): string | null {
-  if (c.kind === 'literal') return rgbaToRRGGBBAA(c.rgba as RGBA);
+  if (c.kind === 'literal') return rgbaToRRGGBBAA(c.rgba);
   const v = resolvedVarByMode[modeId]?.[c.targetVariableId];
   return typeof v === 'string' ? v : null;
 }
@@ -362,8 +357,8 @@ export function resolveTextValue<T extends Primitive>(
   v: IRTextValue<T>,
   resolvedVarByMode: Record<string, Record<string, Primitive>>,
 ): T | null {
-  if ((v as any).kind === 'literal') return (v as any).value as T;
-  const id = (v as any).targetVariableId as string;
+  if (v.kind === 'literal') return v.value;
+  const id = v.targetVariableId;
   const got = resolvedVarByMode[modeId]?.[id];
   return (got as T) ?? null;
 }
@@ -373,8 +368,8 @@ export function resolveTextValueWithUnit(
   v: IRTextValueWithUnit<number>,
   resolvedVarByMode: Record<string, Record<string, Primitive>>,
 ): { value: number; unit: 'PIXELS' | 'PERCENT' | 'AUTO' } | null {
-  if ((v as any).kind === 'literal') return { value: (v as any).value, unit: (v as any).unit };
-  const id = (v as any).targetVariableId as string;
+  if (v.kind === 'literal') return { value: v.value, unit: v.unit };
+  const id = v.targetVariableId;
   const got = resolvedVarByMode[modeId]?.[id];
   return typeof got === 'number' ? { value: got, unit: 'PIXELS' } : null;
 }

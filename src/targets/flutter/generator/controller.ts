@@ -1,9 +1,9 @@
 import { FILE_HEADER } from './emit_helpers';
 import type { PreparedCollection } from './prepare';
 
-// Emit the singleton DesignSystemController. One block per collection wires
-// up: current/prev value, animation controller, mode setter, getter.
-
+/**
+ * Emits the DesignSystemController singleton class managing runtime theme state and transitions.
+ */
 export function emitController(
   collections: PreparedCollection[],
 ): string {
@@ -11,7 +11,6 @@ export function emitController(
   out += `import 'package:flutter/animation.dart';\n`;
   out += `import 'package:flutter/foundation.dart';\n\n`;
   for (const col of collections) {
-    // Controller is at lib/src/_internal/, collections are at lib/src/collections/<col>/
     out += `import '../collections/${col.fileBaseName}/${col.fileBaseName}.dart';\n`;
   }
   out += `\n`;

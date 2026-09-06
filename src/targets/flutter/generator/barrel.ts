@@ -18,7 +18,6 @@ export function emitBarrel(
   out += `export 'src/design_system.dart' show DesignSystem;\n`;
   out += `export 'src/theme.dart' show AppTheme;\n\n`;
 
-  // Export each collection from its folder in src/collections/
   for (const col of collections) {
     out += `export 'src/collections/${col.fileBaseName}/${col.fileBaseName}.dart';\n`;
   }

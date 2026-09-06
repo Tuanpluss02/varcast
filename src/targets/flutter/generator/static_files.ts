@@ -1,5 +1,6 @@
-// Static (non-IR-dependent) files emitted into the package: lerp extensions,
-// the wrapper widget, pubspec, and the README scaffold.
+/**
+ * Static template generators for emitted Flutter package boilerplate files.
+ */
 
 import { FILE_HEADER } from './emit_helpers';
 

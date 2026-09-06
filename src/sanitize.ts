@@ -1,8 +1,6 @@
-// Flutter-flavoured sanitizer (legacy module).
-//
-// Composes neutral helpers from `core/sanitize_base.ts` with Dart-specific
-// reserved-word handling. New code should not import from this module —
-// during Phase 8 it moves to `targets/flutter/identifier.ts`.
+/**
+ * Sanitizer utilities for Flutter target identifiers.
+ */
 
 import { DART_KEYWORDS } from './conventions/dart_keywords';
 import {
@@ -15,9 +13,6 @@ import {
 export { processSegment, splitWords };
 
 export interface SanitizeContext {
-  // Map key: parent path joined with '/'; value: leaves used so far.
-  // Dedup is scoped per parent so `Background/primary` and `Action/primary`
-  // both keep the leaf name `primary`.
   existingByParent: Map<string, Set<string>>;
 }
 
@@ -58,8 +53,6 @@ export function sanitize(
 
   const notes: SanitizeResult['notes'] = {};
 
-  // Re-apply keyword check after camelCasing (toCamelCase may unmask a
-  // keyword that was hidden by the raw form, e.g. "DEFAULT" → "default").
   if (DART_KEYWORDS.has(leafName)) {
     notes.keywordFixedFrom = leafName;
     leafName = leafName + '_';
@@ -82,7 +75,9 @@ export function sanitize(
   return { groupPath, leafName, notes };
 }
 
-// Sanitize a Figma collection / mode name into a Dart identifier.
+/**
+ * Sanitizes a Figma collection or mode name into a valid Dart identifier.
+ */
 export function sanitizeIdentifier(
   raw: string,
   style: 'pascal' | 'camel' = 'pascal',
@@ -93,6 +88,5 @@ export function sanitizeIdentifier(
   return id;
 }
 
-// Re-export under historical names so existing imports keep working.
 export const toPascalCase = corePascalCase;
 export const toCamelCase = coreToCamelCase;

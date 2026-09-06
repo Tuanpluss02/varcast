@@ -199,8 +199,6 @@ function prepareCollection(
   className = resolveStableCollectionName(col.id, className, manifest);
   const accessor = lowerFirst(className);
   const modes: PreparedMode[] = col.modes.map((m) => {
-    // "Mode" conflicts with the enum naming pattern (FontFamilyMode.mode looks like enum ref)
-    // Rename to "default" for safety
     let rawName = m.name;
     if (rawName === 'Mode') rawName = 'default';
     return {
@@ -210,7 +208,6 @@ function prepareCollection(
     };
   });
 
-  // Sanitize each variable's path. Dedup is per-collection (a fresh ctx).
   const ctx = newSanitizeContext();
   const finalNamesByParent = new Map<string, Set<string>>();
   const variables: PreparedVariable[] = [];
@@ -375,7 +372,6 @@ function dedupCompositeGetters<T extends { getterName: string }>(
     }
     const next = n + 1;
     used.set(key, next);
-    // Dart lowerCamelCase: "shadowMd" + 2 = "shadowMd2", not "shadowMd_2".
     it.getterName = `${base}${next}`;
   }
   return items;

@@ -1,9 +1,6 @@
-// Legacy compat layer for the Flutter target.
-//
-// All new code should import from `core/manifest.ts`. This module re-exports
-// the v2 schema and exposes Flutter-flavoured `resolveStableName` /
-// `resolveStableCollectionName` / `diffManifest` helpers that hardcode
-// `targetId: 'flutter'` so existing callers keep working without churn.
+/**
+ * Compatibility wrapper for Flutter target manifest resolution.
+ */
 
 import {
   diffManifestForTarget,
@@ -42,9 +39,6 @@ export function resolveStableName(
     derivedLeafName,
     manifest,
   );
-  // Normalize against the full Flutter section so renames detect collisions
-  // (a legacy `bgSecondary_2` should not be renamed to `bgSecondary2` if some
-  // other variable in the same manifest is already called `bgSecondary2`).
   const section = manifest?.targets?.[FLUTTER_TARGET_ID];
   return normalizeLegacyLeafName(raw, section, variableId);
 }
@@ -69,14 +63,9 @@ export function diffManifest(
   return diffManifestForTarget(old, next, FLUTTER_TARGET_ID);
 }
 
-// Migration: older Flutter generators used `_2`, `_3` suffixes for dedup.
-// Dart public members should be lowerCamelCase without underscores. Convert
-// `foo_2` → `foo2`. Keyword fix-ups like `default_` are preserved.
-//
-// Collision-safe: if the renamed form matches the stable name of a *different*
-// variable in the same manifest section, keep the original name and let the
-// downstream dedup pass disambiguate. This prevents a silent rename that would
-// merge two variables onto the same Dart identifier.
+/**
+ * Normalizes legacy indexed variable leaf names (e.g. foo_2 to foo2).
+ */
 function normalizeLegacyLeafName(
   name: string,
   section: ManifestTargetSection | undefined,

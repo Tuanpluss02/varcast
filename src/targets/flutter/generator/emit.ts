@@ -1,5 +1,6 @@
-// Orchestrator: takes IR and returns all files for a complete Flutter
-// design-system package. This module must stay browser-safe (no fs/path).
+/**
+ * Emits all files for a complete Flutter design system package.
+ */
 
 import type { IR } from '../../../ir/types';
 import type { Manifest } from '../../../manifest';
@@ -26,22 +27,20 @@ import {
 } from './static_files';
 
 export interface EmittedFile {
-  path: string; // relative to package root
+  path: string;
   contents: string;
 }
 
 export function emitPreparedPackage(
-  prepared: PreparedIR,
+  prepared: Omit<PreparedIR, 'warnings'> & { warnings?: unknown },
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): { files: EmittedFile[]; nextManifest: Manifest } {
   const packageName = options.packageName;
 
-  // Filter collections
   const selectedColIds = options.include?.collections
     ? new Set(options.include.collections)
     : null;
 
-  // Drop empty collections — they would emit invalid Dart (zero-arm switch).
   const collections = prepared.collections.filter((c) => {
     if (c.variables.length === 0 || c.modes.length === 0) return false;
     if (selectedColIds) {
@@ -59,7 +58,6 @@ export function emitPreparedPackage(
   const exportedColIds = new Set(collections.map((c) => c.id));
   const files: EmittedFile[] = [];
 
-  // Per-collection files - stored in lib/src/collections/<col_snake_case>/
   for (const col of collections) {
     const colFiles = emitCollection(col, prepared.varIndex, exportedColIds, prepared.ir);
     for (const colFile of colFiles) {
@@ -70,7 +68,6 @@ export function emitPreparedPackage(
     }
   }
 
-  // Composite files (skip when no styles)
   const hasPaint =
     options.include.composites.colorStyles && prepared.paintStyles.length > 0;
   const hasEffect =
@@ -102,7 +99,6 @@ export function emitPreparedPackage(
     });
   }
 
-  // Internal + facade
   files.push({ path: 'lib/src/_internal/lerp.dart', contents: lerpDartFile() });
   files.push({
     path: 'lib/src/_internal/controller.dart',
@@ -122,7 +118,6 @@ export function emitPreparedPackage(
     contents: emitBarrel(collections, hasComposites),
   });
 
-  // Package metadata
   files.push({ path: 'pubspec.yaml', contents: pubspecYaml(packageName) });
   files.push({ path: 'README.md', contents: readmeMd(packageName) });
   files.push({
@@ -130,7 +125,6 @@ export function emitPreparedPackage(
     contents: smokeTestDartFile(packageName),
   });
 
-  // Debug artifact: ir.json (original Figma data for reference/debugging)
   if (prepared.ir) {
     files.push({
       path: '_meta/ir.json',

@@ -12,7 +12,6 @@ export function emitRuntime(prepared: PreparedRN): EmittedFile[] {
       ? `../tokens/primitives/${col.fileBaseName}`
       : `../tokens/tokens/${col.fileBaseName}`;
     imports.push(`import { ${col.exportName} } from '${rel}';`);
-    // default mode = first mode key (deterministic)
     const defaultModeKey = col.modes[0]?.key ?? 'default';
     modeDefaults.push(`  ${JSON.stringify(col.exportName)}: ${JSON.stringify(defaultModeKey)},`);
     attachLines.push(

@@ -89,8 +89,8 @@ function emitPaintGetter(
       return (
         `  SweepGradient get ${s.getterName} => SweepGradient(\n` +
         `    center: Alignment.center,\n` +
-        `    startAngle: ${doubleLiteral((r as any).startAngle)},\n` +
-        `    endAngle: ${doubleLiteral((r as any).endAngle)},\n` +
+        `    startAngle: ${doubleLiteral(r.startAngle)},\n` +
+        `    endAngle: ${doubleLiteral(r.endAngle)},\n` +
         `    stops: ${stopsLiteral(r.stops)},\n` +
         `    colors: [${r.stops.map((st) => colorRef(st.color, varIndex, exportedColIds, ir)).join(', ')}],\n` +
         `  );\n\n`
@@ -107,7 +107,7 @@ function emitPaintGetter(
         `  );\n\n`
       );
     case 'IMAGE':
-      return `  String get ${s.getterName} => ${stringLiteral(`packages/design_system/assets/${(r as any).assetName}`)};\n\n`;
+      return `  String get ${s.getterName} => ${stringLiteral(`packages/design_system/assets/${r.assetName}`)};\n\n`;
   }
 }
 
@@ -126,7 +126,6 @@ function colorRef(
         ref.leafName,
       );
     }
-    // Target collection not exported -> resolve to literal color
     const resolved = resolveToLiteralValue(c.targetVariableId, 0, ir);
     if (resolved && resolved.kind === 'literal' && typeof resolved.value === 'object') {
       return colorLiteral(resolved.value as { r: number; g: number; b: number; a: number });
@@ -188,7 +187,8 @@ function emitShadowGetter(
   exportedColIds?: Set<string>,
   ir?: IR,
 ): string {
-  const r = s.raw as any;
+  const r = s.raw;
+  if (r.type !== 'DROP_SHADOW' && r.type !== 'INNER_SHADOW') return '';
   const isDirectLiteral = r.color.kind === 'literal';
   const colorExpr = colorRef(r.color, varIndex, exportedColIds, ir);
   const colorIsConst = isDirectLiteral || colorExpr.startsWith('const Color(');
@@ -269,7 +269,7 @@ function emitTextGetter(
   exportedColIds?: Set<string>,
   ir?: IR,
 ): string {
-  const r = s.raw as IRTextStyle;
+  const r = s.raw;
   const fontSize = textValue(r.fontSize, varIndex, 'double', exportedColIds, ir);
   const fontFamily = textValue(r.fontFamily, varIndex, 'String', exportedColIds, ir);
   const fontWeight = textValue(r.fontWeight, varIndex, 'double', exportedColIds, ir);
@@ -296,10 +296,10 @@ function textValue<T>(
   exportedColIds?: Set<string>,
   ir?: IR,
 ): string {
-  if ((v as any).kind === 'alias')
-    return aliasExpr((v as any).targetVariableId, varIndex, type, exportedColIds, ir);
-  if (type === 'String') return stringLiteral((v as any).value as string);
-  return doubleLiteral((v as any).value as number);
+  if (v.kind === 'alias')
+    return aliasExpr(v.targetVariableId, varIndex, type, exportedColIds, ir);
+  if (type === 'String') return stringLiteral(v.value as string);
+  return doubleLiteral(v.value as number);
 }
 
 function lineHeightExpr(
@@ -308,11 +308,11 @@ function lineHeightExpr(
   exportedColIds?: Set<string>,
   ir?: IR,
 ): string {
-  if ((v as any).kind === 'alias')
-    return `(${aliasExpr((v as any).targetVariableId, varIndex, 'double', exportedColIds, ir)} / fs)`;
-  if ((v as any).unit === 'AUTO') return 'null';
-  if ((v as any).unit === 'PIXELS') return `(${doubleLiteral((v as any).value)} / fs)`;
-  return `${doubleLiteral(((v as any).value as number) / 100)}`;
+  if (v.kind === 'alias')
+    return `(${aliasExpr(v.targetVariableId, varIndex, 'double', exportedColIds, ir)} / fs)`;
+  if (v.unit === 'AUTO') return 'null';
+  if (v.unit === 'PIXELS') return `(${doubleLiteral(v.value)} / fs)`;
+  return `${doubleLiteral(v.value / 100)}`;
 }
 
 function letterSpacingExpr(
@@ -321,10 +321,10 @@ function letterSpacingExpr(
   exportedColIds?: Set<string>,
   ir?: IR,
 ): string {
-  if ((v as any).kind === 'alias')
-    return aliasExpr((v as any).targetVariableId, varIndex, 'double', exportedColIds, ir);
-  if ((v as any).unit === 'PIXELS') return doubleLiteral((v as any).value as number);
-  return `(${doubleLiteral(((v as any).value as number) / 100)} * fs)`;
+  if (v.kind === 'alias')
+    return aliasExpr(v.targetVariableId, varIndex, 'double', exportedColIds, ir);
+  if (v.unit === 'PIXELS') return doubleLiteral(v.value);
+  return `(${doubleLiteral(v.value / 100)} * fs)`;
 }
 
 function aliasExpr(
@@ -342,7 +342,6 @@ function aliasExpr(
       ref.leafName,
     );
   }
-  // Target collection not exported -> resolve to literal
   const resolved = resolveToLiteralValue(id, 0, ir);
   if (resolved && resolved.kind === 'literal') {
     if (type === 'String') return stringLiteral(resolved.value as string);

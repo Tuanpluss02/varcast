@@ -12,8 +12,6 @@ import type { IR } from '../ir/types';
 import type { Manifest } from './manifest';
 import type { EmittedFile, Target, TargetWarning } from './target';
 
-// ── Engine output ──────────────────────────────────────────────────────────
-
 export interface EngineOutput {
   /** Flat list of emitted files. Paths are prefixed with "<targetId>/" when
    *  multiple targets are requested in the same run. */
@@ -23,8 +21,6 @@ export interface EngineOutput {
   /** Aggregated non-fatal diagnostics from each target's prepare step. */
   warnings: TargetWarning[];
 }
-
-// ── Engine ─────────────────────────────────────────────────────────────────
 
 /**
  * Run the emit pipeline for one or more targets.
@@ -37,7 +33,7 @@ export interface EngineOutput {
  */
 export function runEngine(
   ir: IR,
-  targets: Target[],
+  targets: Target<any, any>[],
   manifest: Manifest | null,
   optionsByTarget: Record<string, unknown> = {},
 ): EngineOutput {

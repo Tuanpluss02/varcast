@@ -1,10 +1,9 @@
 import { FILE_HEADER } from './emit_helpers';
 import type { PreparedCollection } from './prepare';
 
-// Emit `lib/src/theme.dart`.
-// AppTheme is a static facade with per-collection getters that
-// delegate to the singleton controller. Composites are const instances.
-
+/**
+ * Emits the AppTheme static facade class file.
+ */
 export function emitTheme(
   collections: PreparedCollection[],
   hasComposites: { paintStyles: boolean; effectStyles: boolean; textStyles: boolean },

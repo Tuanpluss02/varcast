@@ -205,13 +205,11 @@ function renderCollections(cols: CollectionInfo[]) {
     header.appendChild(trigger);
     header.appendChild(sw);
 
-    // Expand/collapse on trigger click
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       group.classList.toggle('is-expanded');
     });
 
-    // Toggle switch on switch click or space/enter
     sw.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleDataOn(header);
@@ -553,8 +551,6 @@ function wireCopy(btn: HTMLButtonElement, getText: () => string) {
 wireCopy(byId<HTMLButtonElement>('copyErrors'), () => errList.textContent || '');
 wireCopy(copyCodeBtn, () => codeViewer.textContent || '');
 
-// ── Review screen rendering ────────────────────────────────────────────────
-
 type TreeNode = {
   name: string;
   type: 'dir' | 'file';
@@ -736,5 +732,4 @@ window.onmessage = (e: MessageEvent) => {
 updateMeta();
 go('home');
 
-// Request initial data from plugin
 postToPlugin({ type: 'init' });

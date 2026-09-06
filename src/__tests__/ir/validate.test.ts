@@ -50,7 +50,6 @@ function makeCol(
 
 const M1: IRMode = { id: 'm:1', name: 'Value' };
 
-// ── Rule 1: cycle detection ───────────────────────────────────────────────
 
 describe('cycle detection', () => {
   it('detects a cycle of length 2', () => {
@@ -139,7 +138,6 @@ describe('cycle detection', () => {
   });
 });
 
-// ── Rule 2: unresolved alias ──────────────────────────────────────────────
 
 describe('unresolved alias', () => {
   it('marks variable emitToPublic=false and emits a warning', () => {
@@ -158,7 +156,6 @@ describe('unresolved alias', () => {
   });
 });
 
-// ── Rule 3: float rounding ────────────────────────────────────────────────
 // (keyword conflict + duplicate name dedup moved to generator/prepare.ts — see
 //  __tests__/generator/prepare_stable_dedup.test.ts for coverage)
 
@@ -206,7 +203,6 @@ describe('float rounding', () => {
   });
 });
 
-// ── Rule 4: hidden flag ───────────────────────────────────────────────────
 
 describe('hidden flag', () => {
   it('hidden variable → emitToPublic=false, no warning', () => {
@@ -234,7 +230,6 @@ describe('hidden flag', () => {
   });
 });
 
-// ── Composites: diamond + image warnings ──────────────────────────────────
 
 describe('composite warnings', () => {
   it('GRADIENT_DIAMOND → DIAMOND_APPROXIMATED warning', () => {

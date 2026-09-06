@@ -1,18 +1,6 @@
-// Target-neutral identifier helpers.
-//
-// Everything here is shared by every target (Flutter, React Native, Swift,
-// Compose, …). Target-specific concerns live in the target's own
-// `identifier.ts` (reserved-word set, casing convention, reserved-word fix).
-//
-// Pipeline:
-//   raw Figma segment ──▶ transliterate ──▶ word-split ──▶ case helper
-
-// ── Vietnamese transliteration ─────────────────────────────────────────────
-//
-// Covers the Vietnamese alphabet plus common Latin diacritics so designers
-// from any locale produce safe identifiers. We keep this in core because it
-// has nothing to do with the output language.
-
+/**
+ * Transliteration mapping for Vietnamese alphabet and common Latin diacritics.
+ */
 const VIET_MAP: Record<string, string> = {
   à: 'a', á: 'a', â: 'a', ã: 'a', ä: 'a', å: 'a',
   è: 'e', é: 'e', ê: 'e', ë: 'e',
@@ -35,6 +23,9 @@ const VIET_MAP: Record<string, string> = {
   ß: 'ss',
 };
 
+/**
+ * Transliterates accented characters into standard ASCII representations.
+ */
 export function transliterate(s: string): string {
   let out = '';
   for (const ch of s) {
@@ -46,43 +37,30 @@ export function transliterate(s: string): string {
       out += ch;
     }
   }
-  // Strip any leftover combining marks (NFD-decomposed input).
   return out.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-// ── Segment normalisation ──────────────────────────────────────────────────
-//
-// Turns a raw Figma segment ("[1] Color-Basic", "Mặc định", "900") into a
-// space-separated word string suitable for case helpers. Numeric-only or
-// digit-leading segments get an `n` prefix so they yield valid identifiers
-// in every language we target.
-
+/**
+ * Normalizes a raw segment into space-separated alphanumeric words.
+ */
 export function processSegment(seg: string): string {
   let out = transliterate(seg);
-  // Replace separators with spaces so case helpers split on word boundaries.
   out = out.replace(/[\s\-_.]+/g, ' ');
-  // Strip anything that's not alphanumeric or space.
   out = out.replace(/[^a-zA-Z0-9 ]/g, '');
   out = out.trim();
   if (out.length === 0) return 'unnamed';
-  // Drop leading numeric-only words for multi-word segments (designer ordering
-  // prefixes like "[1] Color-Basic" → "Color Basic"); a single numeric word
-  // still gets the 'n' prefix below.
   const words = out.split(/\s+/);
   if (words.length > 1) {
     while (words.length > 1 && /^\d+$/.test(words[0])) words.shift();
     out = words.join(' ');
   }
-  // Numeric-only or starts with digit → prepend 'n'.
   if (/^\d/.test(out)) out = 'n' + out;
   return out;
 }
 
-// ── Word splitting ─────────────────────────────────────────────────────────
-//
-// Splits a normalised string into words. Handles space-separated, camelCase
-// boundaries, and digit boundaries so "lightMode2x" → ["light","Mode","2","x"].
-
+/**
+ * Splits a normalized string into constituent words across word and case boundaries.
+ */
 export function splitWords(s: string): string[] {
   const out: string[] = [];
   for (const chunk of s.split(/\s+/).filter(Boolean)) {
@@ -94,8 +72,6 @@ export function splitWords(s: string): string[] {
   }
   return out;
 }
-
-// ── Case helpers ───────────────────────────────────────────────────────────
 
 export function toPascalCase(s: string): string {
   return splitWords(s).map(capitalize).join('');

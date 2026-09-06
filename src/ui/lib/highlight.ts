@@ -38,8 +38,6 @@ export function highlight(code: string, path: string): string {
   return escapeHtml(code);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -54,8 +52,6 @@ function isIdentPart(ch: string): boolean {
   return /[\w$]/.test(ch);
 }
 
-// ── C-like (Dart, TS, JS) ─────────────────────────────────────────────────
-
 function highlightCLike(src: string, keywords: Set<string>): string {
   let out = '';
   let i = 0;
@@ -65,7 +61,6 @@ function highlightCLike(src: string, keywords: Set<string>): string {
     const ch = src[i];
     const ch2 = src[i + 1];
 
-    // Line comment
     if (ch === '/' && ch2 === '/') {
       const end = src.indexOf('\n', i);
       const stop = end === -1 ? n : end;
@@ -74,7 +69,6 @@ function highlightCLike(src: string, keywords: Set<string>): string {
       continue;
     }
 
-    // Block comment
     if (ch === '/' && ch2 === '*') {
       const end = src.indexOf('*/', i + 2);
       const stop = end === -1 ? n : end + 2;
@@ -83,7 +77,6 @@ function highlightCLike(src: string, keywords: Set<string>): string {
       continue;
     }
 
-    // Strings: "...", '...', `...` — single line, with backslash escapes.
     if (ch === '"' || ch === "'" || ch === '`') {
       const q = ch;
       let j = i + 1;
@@ -98,7 +91,6 @@ function highlightCLike(src: string, keywords: Set<string>): string {
       continue;
     }
 
-    // Numbers (decimal, hex, with exponent)
     if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(ch2 || ''))) {
       const slice = src.slice(i, Math.min(i + 32, n));
       const m = /^(0[xX][\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(slice);
@@ -109,7 +101,6 @@ function highlightCLike(src: string, keywords: Set<string>): string {
       }
     }
 
-    // Identifier / keyword / type
     if (isIdentStart(ch)) {
       let j = i + 1;
       while (j < n && isIdentPart(src[j])) j++;
@@ -124,14 +115,11 @@ function highlightCLike(src: string, keywords: Set<string>): string {
       continue;
     }
 
-    // Punctuation / whitespace / anything else
     out += escapeHtml(ch);
     i++;
   }
   return out;
 }
-
-// ── JSON ──────────────────────────────────────────────────────────────────
 
 function highlightJson(src: string): string {
   let out = '';
@@ -148,7 +136,6 @@ function highlightJson(src: string): string {
         else j++;
       }
       const stop = Math.min(j + 1, n);
-      // Look ahead past whitespace — if next non-space is `:`, it's a key.
       let k = stop;
       while (k < n && /\s/.test(src[k])) k++;
       const cls = src[k] === ':' ? 'tok-key' : 'tok-string';
@@ -181,8 +168,6 @@ function highlightJson(src: string): string {
   return out;
 }
 
-// ── YAML (line-by-line, good enough for pubspec) ──────────────────────────
-
 function highlightYaml(src: string): string {
   return src.split('\n').map(highlightYamlLine).join('\n');
 }
@@ -193,7 +178,6 @@ function highlightYamlLine(line: string): string {
   if (trimmed.startsWith('#')) {
     return `<span class="tok-comment">${escapeHtml(line)}</span>`;
   }
-  // Strip an inline trailing comment if present (heuristic: " # …" outside of strings)
   let body = line;
   let trailing = '';
   const hashIdx = findInlineCommentStart(line);
@@ -201,7 +185,6 @@ function highlightYamlLine(line: string): string {
     body = line.slice(0, hashIdx);
     trailing = `<span class="tok-comment">${escapeHtml(line.slice(hashIdx))}</span>`;
   }
-  // Match: leading indent, key, colon, gap, value
   const m = /^(\s*-?\s*)([^:#\s][^:]*?)(:)(\s*)(.*)$/.exec(body);
   if (m) {
     const [, prefix, key, colon, gap, val] = m;
@@ -218,7 +201,6 @@ function highlightYamlLine(line: string): string {
 }
 
 function findInlineCommentStart(line: string): number {
-  // Find a `#` that is preceded by whitespace and not inside quotes.
   let inSingle = false;
   let inDouble = false;
   for (let i = 0; i < line.length; i++) {

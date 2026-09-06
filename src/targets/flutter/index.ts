@@ -2,7 +2,7 @@ import type { IR } from '../../ir/types';
 import type { Manifest, ManifestTargetSection } from '../../core/manifest';
 import type { EmittedFile, PreparedIR, Target, TargetWarning } from '../../core/target';
 import type { ExportOptions } from './generator/options';
-import { DEFAULT_EXPORT_OPTIONS } from './generator/options';
+import { normalizeExportOptions } from './generator/options';
 import { prepareIR as prepareFlutterIR } from './generator/prepare';
 import type { PreparedWarning } from './generator/prepare';
 import { emitPreparedPackage } from './generator/emit';
@@ -11,7 +11,9 @@ import { flutterTypeMapping } from './type_mapping';
 
 export type FlutterOptions = ExportOptions;
 
-type PreparedFlutter = Omit<ReturnType<typeof prepareFlutterIR>, 'warnings'> & PreparedIR;
+export type PreparedFlutter = PreparedIR & {
+  flutterPrepared: ReturnType<typeof prepareFlutterIR>;
+};
 
 function toTargetSection(prepared: ReturnType<typeof prepareFlutterIR>): ManifestTargetSection {
   return (
@@ -41,26 +43,25 @@ function toTargetWarnings(ws: PreparedWarning[]): TargetWarning[] {
   });
 }
 
-export const flutterTarget: Target = {
+export const flutterTarget: Target<FlutterOptions, PreparedFlutter> = {
   id: 'flutter',
   profile: flutterIdentifierProfile,
   typeMapping: flutterTypeMapping,
 
-  prepare(ir: IR, manifest: Manifest | null, options: unknown): PreparedFlutter {
-    const o = (options as FlutterOptions | undefined) ?? DEFAULT_EXPORT_OPTIONS;
-    const prepared = prepareFlutterIR(ir, manifest as any, o);
-    const { warnings: preparedWarnings, ...rest } = prepared;
+  prepare(ir: IR, manifest: Manifest | null, options?: FlutterOptions): PreparedFlutter {
+    const o = normalizeExportOptions(options);
+    const prepared = prepareFlutterIR(ir, manifest, o);
+    const { warnings: preparedWarnings } = prepared;
     return {
-      ...rest,
+      flutterPrepared: prepared,
       nextManifestSection: toTargetSection(prepared),
       warnings: toTargetWarnings(preparedWarnings),
     };
   },
 
-  emit(prepared: PreparedIR, options: unknown): EmittedFile[] {
-    const o = (options as FlutterOptions | undefined) ?? DEFAULT_EXPORT_OPTIONS;
-    const out = emitPreparedPackage(prepared as any, o);
+  emit(prepared: PreparedFlutter, options?: FlutterOptions): EmittedFile[] {
+    const o = normalizeExportOptions(options);
+    const out = emitPreparedPackage(prepared.flutterPrepared, o);
     return out.files;
   },
 };
-

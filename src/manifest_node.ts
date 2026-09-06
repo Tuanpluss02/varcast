@@ -1,5 +1,6 @@
-// Node-only manifest persistence. Keep separate so the Figma plugin bundle
-// never imports `fs`/`path`.
+/**
+ * Node.js filesystem persistence utilities for manifest data.
+ */
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,7 +19,6 @@ export function loadManifest(packagePath: string): Manifest | null {
   } catch {
     return null;
   }
-  // normalizeManifest auto-migrates v1 → v2 transparently.
   return normalizeManifest(parsed);
 }
 

@@ -6,14 +6,13 @@ import type { PreparedRN, PreparedRNCollection, PreparedRNVariable } from './pre
 type AliasMarker = { $alias: string };
 
 function isAliasMarker(x: unknown): x is AliasMarker {
-  return Boolean(x && typeof x === 'object' && '$alias' in (x as any));
+  return Boolean(x && typeof x === 'object' && '$alias' in x);
 }
 
 function valueLiteral(v: IRValue): unknown {
   if (v.kind === 'alias') return { $alias: v.targetVariableId } satisfies AliasMarker;
-  const val = v.value as any;
+  const val = v.value;
   if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') return val;
-  // RGBA
   return rgbaToRRGGBBAA(val);
 }
 

@@ -1,29 +1,11 @@
-// Target-neutral manifest schema (v2).
-//
-// Manifest persists "stable identifiers" across re-exports so that designer
-// renames in Figma do not break consumer code. v2 keys identifiers per-target
-// because Flutter and React Native (and Swift, Compose, …) each have their
-// own naming conventions and reserved-word lists — a Dart-stable name is not
-// necessarily a JS-stable name.
-//
-// Schema versions:
-//   v1: { variables, collections, figmaNames? }                  (Flutter-only)
-//   v2: { targets: { <id>: { variables, collections, figmaNames? } } }
-//
-// `loadManifest` migrates v1 → v2 transparently (assumes the v1 manifest
-// belongs to the `flutter` target, which is the only target that ever wrote
-// v1 manifests).
-
+/**
+ * Manifest version for stable identifier persistence across re-exports.
+ */
 export const MANIFEST_VERSION = '2.0' as const;
 
-// ── v2 (current) ──────────────────────────────────────────────────────────
-
 export interface ManifestTargetSection {
-  /** VariableID → stable leaf name (camelCase / per-target convention). */
   variables: Record<string, string>;
-  /** VariableCollectionID → stable class/type name (PascalCase / per-target). */
   collections: Record<string, string>;
-  /** Last-seen Figma names — used to produce a useful diff for humans. */
   figmaNames?: {
     variables: Record<string, string>;
     collections: Record<string, string>;
@@ -41,12 +23,12 @@ export type ManifestDiffEntry =
   | { kind: 'added'; id: string; name: string; figmaName: string }
   | { kind: 'removed'; id: string; name: string; figmaName: string }
   | {
-      kind: 'renamed';
-      id: string;
-      name: string;
-      oldFigmaName: string;
-      newFigmaName: string;
-    };
+    kind: 'renamed';
+    id: string;
+    name: string;
+    oldFigmaName: string;
+    newFigmaName: string;
+  };
 
 export interface ManifestDiff {
   added: Array<{ id: string; name: string; figmaName: string }>;
@@ -59,8 +41,6 @@ export interface ManifestDiff {
   }>;
 }
 
-// ── v1 (legacy, for migration only) ───────────────────────────────────────
-
 interface ManifestV1 {
   version: '1.0';
   fileKey: string;
@@ -72,8 +52,6 @@ interface ManifestV1 {
     collections: Record<string, string>;
   };
 }
-
-// ── helpers ────────────────────────────────────────────────────────────────
 
 export function emptyManifest(fileKey = ''): Manifest {
   return {
@@ -95,8 +73,9 @@ export function getTargetSection(
   return manifest?.targets?.[targetId] ?? null;
 }
 
-// Normalise a raw object into a v2 manifest. Returns null if shape is not
-// recognisable (unknown version, missing required fields).
+/**
+ * Normalizes a raw object into a v2 manifest, or returns null if unrecognized.
+ */
 export function normalizeManifest(raw: unknown): Manifest | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as { version?: string };
@@ -124,8 +103,6 @@ function validateV2(raw: unknown): Manifest | null {
 }
 
 function migrateV1(v1: ManifestV1): Manifest {
-  // Anything that wrote v1 was the Flutter generator (only target before the
-  // multi-target refactor), so attribute the section to `flutter`.
   return {
     version: MANIFEST_VERSION,
     fileKey: v1.fileKey,
@@ -140,12 +117,9 @@ function migrateV1(v1: ManifestV1): Manifest {
   };
 }
 
-// ── stable-name resolution ────────────────────────────────────────────────
-//
-// Each target consults the manifest with its own targetId. If the variable
-// was previously exported under that target, return the stored name;
-// otherwise fall back to the freshly-derived name.
-
+/**
+ * Resolves a variable name against a target's saved manifest entries.
+ */
 export function resolveStableVariableName(
   targetId: string,
   variableId: string,
@@ -166,11 +140,9 @@ export function resolveStableCollectionName(
   );
 }
 
-// ── diff ──────────────────────────────────────────────────────────────────
-//
-// Diffs two target sections (added/removed/renamed). The wider per-target
-// schema means callers must specify which target's diff they want.
-
+/**
+ * Computes difference between two target sections (added, removed, renamed).
+ */
 export function diffTargetSection(
   oldSection: ManifestTargetSection | null,
   nextSection: ManifestTargetSection,
@@ -208,7 +180,9 @@ export function diffTargetSection(
   return { added, removed, renamed };
 }
 
-// Convenience wrapper for the common case of "diff a single target".
+/**
+ * Computes difference between two manifests for a specific target.
+ */
 export function diffManifestForTarget(
   oldManifest: Manifest | null,
   nextManifest: Manifest,

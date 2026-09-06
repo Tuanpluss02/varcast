@@ -1,10 +1,6 @@
-// CLI: read IR JSON, validate, write a Flutter package.
-//
-// Usage:
-//   npx tsx src/generator_cli.ts --ir path/to/ir.json --out path/to/out [--name design_system] [--collections col1,col2]
-//
-// Or after `npm run build:cli` (esbuild bundle to dist/cli.js):
-//   node dist/cli.js --ir path/to/ir.json --out path/to/out
+/**
+ * Command-line interface for reading IR JSON, validating, and generating packages.
+ */
 
 import * as fs from 'fs';
 import * as path from 'path';

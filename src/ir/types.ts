@@ -1,6 +1,6 @@
-// Intermediate Representation types — the contract between reader and generator.
-// Reader writes IR; generator reads IR. No other code should hand-roll these shapes.
-
+/**
+ * Intermediate Representation types representing normalized Figma design tokens and styles.
+ */
 export interface IR {
   version: '1.0';
   fileKey: string;
@@ -75,8 +75,6 @@ export interface IRComposites {
   textStyles: IRTextStyle[];
 }
 
-// ── Paint styles ────────────────────────────────────────────────────────────
-
 export type IRPaintStyle =
   | IRSolid
   | IRGradientLinear
@@ -136,8 +134,6 @@ export type IRColorValue =
   | { kind: 'literal'; rgba: RGBA }
   | { kind: 'alias'; targetVariableId: string };
 
-// ── Effect styles ───────────────────────────────────────────────────────────
-
 export type IREffectStyle =
   | IRDropShadow
   | IRInnerShadow
@@ -179,8 +175,6 @@ export interface IRBackgroundBlur extends IREffectStyleBase {
   sigmaX: number;
   sigmaY: number;
 }
-
-// ── Text styles ─────────────────────────────────────────────────────────────
 
 export interface IRTextStyle {
   id: string;

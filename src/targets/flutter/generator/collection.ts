@@ -128,7 +128,6 @@ export function emitCollectionBaseClass(
   const baseClassName = `${cn}`;
   const usesColor = collectionUsesColor(col);
 
-  // Attach flat getter name to each variable once.
   const vars = col.variables.map((v) => ({
     v,
     getter: flatGetterName(v.groupPath, v.leafName),
@@ -138,12 +137,10 @@ export function emitCollectionBaseClass(
   if (usesColor) {
     out += `import 'package:flutter/painting.dart';\n`;
   }
-  // lerp.dart is located in lib/src/_internal/lerp.dart; collection files are in lib/src/collections/<col>/
   if (col.variables.length > 0) {
     out += `import '../../_internal/lerp.dart';\n`;
   }
 
-  // ── Export mode files ────────────────────────────────────────────────────
   for (const mode of col.modes) {
     const exportFileName = `${modeToSnakeCase(mode.pascal)}.dart`;
     out += `export '${exportFileName}';\n`;
@@ -151,7 +148,6 @@ export function emitCollectionBaseClass(
 
   out += '\n';
 
-  // ── Abstract base class ────────────────────────────────────────────────────
   out += `abstract class ${baseClassName} {\n`;
   out += `  const ${baseClassName}();\n`;
   for (const { v, getter } of vars) {
@@ -164,7 +160,6 @@ export function emitCollectionBaseClass(
   }
   out += `      );\n}\n\n`;
 
-  // ── Lerped class ───────────────────────────────────────────────────────────
   out += `class _${cn}Lerp extends ${baseClassName} {\n`;
   if (vars.length > 0) {
     out += `  const _${cn}Lerp({\n`;
@@ -178,7 +173,6 @@ export function emitCollectionBaseClass(
   }
   out += `}\n\n`;
 
-  // ── Mode enum ─────────────────────────────────────────────────────────────
   out += `enum ${cn}Mode { ${col.modes.map((m) => m.camel).join(', ')} }\n`;
 
   return out;
@@ -203,7 +197,6 @@ export function emitCollectionModeClass(
   const usesColor = collectionUsesColor(col);
   const usesAlias = collectionUsesExportedAlias(col, varIndex, exportedColIds);
 
-  // Attach flat getter name to each variable once.
   const vars = col.variables.map((v) => ({
     v,
     getter: flatGetterName(v.groupPath, v.leafName),
@@ -217,17 +210,14 @@ export function emitCollectionModeClass(
       out += `import 'package:flutter/painting.dart';\n`;
     }
 
-    // Always import own collection's base file to extend its base class
     out += `import '${col.fileBaseName}.dart';\n`;
 
-    // Static mode: need theme import for AppTheme when aliases to exported collections are used
     if (usesAlias) {
       out += `import '../../theme.dart';\n`;
     }
     out += '\n';
   }
 
-  // ── Mode-specific concrete class ──────────────────────────────────────────
   out += `class ${modeClassName} extends ${baseClassName} {\n`;
   out += `  const ${modeClassName}();\n`;
   for (const { v, getter } of vars) {
@@ -251,14 +241,12 @@ export function emitCollection(
 ): CollectionFile[] {
   const files: CollectionFile[] = [];
 
-  // Emit base class file
   const baseClassFile: CollectionFile = {
     fileName: `${col.fileBaseName}.dart`,
     contents: emitCollectionBaseClass(col),
   };
   files.push(baseClassFile);
 
-  // Emit mode files in separate files
   for (const mode of col.modes) {
     const modeFile: CollectionFile = {
       fileName: `${modeToSnakeCase(mode.pascal)}.dart`,
@@ -281,7 +269,6 @@ export function emitValueExpr(
   if (!val) return defaultExprFor(v.dartType);
   if (val.kind === 'alias') {
     const ref = varIndex.get(val.targetVariableId);
-    // If target collection is exported, use alias via AppTheme
     if (ref && (!exportedColIds || exportedColIds.has(ref.collectionId))) {
       return flatAliasExpr(
         ref.collectionAccessor,
@@ -289,7 +276,6 @@ export function emitValueExpr(
         ref.leafName,
       );
     }
-    // Target collection is NOT exported -> inline literal value
     const resolved = resolveToLiteralValue(val.targetVariableId, modeId, ir);
     if (resolved && resolved.kind === 'literal') {
       return literalFor(v.dartType, resolved);

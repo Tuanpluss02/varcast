@@ -10,7 +10,9 @@ export interface VarsMock {
 }
 
 export function installVariablesMock(state: VarsMock) {
-  (global as unknown as { figma: unknown }).figma = {
+  const g = global as unknown as { figma?: Record<string, unknown> };
+  g.figma = {
+    ...g.figma,
     variables: {
       getLocalVariableCollectionsAsync: vi.fn(async () => state.collections),
       getLocalVariablesAsync: vi.fn(async () => state.variables),
@@ -19,19 +21,25 @@ export function installVariablesMock(state: VarsMock) {
 }
 
 export function installPaintStylesMock(styles: unknown[]) {
-  (global as unknown as { figma: unknown }).figma = {
+  const g = global as unknown as { figma?: Record<string, unknown> };
+  g.figma = {
+    ...g.figma,
     getLocalPaintStylesAsync: vi.fn(async () => styles),
   };
 }
 
 export function installEffectStylesMock(styles: unknown[]) {
-  (global as unknown as { figma: unknown }).figma = {
+  const g = global as unknown as { figma?: Record<string, unknown> };
+  g.figma = {
+    ...g.figma,
     getLocalEffectStylesAsync: vi.fn(async () => styles),
   };
 }
 
 export function installTextStylesMock(styles: unknown[]) {
-  (global as unknown as { figma: unknown }).figma = {
+  const g = global as unknown as { figma?: Record<string, unknown> };
+  g.figma = {
+    ...g.figma,
     getLocalTextStylesAsync: vi.fn(async () => styles),
   };
 }

@@ -44,12 +44,12 @@ export interface PreparedIR {
   warnings?: TargetWarning[];
 }
 
-export interface Target {
+export interface Target<TOptions = unknown, TPrepared extends PreparedIR = PreparedIR> {
   readonly id: string;
   readonly profile: IdentifierProfile;
   readonly typeMapping: TypeMapping;
 
-  prepare(ir: IR, manifest: Manifest | null, options: unknown): PreparedIR;
-  emit(prepared: PreparedIR, options: unknown): EmittedFile[];
+  prepare(ir: IR, manifest: Manifest | null, options?: TOptions): TPrepared;
+  emit(prepared: TPrepared, options?: TOptions): EmittedFile[];
 }
 

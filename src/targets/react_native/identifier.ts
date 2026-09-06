@@ -7,8 +7,9 @@ import {
 } from '../../core/sanitize_base';
 import type { IdentifierProfile } from '../../core/target';
 
-// Minimal JS/TS reserved words set (expand later if needed).
-// Includes JS keywords + a few built-ins that cause ergonomic issues.
+/**
+ * Reserved words in JavaScript and TypeScript environments.
+ */
 const JS_RESERVED = new Set<string>([
   'break','case','catch','class','const','continue','debugger','default','delete',
   'do','else','export','extends','finally','for','function','if','import','in',

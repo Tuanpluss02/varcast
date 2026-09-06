@@ -1,9 +1,5 @@
-/* ============================================================
-   Varcast UI · Flat dark theme
-   ============================================================ */
-
 :root {
-  /* Neutral gray dark — bg lighter than before, cards visibly elevated. */
+  
   --bg: #1c1c1f;
   --bg-elev: #2a2a2f;
   --bg-elev-2: #34343a;
@@ -54,9 +50,6 @@ body {
   overflow: hidden;
 }
 
-/* ============================================================
-   Cards
-   ============================================================ */
 main {
   flex: 1 1 auto;
   min-height: 0;
@@ -110,9 +103,6 @@ main {
   align-items: flex-end;
 }
 
-/* ============================================================
-   Info button + tooltip (CSS-only)
-   ============================================================ */
 .info {
   width: 14px;
   height: 14px;
@@ -160,9 +150,6 @@ main {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
 }
 
-/* ============================================================
-   Fields
-   ============================================================ */
 .field {
   display: flex;
   flex-direction: column;
@@ -233,9 +220,6 @@ code {
   color: var(--ink-dim);
 }
 
-/* ============================================================
-   Toggle (accessible switch)
-   ============================================================ */
 .toggle {
   display: flex;
   align-items: center;
@@ -324,9 +308,6 @@ code {
   white-space: nowrap;
 }
 
-/* ============================================================
-   Review screen — diff bar, file tree, code viewer
-   ============================================================ */
 .diff-bar {
   display: flex;
   flex-wrap: wrap;
@@ -438,7 +419,6 @@ code {
   min-height: 0;
 }
 
-/* Syntax tokens (set by highlight.ts) */
 .code .tok-comment { color: #6b7280; font-style: italic; }
 .code .tok-string  { color: #a6e3a1; }
 .code .tok-keyword { color: #c792ea; }
@@ -446,9 +426,6 @@ code {
 .code .tok-type    { color: #82aaff; }
 .code .tok-key     { color: #82aaff; }
 
-/* ============================================================
-   Buttons
-   ============================================================ */
 .cta {
   font-family: inherit;
   font-size: 12px;
@@ -527,9 +504,6 @@ code {
   border-color: rgba(52, 211, 153, 0.4);
 }
 
-/* ============================================================
-   Action bar
-   ============================================================ */
 .actions {
   flex-shrink: 0;
   padding: 10px 14px;
@@ -546,9 +520,6 @@ code {
   gap: 10px;
 }
 
-/* ============================================================
-   Status / log / spinner
-   ============================================================ */
 .status-line {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
@@ -599,9 +570,6 @@ code {
   }
 }
 
-/* ============================================================
-   Loading overlay
-   ============================================================ */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -625,9 +593,6 @@ code {
   color: var(--ink-mute);
 }
 
-/* ============================================================
-   Screens & utilities
-   ============================================================ */
 .screen {
   display: flex;
   flex-direction: column;
@@ -645,7 +610,6 @@ code {
   display: none !important;
 }
 
-/* Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -661,7 +625,6 @@ code {
   background: var(--ink-mute);
 }
 
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -671,9 +634,6 @@ code {
   }
 }
 
-/* ============================================================
-   Expandable Accordion, Sticky Headers & Visual Previews
-   ============================================================ */
 .accordion-list {
   display: flex;
   flex-direction: column;
@@ -836,4 +796,3 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-

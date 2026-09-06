@@ -1,8 +1,8 @@
 import type { IREffectStyle, IRColorValue, RGBA } from '../ir/types';
 
-// Reads all local EffectStyles. Each effect within a style becomes one IR entry,
-// so a "Card / Elevated" style with two drop shadows yields two IR entries that
-// share style.id and style.name — Phase 3/4 dedupes leaf names if needed.
+/**
+ * Reads local Figma effect styles into IR effect style representations.
+ */
 export async function readEffectStyles(): Promise<IREffectStyle[]> {
   const styles = await figma.getLocalEffectStylesAsync();
   const out: IREffectStyle[] = [];

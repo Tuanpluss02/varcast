@@ -20,30 +20,47 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   },
 };
 
-export function normalizeExportOptions(input: any): ExportOptions {
+export type PartialExportOptions = {
+  packageName?: string;
+  include?: {
+    collections?: string[];
+    primitives?: boolean;
+    tokens?: boolean;
+    composites?: {
+      colorStyles?: boolean;
+      shadows?: boolean;
+      textStyles?: boolean;
+    };
+  };
+};
+
+export function normalizeExportOptions(input?: PartialExportOptions | unknown): ExportOptions {
   const o: ExportOptions = JSON.parse(JSON.stringify(DEFAULT_EXPORT_OPTIONS));
   if (input && typeof input === 'object') {
-    if (typeof input.packageName === 'string' && input.packageName.trim())
-      o.packageName = sanitizePackageName(input.packageName.trim());
-    if (Array.isArray(input.include?.collections)) {
-      o.include.collections = input.include.collections.filter(
-        (x: any) => typeof x === 'string' && x.trim().length > 0,
+    const inp = input as PartialExportOptions;
+    if (typeof inp.packageName === 'string' && inp.packageName.trim())
+      o.packageName = sanitizePackageName(inp.packageName.trim());
+    if (Array.isArray(inp.include?.collections)) {
+      o.include.collections = inp.include.collections.filter(
+        (x): x is string => typeof x === 'string' && x.trim().length > 0,
       );
     }
-    if (input.include?.primitives !== undefined) o.include.primitives = input.include.primitives;
-    if (input.include?.tokens !== undefined) o.include.tokens = input.include.tokens;
-    if (input.include?.composites?.colorStyles === false)
+    if (inp.include?.primitives !== undefined) o.include.primitives = inp.include.primitives;
+    if (inp.include?.tokens !== undefined) o.include.tokens = inp.include.tokens;
+    if (inp.include?.composites?.colorStyles === false)
       o.include.composites.colorStyles = false;
-    if (input.include?.composites?.shadows === false)
+    if (inp.include?.composites?.shadows === false)
       o.include.composites.shadows = false;
-    if (input.include?.composites?.textStyles === false)
+    if (inp.include?.composites?.textStyles === false)
       o.include.composites.textStyles = false;
   }
   return o;
 }
 
+/**
+ * Sanitizes a package name into a valid Dart pub package identifier (lowercase_with_underscores).
+ */
 function sanitizePackageName(name: string): string {
-  // Dart pub package naming: lowercase_with_underscores
   return (
     name
       .toLowerCase()
