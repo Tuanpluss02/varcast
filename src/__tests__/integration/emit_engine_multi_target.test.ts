@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { validate } from '../../ir/validate';
 import { runEngine } from '../../core/emit_engine';
+import { buildSemanticGraph } from '../../core/graph/build_graph';
 import { flutterTarget } from '../../targets/flutter';
 import { reactNativeTarget } from '../../targets/react_native';
 import type { IR } from '../../ir/types';
@@ -107,5 +108,52 @@ describe('Emit engine: multi-target simultaneous run', () => {
 
   it('nextManifest.fileKey matches ir.fileKey', () => {
     expect(output.nextManifest.fileKey).toBe(ir.fileKey);
+  });
+
+  it('computes diffsByTarget for each executed target', () => {
+    expect(output.diffsByTarget).toBeDefined();
+    expect(output.diffsByTarget['flutter']).toBeDefined();
+    expect(output.diffsByTarget['react_native']).toBeDefined();
+    expect(output.diffsByTarget['flutter'].variables.added.length).toBeGreaterThan(0);
+    expect(output.diffsByTarget['react_native'].variables.added.length).toBeGreaterThan(0);
+  });
+
+  it('accepts target IDs as strings and produces identical output', () => {
+    const stringOutput = runEngine(ir, ['flutter', 'react_native'], null, {
+      flutter: { packageName: 'design_system' },
+      react_native: { packageName: 'design-system' },
+    });
+    expect(stringOutput.files.map((f) => f.path)).toEqual(output.files.map((f) => f.path));
+    expect(stringOutput.nextManifest.fileKey).toBe(output.nextManifest.fileKey);
+    expect(stringOutput.diffsByTarget['flutter'].variables.added.length).toBe(
+      output.diffsByTarget['flutter'].variables.added.length,
+    );
+  });
+
+  it('preserves unselected target manifest sections when running a subset', () => {
+    // Re-run with flutter only, passing previous nextManifest
+    const flutterOnlyOutput = runEngine(ir, ['flutter'], output.nextManifest, {
+      flutter: { packageName: 'design_system' },
+    });
+    // Flutter section updated
+    expect(flutterOnlyOutput.nextManifest.targets['flutter']).toBeDefined();
+    // React Native section preserved from previous manifest
+    expect(flutterOnlyOutput.nextManifest.targets['react_native']).toBeDefined();
+    expect(flutterOnlyOutput.nextManifest.targets['react_native']).toEqual(
+      output.nextManifest.targets['react_native'],
+    );
+    // Single target emit produces unprefixed paths
+    expect(flutterOnlyOutput.files.every((f) => !f.path.startsWith('flutter/'))).toBe(true);
+    expect(flutterOnlyOutput.diffsByTarget['flutter'].variables.added).toHaveLength(0); // no changes
+  });
+
+  it('accepts pre-built SemanticTokenGraph directly', () => {
+    const graph = buildSemanticGraph(ir);
+    const graphOutput = runEngine(graph, [flutterTarget, reactNativeTarget], null, {
+      flutter: { packageName: 'design_system' },
+      react_native: { packageName: 'design-system' },
+    });
+    expect(graphOutput.files.length).toBe(output.files.length);
+    expect(graphOutput.nextManifest.fileKey).toBe(ir.fileKey);
   });
 });
