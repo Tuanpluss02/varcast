@@ -31,7 +31,6 @@ describe('Cross-target consistency: Flutter vs React Native', () => {
       flutter: { packageName: 'design_system' },
     });
 
-    // Re-parse IR because validate() mutates in-place (normalizeIR).
     const ir2: IR = JSON.parse(fs.readFileSync(IR_PATH, 'utf-8')) as IR;
     rnOutput = runEngine(ir2, [reactNativeTarget], null, {
       react_native: { packageName: 'design-system' },

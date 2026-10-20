@@ -34,8 +34,6 @@ export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> 
   defaultOptions: DEFAULT_RN_OPTIONS,
   sanitizePackageName,
   normalizeOptions: mergeRnOptions,
-  profile: reactNativeIdentifierProfile,
-  typeMapping: reactNativeTypeMapping,
 
   prepare(
     input: SemanticTokenGraph | IR,

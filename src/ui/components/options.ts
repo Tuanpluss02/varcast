@@ -1,3 +1,5 @@
+import { getTarget, hasTarget } from '../../core/registry/target_registry';
+
 export type ExportOptions = {
   targetId: string;
   packageName: string;
@@ -51,12 +53,7 @@ export function collectOptions(opts: {
 
 export function pillText(o: ExportOptions, totalCollections?: number): string {
   const bits: string[] = [];
-  const displayName =
-    o.targetId === 'react_native'
-      ? 'React Native'
-      : o.targetId === 'flutter'
-        ? 'Flutter'
-        : o.targetId;
+  const displayName = (hasTarget(o.targetId) ? getTarget(o.targetId).displayName : o.targetId) ?? o.targetId;
   bits.push(displayName);
   if (o.include.collections && totalCollections !== undefined) {
     if (o.include.collections.length === totalCollections) bits.push('All collections');
