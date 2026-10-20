@@ -60,7 +60,7 @@ export function normalizeExportOptions(input?: PartialExportOptions | unknown): 
 /**
  * Sanitizes a package name into a valid Dart pub package identifier (lowercase_with_underscores).
  */
-function sanitizePackageName(name: string): string {
+export function sanitizePackageName(name: string): string {
   return (
     name
       .toLowerCase()

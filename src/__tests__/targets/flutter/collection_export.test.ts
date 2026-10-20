@@ -9,6 +9,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { emitPackage } from '../../../targets/flutter/generator/emit';
+import { flutterTarget, registerFlutterTarget } from '../../../targets/flutter';
+import { getTarget, hasTarget } from '../../../core/registry/target_registry';
+import { buildSemanticGraph } from '../../../core/graph/build_graph';
 import type { IR } from '../../../ir/types';
 
 function fileMap(files: { path: string; contents: string }[]): Map<string, string> {
@@ -406,5 +409,48 @@ describe('Flutter collection export barrel file', () => {
     expect(barrel).toContain("export 'src/theme.dart' show AppTheme;");
     expect(barrel).not.toContain('AppThemeData');
     expect(barrel).not.toContain('AppThemeContext');
+  });
+});
+
+describe('flutterTarget contract and SemanticTokenGraph consumption', () => {
+  it('is registered in TargetRegistry with metadata', () => {
+    registerFlutterTarget();
+    expect(hasTarget('flutter')).toBe(true);
+    const target = getTarget('flutter');
+    expect(target).toBe(flutterTarget);
+    expect(target.displayName).toBe('Flutter');
+    expect(target.defaultPackageName).toBe('design_system');
+    expect(target.sanitizePackageName?.('My_Design-System!123')).toBe('my_design_system_123');
+    expect(target.normalizeOptions?.({ packageName: ' custom_ds ' })).toMatchObject({
+      packageName: 'custom_ds',
+    });
+  });
+
+  it('prepares and emits directly from SemanticTokenGraph', () => {
+    const rawIr = multiCollectionIR();
+    const graph = buildSemanticGraph(rawIr);
+
+    const prepared = flutterTarget.prepare(graph, null, { packageName: 'test_ds' });
+
+    expect(prepared.targetId).toBe('flutter');
+    expect(prepared.nextManifestSection).toBeDefined();
+    expect(prepared.nextManifestSection.collections['col:basic']).toBe('ColorBasic');
+    expect(prepared.nextManifestSection.collections['col:token']).toBe('ColorToken');
+    expect(prepared.nextManifestSection.variables['v:white']).toBe('white');
+    expect(prepared.nextManifestSection.variables['v:neutral900']).toBe('neutral900');
+    expect(prepared.nextManifestSection.variables['v:heading']).toBe('primary');
+
+    const emitted = flutterTarget.emit(prepared, { packageName: 'test_ds' });
+    const emittedPaths = emitted.map((f) => f.path);
+
+    expect(emittedPaths).toContain('lib/test_ds.dart');
+    expect(emittedPaths).toContain('lib/src/theme.dart');
+    expect(emittedPaths).toContain('lib/src/collections/color_basic/color_basic.dart');
+    expect(emittedPaths).toContain('lib/src/collections/color_token/color_token.dart');
+    expect(emittedPaths).toContain('lib/src/collections/color_token/light_mode.dart');
+
+    const lightModeContent = emitted.find((f) => f.path.endsWith('light_mode.dart'))!.contents;
+    expect(lightModeContent).toContain('AppTheme.colorBasic.neutral900');
+    expect(lightModeContent).not.toContain('BuildContext');
   });
 });

@@ -3,6 +3,7 @@
  */
 
 import type { IR } from '../../../ir/types';
+import type { SemanticTokenGraph } from '../../../core/graph/types';
 import type { Manifest } from '../../../manifest';
 import { prepareIR } from './prepare';
 import type { PreparedIR } from './prepare';
@@ -136,7 +137,7 @@ export function emitPreparedPackage(
 }
 
 export function emitPackage(
-  ir: IR,
+  ir: SemanticTokenGraph | IR,
   manifest: Manifest | null = null,
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): { files: EmittedFile[]; nextManifest: Manifest } {

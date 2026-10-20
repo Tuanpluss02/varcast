@@ -42,28 +42,33 @@ const FLUTTER_TARGET_ID = 'flutter';
 export function resolveStableName(
   variableId: string,
   derivedLeafName: string,
-  manifest: Manifest | null,
+  manifest: Manifest | ManifestTargetSection | null,
 ): string {
+  const section =
+    manifest && 'variables' in manifest
+      ? manifest
+      : manifest?.targets?.[FLUTTER_TARGET_ID];
   const raw = resolveStableVariableName(
-    FLUTTER_TARGET_ID,
+    section,
     variableId,
     derivedLeafName,
-    manifest,
   );
-  const section = manifest?.targets?.[FLUTTER_TARGET_ID];
   return normalizeLegacyLeafName(raw, section, variableId);
 }
 
 export function resolveStableCollectionName(
   collectionId: string,
   derivedClassName: string,
-  manifest: Manifest | null,
+  manifest: Manifest | ManifestTargetSection | null,
 ): string {
+  const section =
+    manifest && 'collections' in manifest
+      ? manifest
+      : manifest?.targets?.[FLUTTER_TARGET_ID];
   return coreResolveStableCollectionName(
-    FLUTTER_TARGET_ID,
+    section,
     collectionId,
     derivedClassName,
-    manifest,
   );
 }
 

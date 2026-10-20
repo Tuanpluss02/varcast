@@ -1,4 +1,5 @@
-import type { IR, IRValue } from '../../../ir/types';
+import type { IR, IRValue, RGBA } from '../../../ir/types';
+import type { ResolvedLiteral } from '../../../core/graph/types';
 import { toSnakeCase } from '../../../core/sanitize_base';
 import {
   FILE_HEADER,
@@ -276,6 +277,10 @@ export function emitValueExpr(
         ref.leafName,
       );
     }
+    const preResolved = v.resolvedValuesByMode?.[modeId];
+    if (preResolved !== undefined) {
+      return resolvedLiteralFor(v.dartType, preResolved);
+    }
     const resolved = resolveToLiteralValue(val.targetVariableId, modeId, ir);
     if (resolved && resolved.kind === 'literal') {
       return literalFor(v.dartType, resolved);
@@ -283,6 +288,29 @@ export function emitValueExpr(
     return defaultExprFor(v.dartType);
   }
   return literalFor(v.dartType, val);
+}
+
+export function resolvedLiteralFor(t: DartType, val: ResolvedLiteral): string {
+  switch (t) {
+    case 'Color': {
+      if (typeof val === 'object' && val !== null && 'r' in val) {
+        return colorLiteral(val as RGBA);
+      }
+      return defaultExprFor(t);
+    }
+    case 'double': {
+      if (typeof val === 'number') {
+        return doubleLiteral(val);
+      }
+      return defaultExprFor(t);
+    }
+    case 'String': {
+      return stringLiteral(String(val));
+    }
+    case 'bool': {
+      return boolLiteral(Boolean(val));
+    }
+  }
 }
 
 export function literalFor(t: DartType, v: IRValue): string {
