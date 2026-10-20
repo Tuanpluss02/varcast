@@ -128,7 +128,7 @@ describe('multi-hop alias chains across collections', () => {
       variableId: 'v:B',
       targetId: 'v:MISSING',
     });
-    expect(ir.collections[1].variables[0].emitToPublic).toBe(false);
+    expect(ir.collections[1].variables[0].emitToPublic).toBe(true);
     expect(ir.collections[0].variables[0].emitToPublic).toBe(true);
   });
 });
@@ -224,7 +224,7 @@ describe('cycle detection in alias chains', () => {
 });
 
 describe('alias targeting non-existent variable id', () => {
-  it('single dangling alias emits UNRESOLVED_ALIAS warning and suppresses emitToPublic', () => {
+  it('single dangling alias emits UNRESOLVED_ALIAS warning without mutating IR', () => {
     const ir = makeIR({
       collections: [
         makeCol('col:1', [M1], [
@@ -242,7 +242,7 @@ describe('alias targeting non-existent variable id', () => {
       variableId: 'v:A',
       targetId: 'v:does-not-exist',
     });
-    expect(ir.collections[0].variables[0].emitToPublic).toBe(false);
+    expect(ir.collections[0].variables[0].emitToPublic).toBe(true);
   });
 
   it('multiple dangling aliases each produce their own UNRESOLVED_ALIAS warning', () => {
@@ -275,12 +275,15 @@ describe('alias targeting non-existent variable id', () => {
       ],
     });
 
-    validate(ir);
-    expect(ir.collections[0].variables[0].emitToPublic).toBe(false);
+    const result = validate(ir);
+    const warnings = result.warnings.filter((w) => w.type === 'UNRESOLVED_ALIAS');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ variableId: 'v:A', targetId: 'v:GHOST' });
+    expect(ir.collections[0].variables[0].emitToPublic).toBe(true);
     expect(ir.collections[1].variables[0].emitToPublic).toBe(true);
   });
 
-  it('multi-mode variable with one mode aliasing a missing id suppresses emitToPublic', () => {
+  it('multi-mode variable with one mode aliasing a missing id emits UNRESOLVED_ALIAS warning', () => {
     const M2: IRMode = { id: 'm:2', name: 'Dark' };
     const ir = makeIR({
       collections: [
@@ -293,7 +296,10 @@ describe('alias targeting non-existent variable id', () => {
       ],
     });
 
-    validate(ir);
-    expect(ir.collections[0].variables[0].emitToPublic).toBe(false);
+    const result = validate(ir);
+    const warning = result.warnings.find((w) => w.type === 'UNRESOLVED_ALIAS');
+    expect(warning).toBeDefined();
+    expect(warning).toMatchObject({ variableId: 'v:A', targetId: 'v:GHOST' });
+    expect(ir.collections[0].variables[0].emitToPublic).toBe(true);
   });
 });

@@ -17,30 +17,11 @@ export type ValidationWarning =
   | { type: 'IMAGE_ASSET_REQUIRED'; styleId: string; assetName: string };
 
 /**
- * Normalizes the IR in place (rounds floats, applies hidden flag, marks unresolved aliases).
- */
-export function normalizeIR(ir: IR): void {
-  const allVars = new Map<string, IRVariable>();
-  for (const col of ir.collections) {
-    for (const v of col.variables) {
-      allVars.set(v.id, v);
-    }
-  }
-
-  for (const col of ir.collections) {
-    normalizeAliases(col, allVars);
-    roundFloats(col);
-    applyHidden(col);
-  }
-}
-
-/**
- * Validates the IR for cycles and warnings after normalizing it.
+ * Validates the IR for cycles and warnings.
+ * Pure inspection — does not mutate the IR.
  * @returns Validation errors (blocks emit) and warnings (surfaced in UI).
  */
 export function validate(ir: IR): ValidationResult {
-  normalizeIR(ir);
-
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
 
@@ -146,20 +127,6 @@ function canonicalCycleKey(cycle: string[]): string {
   return rotated.join('→');
 }
 
-function normalizeAliases(
-  col: IRCollection,
-  allVars: Map<string, IRVariable>,
-): void {
-  for (const v of col.variables) {
-    for (const val of Object.values(v.valuesByMode)) {
-      if (val.kind !== 'alias') continue;
-      if (!allVars.has(val.targetVariableId)) {
-        v.emitToPublic = false;
-      }
-    }
-  }
-}
-
 function findUnresolvedAliases(
   col: IRCollection,
   allVars: Map<string, IRVariable>,
@@ -176,25 +143,5 @@ function findUnresolvedAliases(
         });
       }
     }
-  }
-}
-
-function roundFloats(col: IRCollection): void {
-  for (const v of col.variables) {
-    if (v.type !== 'FLOAT') continue;
-    for (const [modeId, val] of Object.entries(v.valuesByMode)) {
-      if (val.kind === 'literal' && typeof val.value === 'number') {
-        v.valuesByMode[modeId] = {
-          kind: 'literal',
-          value: Math.round(val.value * 1e6) / 1e6,
-        };
-      }
-    }
-  }
-}
-
-function applyHidden(col: IRCollection): void {
-  for (const v of col.variables) {
-    if (v.hiddenFromPublishing) v.emitToPublic = false;
   }
 }

@@ -140,7 +140,7 @@ describe('cycle detection', () => {
 
 
 describe('unresolved alias', () => {
-  it('marks variable emitToPublic=false and emits a warning', () => {
+  it('emits a warning without mutating emitToPublic', () => {
     const ir = makeIR({
       collections: [
         makeCol('col:1', [M1], [
@@ -152,7 +152,7 @@ describe('unresolved alias', () => {
     const result = validate(ir);
     const warning = result.warnings.find((w) => w.type === 'UNRESOLVED_ALIAS');
     expect(warning).toBeDefined();
-    expect(ir.collections[0].variables[0].emitToPublic).toBe(false);
+    expect(ir.collections[0].variables[0].emitToPublic).toBe(true);
   });
 });
 
@@ -160,7 +160,7 @@ describe('unresolved alias', () => {
 //  __tests__/generator/prepare_stable_dedup.test.ts for coverage)
 
 describe('float rounding', () => {
-  it('rounds 0.30000001192092896 to 0.3', () => {
+  it('does not mutate float values during pure validation', () => {
     const ir = makeIR({
       collections: [
         makeCol(
@@ -181,7 +181,7 @@ describe('float rounding', () => {
 
     validate(ir);
     const val = ir.collections[0].variables[0].valuesByMode['m:1'];
-    expect(val.kind === 'literal' && val.value).toBe(0.3);
+    expect(val.kind === 'literal' && val.value).toBe(0.30000001192092896);
   });
 
   it('does not touch COLOR / STRING / BOOLEAN', () => {
