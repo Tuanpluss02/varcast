@@ -7,7 +7,9 @@
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../../../core/emit_engine';
 import type { IR } from '../../../ir/types';
-import { reactNativeTarget } from '../../../targets/react_native';
+import { reactNativeTarget, registerReactNativeTarget } from '../../../targets/react_native';
+import { getTarget, hasTarget } from '../../../core/registry/target_registry';
+import { buildSemanticGraph } from '../../../core/graph/build_graph';
 
 function fileMap(files: { path: string; contents: string }[]) {
   const m = new Map<string, string>();
@@ -217,3 +219,50 @@ describe('Collection naming preserved from Figma', () => {
     expect(collectionFile).toContain('export type MyFancyCollection =');
   });
 });
+
+describe('reactNativeTarget contract and SemanticTokenGraph consumption', () => {
+  it('is registered in TargetRegistry with metadata', () => {
+    registerReactNativeTarget();
+    expect(hasTarget('react_native')).toBe(true);
+    const target = getTarget('react_native');
+    expect(target).toBe(reactNativeTarget);
+    expect(target.displayName).toBe('React Native');
+    expect(target.defaultPackageName).toBe('design-system');
+    expect(target.sanitizePackageName?.('My_Design-System!123')).toBe('my_design-system-123');
+    expect(target.normalizeOptions?.({ packageName: ' custom-ds ' })).toMatchObject({
+      packageName: 'custom-ds',
+    });
+  });
+
+  it('prepares and emits directly from SemanticTokenGraph', () => {
+    const rawIr = collectionBasedIR();
+    const graph = buildSemanticGraph(rawIr);
+    const options = reactNativeTarget.normalizeOptions?.({ packageName: 'test-ds' });
+
+    const prepared = reactNativeTarget.prepare(graph, null, options);
+
+    expect(prepared.targetId).toBe('react_native');
+    expect(prepared.nextManifestSection).toBeDefined();
+    expect(prepared.nextManifestSection.collections['col:basic']).toBe('ColorBasic');
+    expect(prepared.nextManifestSection.collections['col:token']).toBe('ColorToken');
+    expect(prepared.nextManifestSection.variables['v:white']).toBe('white');
+    expect(prepared.nextManifestSection.variables['v:neutral900']).toBe('neutral900');
+    expect(prepared.nextManifestSection.variables['v:heading']).toBe('primary');
+
+    const emitted = reactNativeTarget.emit(prepared, options);
+    const emittedPaths = emitted.map((f) => f.path);
+
+    expect(emittedPaths).toContain('package.json');
+    expect(emittedPaths).toContain('src/index.ts');
+    expect(emittedPaths).toContain('src/runtime/ThemeProvider.tsx');
+    expect(emittedPaths).toContain('src/runtime/createTheme.ts');
+    expect(emittedPaths).toContain('src/runtime/modes.ts');
+    expect(emittedPaths).toContain('src/tokens/primitives/color-basic.ts');
+    expect(emittedPaths).toContain('src/tokens/tokens/color-token.ts');
+
+    const colorTokenContent = emitted.find((f) => f.path.endsWith('color-token.ts'))!.contents;
+    expect(colorTokenContent).toContain('"v:neutral900"');
+    expect(colorTokenContent).toContain('export const colorToken =');
+  });
+});
+

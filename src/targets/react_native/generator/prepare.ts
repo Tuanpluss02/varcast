@@ -9,13 +9,19 @@ import type {
   IRTextValueWithUnit,
   IRValue,
   IRVariable,
-  RGBA,
 } from '../../../ir/types';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
   resolveStableCollectionName,
   resolveStableVariableName,
 } from '../../../core/manifest';
+import type { PreparedTarget, TargetWarning } from '../../../core/target';
+import type {
+  GraphCollection,
+  ResolvedLiteral,
+  SemanticTokenGraph,
+} from '../../../core/graph/types';
+import { buildSemanticGraph } from '../../../core/graph/build_graph';
 import { processSegment, splitWords, toCamelCase, toKebabCase, toPascalCase } from '../../../core/sanitize_base';
 import { rgbaToRRGGBBAA } from '../type_mapping';
 
@@ -36,6 +42,7 @@ export interface PreparedRNVariable {
   stableLeafKey: string;
   type: IRVariable['type'];
   valuesByMode: Record<string, IRValue>;
+  resolvedValuesByMode?: Record<string, ResolvedLiteral>;
 }
 
 export interface PreparedRNCollection {
@@ -49,7 +56,8 @@ export interface PreparedRNCollection {
   variables: PreparedRNVariable[];
 }
 
-export interface PreparedRN {
+export interface PreparedRN extends PreparedTarget {
+  targetId?: string;
   /** All known modes across collections (used for composites). */
   modes: PreparedRNMode[];
   collections: PreparedRNCollection[];
@@ -57,8 +65,10 @@ export interface PreparedRN {
   effectStyles: PreparedRNEffectStyle[];
   textStyles: PreparedRNTextStyle[];
   /** Per-mode variable literal index (post alias-resolve). */
-  resolvedVarByMode: Record<string /*modeId*/, Record<string /*varId*/, string | number | boolean>>;
+  resolvedVarByMode: Record<string /*modeId*/, Record<string /*varId*/, Primitive>>;
   nextManifestSection: ManifestTargetSection;
+  nextManifest?: Manifest;
+  warnings?: TargetWarning[];
 }
 
 export interface PreparedRNPaintStyle {
@@ -100,45 +110,78 @@ function kebab(raw: string): string {
   return toKebabCase(words(raw).join(' '));
 }
 
-export function prepareRN(ir: IR, manifest: Manifest | null): PreparedRN {
-  const modes = collectAllModes(ir);
-  const collections: PreparedRNCollection[] = ir.collections.map((c) =>
+export function prepareRN(
+  input: SemanticTokenGraph | IR,
+  manifest: Manifest | ManifestTargetSection | null = null,
+): PreparedRN {
+  const isRawIR = 'version' in input && !('variableIndex' in input);
+  const graph: SemanticTokenGraph = isRawIR
+    ? buildSemanticGraph(input as IR)
+    : (input as SemanticTokenGraph);
+
+  const modes: PreparedRNMode[] = graph.allModes.map((m) => ({
+    id: m.id,
+    name: m.name,
+    key: modeKey(m.name),
+  }));
+
+  const collections: PreparedRNCollection[] = graph.collections.map((c) =>
     prepareCollection(c, manifest),
   );
 
-  const resolvedVarByMode = resolveAllVariableLiterals(ir);
+  const resolvedVarByMode = extractResolvedVarByMode(graph);
 
   const paintStyles = dedupCompositeGetters(
-    ir.composites.paintStyles.map((s) => preparePaint(s)),
+    graph.composites.paintStyles.map((s) => preparePaint(s)),
     (s) => s.groupName,
   );
   const effectStyles = dedupCompositeGetters(
-    ir.composites.effectStyles.map((s) => prepareEffect(s)),
+    graph.composites.effectStyles.map((s) => prepareEffect(s)),
     (s) => s.groupName,
   );
   const textStyles = dedupCompositeGetters(
-    ir.composites.textStyles.map((s) => prepareText(s)),
+    graph.composites.textStyles.map((s) => prepareText(s)),
     (s) => s.groupName,
   );
 
-  const nextManifestSection = buildNextManifestSection(ir, collections);
-  return { modes, collections, paintStyles, effectStyles, textStyles, resolvedVarByMode, nextManifestSection };
+  const nextManifestSection = buildNextManifestSection(graph, collections);
+
+  const oldTargets: Manifest['targets'] =
+    manifest && 'targets' in manifest ? { ...(manifest as Manifest).targets } : {};
+  oldTargets['react_native'] = nextManifestSection;
+
+  const nextManifest: Manifest = {
+    version: '2.0',
+    fileKey: graph.fileKey,
+    lastExportedAt: new Date().toISOString(),
+    targets: oldTargets,
+  };
+
+  return {
+    targetId: 'react_native',
+    modes,
+    collections,
+    paintStyles,
+    effectStyles,
+    textStyles,
+    resolvedVarByMode,
+    nextManifestSection,
+    nextManifest,
+    warnings: [],
+  };
 }
 
-function collectAllModes(ir: IR): PreparedRNMode[] {
-  const byId = new Map<string, PreparedRNMode>();
-  for (const c of ir.collections) {
-    for (const m of c.modes) {
-      if (byId.has(m.id)) continue;
-      byId.set(m.id, { id: m.id, name: m.name, key: modeKey(m.name) });
-    }
-  }
-  return [...byId.values()];
-}
-
-function prepareCollection(col: IRCollection, manifest: Manifest | null): PreparedRNCollection {
+function prepareCollection(
+  col: GraphCollection,
+  manifest: Manifest | ManifestTargetSection | null,
+): PreparedRNCollection {
   const derivedType = pascal(col.name);
-  const typeName = resolveStableCollectionName('react_native', col.id, derivedType, manifest);
+  const typeName = resolveStableCollectionName(
+    manifest && 'collections' in manifest ? (manifest as ManifestTargetSection) : 'react_native',
+    col.id,
+    derivedType,
+    manifest && 'targets' in manifest ? (manifest as Manifest) : null,
+  );
   const exportName = lowerFirst(typeName);
   const fileBaseName = kebab(col.name);
 
@@ -151,12 +194,17 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
   const variables: PreparedRNVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
-    const segs = v.groupPath.map((s) => s.trim()).filter(Boolean);
-    const groupSegs = segs.slice(0, -1);
-    const leafSeg = segs[segs.length - 1] ?? 'unnamed';
+    const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
+    const leafSeg = (v.leafName ?? 'unnamed').trim();
+    const segs = [...groupSegs, leafSeg];
     const groupPathKeys = groupSegs.map(camel);
     const derivedLeaf = camel(leafSeg);
-    const stableLeafKey = resolveStableVariableName('react_native', v.id, derivedLeaf, manifest);
+    const stableLeafKey = resolveStableVariableName(
+      manifest && 'variables' in manifest ? (manifest as ManifestTargetSection) : 'react_native',
+      v.id,
+      derivedLeaf,
+      manifest && 'targets' in manifest ? (manifest as Manifest) : null,
+    );
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
@@ -165,7 +213,8 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
       leafKey: derivedLeaf,
       stableLeafKey,
       type: v.type,
-      valuesByMode: v.valuesByMode,
+      valuesByMode: v.rawValuesByMode ?? (v as any).valuesByMode ?? {},
+      resolvedValuesByMode: v.resolvedValuesByMode,
     });
   }
 
@@ -186,19 +235,27 @@ function modeKey(modeName: string): string {
   return /mode$/i.test(base) ? base : `${base}Mode`;
 }
 
-function buildNextManifestSection(ir: IR, cols: PreparedRNCollection[]): ManifestTargetSection {
+function buildNextManifestSection(
+  graph: SemanticTokenGraph,
+  cols: PreparedRNCollection[],
+): ManifestTargetSection {
   const variables: Record<string, string> = {};
   const collections: Record<string, string> = {};
   const figmaVar: Record<string, string> = {};
   const figmaCol: Record<string, string> = {};
 
-  for (const c of cols) collections[c.id] = c.typeName;
-  for (const c of ir.collections) {
-    figmaCol[c.id] = c.name;
-    for (const v of c.variables) figmaVar[v.id] = v.figmaName;
-  }
   for (const c of cols) {
-    for (const v of c.variables) variables[v.id] = v.stableLeafKey;
+    collections[c.id] = c.typeName;
+    for (const v of c.variables) {
+      variables[v.id] = v.stableLeafKey;
+    }
+  }
+
+  for (const c of graph.collections) {
+    figmaCol[c.id] = c.name;
+    for (const v of c.variables) {
+      figmaVar[v.id] = v.figmaName;
+    }
   }
 
   return {
@@ -300,46 +357,33 @@ function dedupCompositeGetters<T extends { getterName: string }>(
 
 type Primitive = string | number | boolean;
 
-function resolveAllVariableLiterals(ir: IR): Record<string, Record<string, Primitive>> {
-  const allVars = new Map<string, IRVariable>();
-  for (const c of ir.collections) for (const v of c.variables) allVars.set(v.id, v);
-
-  const modeIds = new Set<string>();
-  for (const c of ir.collections) for (const m of c.modes) modeIds.add(m.id);
-
+function extractResolvedVarByMode(
+  graph: SemanticTokenGraph,
+): Record<string, Record<string, Primitive>> {
   const out: Record<string, Record<string, Primitive>> = {};
-  for (const modeId of modeIds) {
-    out[modeId] = {};
-    for (const [id] of allVars) {
-      const v = allVars.get(id)!;
-      const val = v.valuesByMode[modeId];
-      if (!val) continue;
-      const resolved = resolveValue(modeId, val, allVars, new Set());
-      if (resolved !== undefined) out[modeId][id] = resolved;
+
+  for (const mode of graph.allModes) {
+    out[mode.id] = {};
+  }
+
+  for (const [, v] of graph.variableIndex) {
+    for (const [modeId, resolvedLit] of Object.entries(v.resolvedValuesByMode)) {
+      if (!out[modeId]) {
+        out[modeId] = {};
+      }
+      if (typeof resolvedLit === 'object' && resolvedLit !== null && 'hex' in resolvedLit) {
+        out[modeId][v.id] = resolvedLit.hex;
+      } else if (
+        typeof resolvedLit === 'number' ||
+        typeof resolvedLit === 'string' ||
+        typeof resolvedLit === 'boolean'
+      ) {
+        out[modeId][v.id] = resolvedLit;
+      }
     }
   }
-  return out;
-}
 
-function resolveValue(
-  modeId: string,
-  v: IRValue,
-  allVars: Map<string, IRVariable>,
-  seen: Set<string>,
-): Primitive | undefined {
-  if (v.kind === 'literal') {
-    const x = v.value;
-    if (typeof x === 'number' || typeof x === 'string' || typeof x === 'boolean') return x;
-    return rgbaToRRGGBBAA(x);
-  }
-  const targetId = v.targetVariableId;
-  if (seen.has(targetId)) return undefined;
-  seen.add(targetId);
-  const target = allVars.get(targetId);
-  if (!target) return undefined;
-  const next = target.valuesByMode[modeId];
-  if (!next) return undefined;
-  return resolveValue(modeId, next, allVars, seen);
+  return out;
 }
 
 export function resolveColorValueToHex(
@@ -373,4 +417,3 @@ export function resolveTextValueWithUnit(
   const got = resolvedVarByMode[modeId]?.[id];
   return typeof got === 'number' ? { value: got, unit: 'PIXELS' } : null;
 }
-
