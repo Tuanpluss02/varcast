@@ -7,11 +7,22 @@ import {
   resolveStableVariableName,
   resolveStableCollectionName as coreResolveStableCollectionName,
 } from './core/manifest';
-import type { Manifest, ManifestDiff, ManifestTargetSection } from './core/manifest';
+import type {
+  Manifest,
+  ManifestDiff as CoreManifestDiff,
+  ManifestItemDiff,
+  ManifestRenameDiff,
+  ManifestTargetSection,
+} from './core/manifest';
+
+export type ManifestDiff = CoreManifestDiff & {
+  added: ManifestItemDiff[];
+  removed: ManifestItemDiff[];
+  renamed: ManifestRenameDiff[];
+};
 
 export type {
   Manifest,
-  ManifestDiff,
   ManifestTargetSection,
 } from './core/manifest';
 export {
@@ -60,7 +71,7 @@ export function diffManifest(
   old: Manifest | null,
   next: Manifest,
 ): ManifestDiff {
-  return diffManifestForTarget(old, next, FLUTTER_TARGET_ID);
+  return diffManifestForTarget(old, next, FLUTTER_TARGET_ID) as ManifestDiff;
 }
 
 /**

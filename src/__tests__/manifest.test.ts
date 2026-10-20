@@ -68,7 +68,7 @@ describe('manifest', () => {
 });
 
 describe('manifest migration', () => {
-  it('normalizeManifest: v1 → v2 places everything under flutter target', () => {
+  it('normalizeManifest: v1 is unsupported and rejected', () => {
     const v1 = {
       version: '1.0',
       fileKey: 'k',
@@ -81,11 +81,7 @@ describe('manifest migration', () => {
       },
     };
     const m = normalizeManifest(v1);
-    expect(m).toBeTruthy();
-    expect(m!.version).toBe('2.0');
-    expect(m!.targets.flutter.variables['var:1']).toBe('n900');
-    expect(m!.targets.flutter.collections['col:1']).toBe('ColorBasic');
-    expect(m!.targets.flutter.figmaNames?.variables['var:1']).toBe('neutral/900');
+    expect(m).toBeNull();
   });
 
   it('normalizeManifest: v2 passes through', () => {
