@@ -12,6 +12,7 @@ import type {
   EffectStylePreview,
   TextStylePreview,
 } from './lib/messages';
+import { resolveVariableLiteral, isRGBA } from '../core/graph/alias_resolver';
 
 export function toHex(rgba: RGBA): string {
   const r = Math.round(rgba.r * 255)
@@ -36,36 +37,17 @@ export function toRgbaString(rgba: RGBA): string {
   return `rgba(${Math.round(rgba.r * 255)}, ${Math.round(rgba.g * 255)}, ${Math.round(rgba.b * 255)}, ${rgba.a.toFixed(2)})`;
 }
 
-function isRGBA(val: unknown): val is RGBA {
-  return (
-    typeof val === 'object' &&
-    val !== null &&
-    'r' in val &&
-    'g' in val &&
-    'b' in val &&
-    'a' in val &&
-    typeof (val as RGBA).r === 'number'
-  );
-}
-
 export function resolveVarLiteral(
   targetId: string,
   collections: IRCollection[],
   visited = new Set<string>(),
 ): unknown {
-  if (visited.has(targetId)) return undefined;
-  visited.add(targetId);
-
-  for (const col of collections) {
-    const v = col.variables.find((x: IRVariable) => x.id === targetId);
-    if (!v) continue;
-    const modeKeys = Object.keys(v.valuesByMode);
-    const val = modeKeys.length > 0 ? v.valuesByMode[modeKeys[0]] : undefined;
-    if (!val) return undefined;
-    if (val.kind === 'literal') return val.value;
-    if (val.kind === 'alias') return resolveVarLiteral(val.targetVariableId, collections, visited);
+  const resolved = resolveVariableLiteral(targetId, '', collections, visited);
+  if (resolved === undefined) return undefined;
+  if (isRGBA(resolved)) {
+    return { r: resolved.r, g: resolved.g, b: resolved.b, a: resolved.a };
   }
-  return undefined;
+  return resolved;
 }
 
 export function extractVariablePreview(
@@ -86,13 +68,12 @@ export function extractVariablePreview(
       const tv = c.variables.find((x: IRVariable) => x.id === firstVal.targetVariableId);
       if (tv) {
         targetName = tv.figmaName;
-        const tKeys = Object.keys(tv.valuesByMode);
-        const tVal = tKeys.length > 0 ? tv.valuesByMode[tKeys[0]] : undefined;
-        if (tVal && tVal.kind === 'literal' && isRGBA(tVal.value)) {
-          resolvedRgba = tVal.value;
-        }
         break;
       }
+    }
+    const resolved = resolveVariableLiteral(firstVal.targetVariableId, '', irCollections);
+    if (isRGBA(resolved)) {
+      resolvedRgba = { r: resolved.r, g: resolved.g, b: resolved.b, a: resolved.a };
     }
     return {
       id: v.id,

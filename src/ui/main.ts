@@ -21,6 +21,10 @@ import {
   isToggleOn,
 } from './components/options';
 import { createInitialState } from './state';
+import { getAllTargets, getTarget, hasTarget } from '../core/registry';
+// Ensure default targets are registered:
+import '../targets/flutter';
+import '../targets/react_native';
 
 const state = createInitialState();
 
@@ -489,14 +493,39 @@ function startExport() {
 
 exportBtn.addEventListener('click', startExport);
 
+function initTargetDropdown() {
+  const targets = getAllTargets();
+  if (targets.length > 0) {
+    const currentVal = targetId.value;
+    targetId.innerHTML = '';
+    targets.forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.displayName ?? t.id;
+      if (t.id === currentVal || (!currentVal && t.id === 'flutter')) {
+        opt.selected = true;
+      }
+      targetId.appendChild(opt);
+    });
+  }
+}
+
 [targetId, packageName].forEach((el) => {
   el.addEventListener('input', updateMeta);
   el.addEventListener('change', updateMeta);
 });
 
+targetId.addEventListener('change', () => {
+  const t = hasTarget(targetId.value) ? getTarget(targetId.value) : null;
+  if (t) {
+    packageName.placeholder = t.defaultPackageName ?? 'design_system';
+  }
+});
+
 byId<HTMLButtonElement>('reset').addEventListener('click', () => {
-  targetId.value = 'flutter';
-  packageName.value = 'design_system';
+  const firstTarget = getAllTargets()[0];
+  targetId.value = firstTarget?.id ?? 'flutter';
+  packageName.value = firstTarget?.defaultPackageName ?? 'design_system';
   const allHeaders = document.querySelectorAll<HTMLElement>(
     '.accordion-header[role="switch"]',
   );
@@ -729,6 +758,7 @@ window.onmessage = (e: MessageEvent) => {
   }
 };
 
+initTargetDropdown();
 updateMeta();
 go('home');
 

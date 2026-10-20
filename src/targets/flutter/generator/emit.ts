@@ -4,7 +4,7 @@
 
 import type { IR } from '../../../ir/types';
 import type { SemanticTokenGraph } from '../../../core/graph/types';
-import type { Manifest } from '../../../manifest';
+import type { Manifest } from '../../../core/manifest';
 import { prepareIR } from './prepare';
 import type { PreparedIR } from './prepare';
 import type { ExportOptions } from './options';

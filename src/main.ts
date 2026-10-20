@@ -1,17 +1,14 @@
 import { readIR } from './reader';
 import { validate } from './ir/validate';
-import { diffManifest } from './manifest';
 import type { Manifest } from './core/manifest';
-import { normalizeManifest } from './core/manifest';
-import { generateChangelog } from './targets/flutter/generator/changelog';
+import { normalizeManifest, diffManifestForTarget } from './core/manifest';
+import { generateChangelog } from './core/manifest/changelog';
 import { buildZip } from './zip';
-import {
-  normalizeExportOptions,
-  DEFAULT_EXPORT_OPTIONS,
-} from './targets/flutter/generator/options';
 import { runEngine } from './core/emit_engine';
-import { flutterTarget } from './targets/flutter';
-import { reactNativeTarget } from './targets/react_native';
+import { getTarget } from './core/registry';
+// Ensure default targets are registered:
+import './targets/flutter';
+import './targets/react_native';
 import {
   extractVariablePreview,
   extractPaintPreview,
@@ -66,9 +63,15 @@ figma.ui.onmessage = async (msg: unknown) => {
   if (m.type === 'export') {
     try {
       pending = null;
-      const rawOptions = m.options;
-      const options = normalizeExportOptions(rawOptions as Parameters<typeof normalizeExportOptions>[0] ?? DEFAULT_EXPORT_OPTIONS);
-      const targetId = (rawOptions as { targetId?: string } | undefined)?.targetId ?? 'flutter';
+      const rawOptions = (m.options ?? {}) as Record<string, unknown>;
+      const targetId = (rawOptions.targetId as string | undefined) ?? 'flutter';
+      const target = getTarget(targetId);
+
+      const rawPkg = rawOptions.packageName as string | undefined;
+      const packageName = rawPkg
+        ? (target.sanitizePackageName ? target.sanitizePackageName(rawPkg) : rawPkg)
+        : (target.defaultPackageName ?? 'tokens');
+
       const ir = await readIR();
 
       const result = validate(ir);
@@ -84,15 +87,14 @@ figma.ui.onmessage = async (msg: unknown) => {
         (await figma.clientStorage.getAsync('manifest_v2')) ??
         (await figma.clientStorage.getAsync('manifest_v1'));
       const oldManifest = normalizeManifest(rawManifest);
-      const targets =
-        targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
-      const { files, nextManifest } = runEngine(
+
+      const { files, nextManifest, diffsByTarget } = runEngine(
         ir,
-        targets,
+        [target],
         oldManifest,
-        targetId === 'react_native' ? { react_native: options } : { flutter: options },
+        { [targetId]: rawOptions },
       );
-      const diff = diffManifest(oldManifest, nextManifest);
+      const diff = diffsByTarget[targetId] ?? diffManifestForTarget(oldManifest, nextManifest, targetId);
       const changelog = generateChangelog(diff);
 
       const allFiles = [
@@ -107,7 +109,7 @@ figma.ui.onmessage = async (msg: unknown) => {
       pending = {
         files: allFiles,
         nextManifest,
-        packageName: options.packageName,
+        packageName,
       };
 
       const previewFiles = allFiles.map((f) => ({
@@ -121,9 +123,18 @@ figma.ui.onmessage = async (msg: unknown) => {
         type: 'preview-ready',
         files: previewFiles,
         diff: {
-          added: diff.added.length,
-          removed: diff.removed.length,
-          renamed: diff.renamed.length,
+          added:
+            diff.variables.added.length +
+            diff.collections.added.length +
+            diff.composites.added.length,
+          removed:
+            diff.variables.removed.length +
+            diff.collections.removed.length +
+            diff.composites.removed.length,
+          renamed:
+            diff.variables.renamed.length +
+            diff.collections.renamed.length +
+            diff.composites.renamed.length,
         },
         summary: {
           fileCount: previewFiles.length,

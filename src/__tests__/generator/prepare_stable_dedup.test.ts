@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { IR } from '../../ir/types';
-import type { Manifest } from '../../manifest';
+import type { Manifest } from '../../core/manifest';
 import { prepareIR } from '../../targets/flutter/generator/prepare';
 
 function baseIR(variables: IR['collections'][0]['variables']): IR {

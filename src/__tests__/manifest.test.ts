@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { Manifest } from '../manifest';
-import { diffManifest, resolveStableName } from '../manifest';
-import { normalizeManifest } from '../core/manifest';
+import type { Manifest } from '../core/manifest';
+import {
+  diffManifestForTarget,
+  normalizeManifest,
+  resolveStableVariableName,
+} from '../core/manifest';
+import { resolveStableName } from '../targets/flutter/generator/prepare';
 
 function flutterManifest(
   vars: Record<string, string> = {},
@@ -22,10 +26,10 @@ function flutterManifest(
 }
 
 describe('manifest', () => {
-  it('resolveStableName: rename in Figma keeps stable name by id', () => {
+  it('resolveStableVariableName: rename in Figma keeps stable name by id', () => {
     const m = flutterManifest({ 'var:1': 'n900' });
-    expect(resolveStableName('var:1', 'charcoal', m)).toBe('n900');
-    expect(resolveStableName('var:2', 'n800', m)).toBe('n800');
+    expect(resolveStableVariableName('flutter', 'var:1', 'charcoal', m)).toBe('n900');
+    expect(resolveStableVariableName('flutter', 'var:2', 'n800', m)).toBe('n800');
   });
 
   it('resolveStableName: migrates legacy _2 suffix to Dart-style digit suffix', () => {
@@ -50,7 +54,7 @@ describe('manifest', () => {
     expect(resolveStableName('var:2', 'bgSecondary', m)).toBe('bgSecondary2');
   });
 
-  it('diffManifest: added/removed/renamed detected by variable id', () => {
+  it('diffManifestForTarget: added/removed/renamed detected by variable id', () => {
     const oldM = flutterManifest(
       { 'var:1': 'n900', 'var:2': 'n800' },
       { 'var:1': 'neutral/900', 'var:2': 'neutral/800' },
@@ -60,10 +64,10 @@ describe('manifest', () => {
       { 'var:1': 'neutral/charcoal', 'var:3': 'neutral/700' },
     );
 
-    const d = diffManifest(oldM, nextM);
-    expect(d.added.map((x) => x.id)).toEqual(['var:3']);
-    expect(d.removed.map((x) => x.id)).toEqual(['var:2']);
-    expect(d.renamed.map((x) => x.id)).toEqual(['var:1']);
+    const d = diffManifestForTarget(oldM, nextM, 'flutter');
+    expect(d.variables.added.map((x) => x.id)).toEqual(['var:3']);
+    expect(d.variables.removed.map((x) => x.id)).toEqual(['var:2']);
+    expect(d.variables.renamed.map((x) => x.id)).toEqual(['var:1']);
   });
 });
 

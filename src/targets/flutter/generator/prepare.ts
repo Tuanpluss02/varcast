@@ -12,7 +12,10 @@ import {
 } from '../identifier';
 import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
-import { resolveStableCollectionName, resolveStableName } from '../../../manifest';
+import {
+  resolveStableCollectionName,
+  resolveStableVariableName,
+} from '../../../core/manifest';
 import type { PreparedTarget } from '../../../core/target';
 import type {
   GraphCollection,
@@ -223,6 +226,62 @@ const DISALLOWED_COLLECTION_CLASS_NAMES = new Set([
   'DSShadow',
 ]);
 
+function normalizeLegacyLeafName(
+  name: string,
+  section: ManifestTargetSection | undefined,
+  variableId: string,
+): string {
+  const m = /^(.+)_([0-9]+)$/.exec(name);
+  if (!m) return name;
+  const base = m[1];
+  const n = m[2];
+  if (base.endsWith('_')) return name;
+  const renamed = `${base}${n}`;
+  if (section?.variables) {
+    for (const [otherId, otherName] of Object.entries(section.variables)) {
+      if (otherId === variableId) continue;
+      if (otherName === renamed) return name;
+    }
+  }
+  return renamed;
+}
+
+export function resolveStableName(
+  variableId: string,
+  derivedLeafName: string,
+  manifest: Manifest | ManifestTargetSection | null,
+): string {
+  const section =
+    manifest && 'variables' in manifest
+      ? (manifest as ManifestTargetSection)
+      : (manifest as Manifest | null)?.targets?.flutter;
+  const raw = resolveStableVariableName(
+    section,
+    variableId,
+    derivedLeafName,
+  );
+  return normalizeLegacyLeafName(raw, section, variableId);
+}
+
+function resolveFlutterStableCollectionName(
+  collectionId: string,
+  derivedClassName: string,
+  manifest: Manifest | ManifestTargetSection | null,
+): string {
+  const section =
+    manifest && 'collections' in manifest
+      ? (manifest as ManifestTargetSection)
+      : 'flutter';
+  const parentManifest =
+    manifest && 'targets' in manifest ? (manifest as Manifest) : null;
+  return resolveStableCollectionName(
+    section,
+    collectionId,
+    derivedClassName,
+    parentManifest,
+  );
+}
+
 function prepareCollection(
   col: GraphCollection,
   manifest: Manifest | ManifestTargetSection | null,
@@ -233,7 +292,7 @@ function prepareCollection(
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
     className = `${className}Tokens`;
   }
-  className = resolveStableCollectionName(col.id, className, manifest);
+  className = resolveFlutterStableCollectionName(col.id, className, manifest);
   const accessor = lowerFirst(className);
   const modes: PreparedMode[] = col.modes.map((m) => {
     let rawName = m.name;

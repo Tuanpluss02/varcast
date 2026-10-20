@@ -51,7 +51,13 @@ export function collectOptions(opts: {
 
 export function pillText(o: ExportOptions, totalCollections?: number): string {
   const bits: string[] = [];
-  bits.push(o.targetId === 'flutter' ? 'Flutter' : 'React Native');
+  const displayName =
+    o.targetId === 'react_native'
+      ? 'React Native'
+      : o.targetId === 'flutter'
+        ? 'Flutter'
+        : o.targetId;
+  bits.push(displayName);
   if (o.include.collections && totalCollections !== undefined) {
     if (o.include.collections.length === totalCollections) bits.push('All collections');
     else bits.push(`${o.include.collections.length}/${totalCollections} collections`);

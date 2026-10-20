@@ -6,15 +6,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { runEngine } from './core/emit_engine';
 import { diffManifestForTarget } from './core/manifest';
+import { generateChangelog } from './core/manifest/changelog';
+import { getTarget } from './core/registry';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
 import { loadManifest, saveManifest } from './manifest_node';
-import { flutterTarget } from './targets/flutter';
-import { generateChangelog } from './targets/flutter/generator/changelog';
-import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
-import { writePackage } from './targets/flutter/generator/write_node';
-import { reactNativeTarget } from './targets/react_native';
-import { DEFAULT_RN_OPTIONS } from './targets/react_native/options';
+import { writePackage } from './writer/node_writer';
+// Ensure default targets are registered:
+import './targets/flutter';
+import './targets/react_native';
 
 interface Args {
   ir: string;
@@ -74,30 +74,32 @@ function main() {
 
   const oldManifest = loadManifest(outDir);
   const targetId = args.target ?? 'flutter';
-  const targets =
-    targetId === 'react_native'
-      ? [reactNativeTarget]
-      : [flutterTarget];
-  const optionsByTarget =
-    targetId === 'react_native'
-      ? {
-          react_native: {
-            ...DEFAULT_RN_OPTIONS,
-            packageName: args.name ?? 'design-system',
-          },
-        }
-      : {
-          flutter: {
-            ...DEFAULT_EXPORT_OPTIONS,
-            packageName: args.name ?? 'design_system',
-            include: {
-              ...DEFAULT_EXPORT_OPTIONS.include,
-              collections: args.collections,
-            },
-          },
-        };
-  const { files, nextManifest } = runEngine(ir, targets, oldManifest, optionsByTarget);
-  const diff = diffManifestForTarget(oldManifest, nextManifest, targetId);
+  const target = getTarget(targetId);
+
+  const defaultPkg = target.defaultPackageName ?? 'tokens';
+  const packageName = args.name
+    ? (target.sanitizePackageName ? target.sanitizePackageName(args.name) : args.name)
+    : defaultPkg;
+
+  const targetOptions: Record<string, unknown> = {
+    ...(target.defaultOptions ?? {}),
+    packageName,
+  };
+
+  if (args.collections) {
+    targetOptions.include = {
+      ...((targetOptions.include as Record<string, unknown>) ?? {}),
+      collections: args.collections,
+    };
+  }
+
+  const { files, nextManifest, diffsByTarget } = runEngine(
+    ir,
+    [target],
+    oldManifest,
+    { [targetId]: targetOptions },
+  );
+  const diff = diffsByTarget[targetId] ?? diffManifestForTarget(oldManifest, nextManifest, targetId);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
   saveManifest(outDir, nextManifest);
