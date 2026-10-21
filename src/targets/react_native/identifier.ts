@@ -1,5 +1,6 @@
 import {
   processSegment,
+  sanitizeWords,
   splitWords,
   toCamelCase,
   toKebabCase,
@@ -7,6 +8,5 @@ import {
 } from '../../core/sanitize_base';
 
 export function wordsFromRaw(raw: string): string[] {
-  const processed = processSegment(raw);
-  return splitWords(processed);
+  return sanitizeWords(raw);
 }

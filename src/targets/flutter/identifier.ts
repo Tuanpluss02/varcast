@@ -1,12 +1,13 @@
 import { DART_KEYWORDS } from './dart_keywords';
 import {
   processSegment,
+  sanitizeWords,
   splitWords,
   toCamelCase,
   toPascalCase,
 } from '../../core/sanitize_base';
 
-export { processSegment, splitWords, toPascalCase, toCamelCase, DART_KEYWORDS };
+export { processSegment, splitWords, sanitizeWords, toPascalCase, toCamelCase, DART_KEYWORDS };
 
 export interface SanitizeContext {
   existingByParent: Map<string, Set<string>>;
@@ -85,6 +86,5 @@ export function sanitizeIdentifier(
 }
 
 export function flutterWordsFromRaw(raw: string): string[] {
-  const processed = processSegment(raw);
-  return splitWords(processed);
+  return sanitizeWords(raw);
 }

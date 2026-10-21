@@ -1,13 +1,13 @@
 import type { PreparedTarget, Target } from '../target';
 
 export class TargetRegistry {
-  private readonly targets = new Map<string, Target<any, PreparedTarget>>();
+  private readonly targets = new Map<string, Target<unknown, PreparedTarget>>();
 
   /**
    * Registers a target into this registry instance.
    * Throws an error if target ID format is invalid or already registered.
    */
-  register<TOptions = any, TPrepared extends PreparedTarget = any>(
+  register<TOptions = unknown, TPrepared extends PreparedTarget = PreparedTarget>(
     target: Target<TOptions, TPrepared>,
   ): void {
     if (!/^[a-z][a-z0-9_-]*$/.test(target.id)) {
@@ -16,21 +16,21 @@ export class TargetRegistry {
     if (this.targets.has(target.id)) {
       throw new Error(`Target with ID "${target.id}" is already registered.`);
     }
-    this.targets.set(target.id, target);
+    this.targets.set(target.id, target as Target<unknown, PreparedTarget>);
   }
 
   /**
    * Retrieves a registered target by its unique ID.
    * Throws an error if the target ID is not registered.
    */
-  get<TOptions = any, TPrepared extends PreparedTarget = any>(
+  get<TOptions = unknown, TPrepared extends PreparedTarget = PreparedTarget>(
     id: string,
   ): Target<TOptions, TPrepared> {
     const target = this.targets.get(id);
     if (!target) {
       throw new Error(`Target with ID "${id}" is not registered.`);
     }
-    return target as Target<TOptions, TPrepared>;
+    return target as unknown as Target<TOptions, TPrepared>;
   }
 
   /**
@@ -43,7 +43,7 @@ export class TargetRegistry {
   /**
    * Returns all registered targets in their insertion (registration) order.
    */
-  getAll(): Target<any, PreparedTarget>[] {
+  getAll(): Target<unknown, PreparedTarget>[] {
     return Array.from(this.targets.values());
   }
 
@@ -64,7 +64,7 @@ const defaultRegistry = new TargetRegistry();
  * Registers a target into the global target registry.
  * Throws if a target with the same ID is already registered.
  */
-export function registerTarget<TOptions = any, TPrepared extends PreparedTarget = any>(
+export function registerTarget<TOptions = unknown, TPrepared extends PreparedTarget = PreparedTarget>(
   target: Target<TOptions, TPrepared>,
 ): void {
   defaultRegistry.register(target);
@@ -74,7 +74,7 @@ export function registerTarget<TOptions = any, TPrepared extends PreparedTarget 
  * Retrieves a registered target by its ID from the global target registry.
  * Throws if not found.
  */
-export function getTarget<TOptions = any, TPrepared extends PreparedTarget = any>(
+export function getTarget<TOptions = unknown, TPrepared extends PreparedTarget = PreparedTarget>(
   id: string,
 ): Target<TOptions, TPrepared> {
   return defaultRegistry.get<TOptions, TPrepared>(id);
@@ -90,7 +90,7 @@ export function hasTarget(id: string): boolean {
 /**
  * Returns all registered targets in registration order from the global target registry.
  */
-export function getAllTargets(): Target<any, PreparedTarget>[] {
+export function getAllTargets(): Target<unknown, PreparedTarget>[] {
   return defaultRegistry.getAll();
 }
 

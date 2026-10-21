@@ -50,8 +50,9 @@ export function processSegment(seg: string): string {
   out = out.trim();
   if (out.length === 0) return 'unnamed';
   const words = out.split(/\s+/);
-  if (words.length > 1) {
-    while (words.length > 1 && /^\d+$/.test(words[0])) words.shift();
+  const hasAlpha = words.some((w) => /[a-zA-Z]/.test(w));
+  if (hasAlpha) {
+    while (words.length > 0 && /^\d+$/.test(words[0])) words.shift();
     out = words.join(' ');
   }
   if (/^\d/.test(out)) out = 'n' + out;
@@ -71,6 +72,13 @@ export function splitWords(s: string): string[] {
     out.push(...expanded.split(/\s+/).filter(Boolean));
   }
   return out;
+}
+
+/**
+ * Normalizes and splits a raw segment into sanitized constituent words.
+ */
+export function sanitizeWords(seg: string): string[] {
+  return splitWords(processSegment(seg));
 }
 
 export function toPascalCase(s: string): string {

@@ -5,15 +5,21 @@ import type { Target, PreparedTarget } from '../../core/target';
 describe('Target Contract & Registry ID validation', () => {
   it('rejects target IDs with invalid characters', () => {
     const registry = new TargetRegistry();
-    const invalidTarget = {
-      id: 'Flutter Target',
-      displayName: 'Flutter',
-      defaultPackageName: 'tokens',
-      prepare: () => ({ nextManifestSection: { variables: {}, collections: {} }, warnings: [] }),
-      emit: () => [],
-    } as unknown as Target;
+    const createTarget = (id: string): Target =>
+      ({
+        id,
+        displayName: 'Test',
+        defaultPackageName: 'tokens',
+        prepare: () => ({ nextManifestSection: { variables: {}, collections: {} }, warnings: [] }),
+        emit: () => [],
+      }) as unknown as Target;
 
-    expect(() => registry.register(invalidTarget)).toThrow(/Invalid target ID format/);
+    expect(() => registry.register(createTarget('Flutter Target'))).toThrow(/Invalid target ID format/);
+    expect(() => registry.register(createTarget('1target'))).toThrow(/Invalid target ID format/);
+    expect(() => registry.register(createTarget('@target'))).toThrow(/Invalid target ID format/);
+    expect(() => registry.register(createTarget('Flutter'))).toThrow(/Invalid target ID format/);
+    expect(() => registry.register(createTarget(''))).toThrow(/Invalid target ID format/);
+    expect(() => registry.register(createTarget('target name'))).toThrow(/Invalid target ID format/);
   });
 
   it('accepts valid target IDs (kebab-case, snake_case, lowercase)', () => {

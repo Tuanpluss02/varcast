@@ -1,3 +1,4 @@
+import { dedupSiblingKeys } from '../naming/dedup';
 import type { ResolvedVariable, TokenTreeNode } from './types';
 
 /**
@@ -24,19 +25,17 @@ export function flatGetterName(groupPath: string[], leafName: string): string {
 
 /**
  * Deduplicates a leaf name among siblings by appending an incrementing numeric suffix (starting at 2).
+ * Delegates to the centralized dedupSiblingKeys logic.
  */
 export function deduplicateSiblingName(
   baseName: string,
   existingNames: Set<string> | Map<string, unknown>,
 ): string {
-  if (!existingNames.has(baseName)) {
-    return baseName;
-  }
-  let index = 2;
-  while (existingNames.has(`${baseName}${index}`)) {
-    index++;
-  }
-  return `${baseName}${index}`;
+  const set = existingNames instanceof Set
+    ? new Set(existingNames)
+    : new Set(existingNames.keys());
+  const usedMap = new Map<string, Set<string>>([['', set]]);
+  return dedupSiblingKeys(usedMap, '', baseName);
 }
 
 /**
