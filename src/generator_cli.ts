@@ -6,8 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { runEngine } from './core/emit_engine';
 import type { Manifest } from './core/manifest';
-import { diffManifestForTarget } from './core/manifest';
-import { generateChangelog } from './core/manifest/changelog';
+import { generateMultiTargetChangelog } from './core/manifest/changelog';
 import { getTarget } from './core/registry';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
@@ -106,13 +105,12 @@ function main() {
     oldManifest,
     { [targetId]: targetOptions },
   );
-  const diff = diffsByTarget[targetId] ?? diffManifestForTarget(oldManifest, nextManifest, targetId);
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
   saveManifest(outDir, nextManifest);
   fs.writeFileSync(
     path.join(outDir, 'CHANGELOG.md'),
-    generateChangelog(diff) + '\n',
+    generateMultiTargetChangelog(diffsByTarget) + '\n',
   );
 
   console.log(

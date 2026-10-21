@@ -2,7 +2,7 @@ import { readIR } from './reader';
 import { validate } from './ir/validate';
 import type { Manifest } from './core/manifest';
 import { normalizeManifest, diffManifestForTarget } from './core/manifest';
-import { generateChangelog } from './core/manifest/changelog';
+import { generateMultiTargetChangelog } from './core/manifest/changelog';
 import { handleDownloadZip, type PendingExportData } from './download_handler';
 import { runEngine } from './core/emit_engine';
 import { getAllTargets, getTarget } from './core/registry';
@@ -95,7 +95,7 @@ figma.ui.onmessage = async (msg: unknown) => {
         { [targetId]: rawOptions },
       );
       const diff = diffsByTarget[targetId] ?? diffManifestForTarget(oldManifest, nextManifest, targetId);
-      const changelog = generateChangelog(diff);
+      const changelog = generateMultiTargetChangelog(diffsByTarget);
 
       const allFiles = [
         ...files,
