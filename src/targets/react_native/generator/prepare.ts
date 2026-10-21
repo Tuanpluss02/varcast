@@ -17,7 +17,7 @@ import {
   resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
-import { dedupGetters } from '../../../core/naming/dedup';
+import { dedupGetters, dedupSiblingKeys } from '../../../core/naming/dedup';
 import type { PreparedTarget, TargetWarning } from '../../../core/target';
 import type {
   GraphCollection,
@@ -25,8 +25,10 @@ import type {
   SemanticTokenGraph,
 } from '../../../core/graph/types';
 import { buildSemanticGraph } from '../../../core/graph/build_graph';
+import { validate } from '../../../ir/validate';
 import { processSegment, splitWords, toCamelCase, toKebabCase, toPascalCase } from '../../../core/sanitize_base';
 import { rgbaToRRGGBBAA } from '../type_mapping';
+import { isJsReservedWord } from '../reserved';
 
 export type RNPrimitiveType = 'string' | 'number' | 'boolean';
 
@@ -128,8 +130,10 @@ export function prepareRN(
     key: modeKey(m.name),
   }));
 
+  const warnings: TargetWarning[] = [];
+
   const collections: PreparedRNCollection[] = graph.collections.map((c) =>
-    prepareCollection(c, manifest),
+    prepareCollection(c, manifest, warnings),
   );
 
   const manifestSection: ManifestTargetSection | null =
@@ -160,6 +164,64 @@ export function prepareRN(
     (s) => s.groupName,
   );
 
+  // Collect unresolvable aliases
+  const seenUnresolved = new Set<string>();
+  if (isRawIR) {
+    const valResult = validate(input as IR);
+    for (const w of valResult.warnings) {
+      if (w.type === 'UNRESOLVED_ALIAS') {
+        const key = `${w.variableId}:${w.targetId}`;
+        if (!seenUnresolved.has(key)) {
+          seenUnresolved.add(key);
+          warnings.push({
+            targetId: 'react_native',
+            code: 'UNRESOLVED_ALIAS',
+            message: `Variable "${w.variableId}" references missing alias target "${w.targetId}".`,
+            details: { variableId: w.variableId, targetId: w.targetId },
+          });
+        }
+      }
+    }
+  }
+
+  for (const col of graph.collections) {
+    for (const v of col.variables) {
+      for (const [modeId, val] of Object.entries(
+        v.rawValuesByMode ?? (v as any).valuesByMode ?? {},
+      )) {
+        if (val && typeof val === 'object' && val.kind === 'alias') {
+          const targetId = val.targetVariableId;
+          const targetVar = graph.variableIndex.get(targetId);
+          const resolved = v.resolvedValuesByMode?.[modeId];
+          if (!targetVar || resolved === undefined) {
+            const key = `${v.id}:${targetId}`;
+            if (!seenUnresolved.has(key)) {
+              seenUnresolved.add(key);
+              warnings.push({
+                targetId: 'react_native',
+                code: 'UNRESOLVED_ALIAS',
+                message: `Variable "${v.id}" references unresolvable alias "${targetId}".`,
+                details: { variableId: v.id, targetId, modeId },
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Collect unsupported effects
+  for (const s of graph.composites.effectStyles) {
+    if (s.type !== 'DROP_SHADOW') {
+      warnings.push({
+        targetId: 'react_native',
+        code: 'UNSUPPORTED_EFFECT',
+        message: `Effect style "${s.figmaName}" of type "${s.type}" is not supported in React Native.`,
+        details: { styleId: s.id, type: s.type },
+      });
+    }
+  }
+
   const nextManifestSection = buildNextManifestSection(graph, collections, {
     paintStyles,
     effectStyles,
@@ -187,13 +249,14 @@ export function prepareRN(
     resolvedVarByMode,
     nextManifestSection,
     nextManifest,
-    warnings: [],
+    warnings,
   };
 }
 
 function prepareCollection(
   col: GraphCollection,
   manifest: Manifest | ManifestTargetSection | null,
+  warnings: TargetWarning[],
 ): PreparedRNCollection {
   const derivedType = pascal(col.name);
   const typeName = resolveStableCollectionName(
@@ -202,7 +265,16 @@ function prepareCollection(
     derivedType,
     manifest && 'targets' in manifest ? (manifest as Manifest) : null,
   );
-  const exportName = lowerFirst(typeName);
+  let exportName = lowerFirst(typeName);
+  if (isJsReservedWord(exportName)) {
+    const escaped = `${exportName}Tokens`;
+    warnings.push({
+      targetId: 'react_native',
+      code: 'RESERVED_WORD_ESCAPED',
+      message: `Collection export name "${col.name}" is a JavaScript reserved word; escaped to "${escaped}".`,
+    });
+    exportName = escaped;
+  }
   const fileBaseName = kebab(col.name);
 
   const modes: PreparedRNMode[] = col.modes.map((m) => ({
@@ -211,6 +283,7 @@ function prepareCollection(
     key: modeKey(m.name),
   }));
 
+  const usedByGroup = new Map<string, Set<string>>();
   const variables: PreparedRNVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
@@ -219,19 +292,29 @@ function prepareCollection(
     const segs = [...groupSegs, leafSeg];
     const groupPathKeys = groupSegs.map(camel);
     const derivedLeaf = camel(leafSeg);
-    const stableLeafKey = resolveStableVariableName(
+    const stableLeaf = resolveStableVariableName(
       manifest && 'variables' in manifest ? (manifest as ManifestTargetSection) : 'react_native',
       v.id,
       derivedLeaf,
       manifest && 'targets' in manifest ? (manifest as Manifest) : null,
     );
+    const groupKey = groupPathKeys.join('/');
+    const finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, stableLeaf);
+    if (finalLeaf !== stableLeaf) {
+      warnings.push({
+        targetId: 'react_native',
+        code: 'DUPLICATE_LEAF_NAME',
+        message: `Variable "${v.figmaName}" collided with sibling leaf name; deduplicated to "${finalLeaf}".`,
+        details: { variableId: v.id, original: stableLeaf, fixed: finalLeaf },
+      });
+    }
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
       groupPath: segs,
       groupPathKeys,
-      leafKey: derivedLeaf,
-      stableLeafKey,
+      leafKey: finalLeaf,
+      stableLeafKey: finalLeaf,
       type: v.type,
       valuesByMode: v.rawValuesByMode ?? (v as any).valuesByMode ?? {},
       resolvedValuesByMode: v.resolvedValuesByMode,

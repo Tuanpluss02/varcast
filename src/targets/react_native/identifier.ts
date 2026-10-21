@@ -7,16 +7,9 @@ import {
 } from '../../core/sanitize_base';
 import type { IdentifierProfile } from '../../core/target';
 
-/**
- * Reserved words in JavaScript and TypeScript environments.
- */
-const JS_RESERVED = new Set<string>([
-  'break','case','catch','class','const','continue','debugger','default','delete',
-  'do','else','export','extends','finally','for','function','if','import','in',
-  'instanceof','new','return','super','switch','this','throw','try','typeof',
-  'var','void','while','with','yield','enum','await','implements','interface',
-  'let','package','private','protected','public','static','null','true','false',
-]);
+import { JS_RESERVED_WORDS } from './reserved';
+
+const JS_RESERVED = JS_RESERVED_WORDS;
 
 export const reactNativeIdentifierProfile: IdentifierProfile = {
   reservedWords: JS_RESERVED,
