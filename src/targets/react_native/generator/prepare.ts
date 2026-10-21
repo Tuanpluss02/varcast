@@ -25,7 +25,6 @@ import type {
   SemanticTokenGraph,
 } from '../../../core/graph/types';
 import { buildSemanticGraph } from '../../../core/graph/build_graph';
-import { validate } from '../../../ir/validate';
 import {
   processSegment,
   splitWords,
@@ -168,49 +167,6 @@ export function prepareRN(
     (s) => s.groupName,
   );
 
-  // Collect unresolvable aliases
-  const seenUnresolved = new Set<string>();
-  if (isRawIR) {
-    const valResult = validate(input as IR);
-    for (const w of valResult.warnings) {
-      if (w.type === 'UNRESOLVED_ALIAS') {
-        const key = `${w.variableId}:${w.targetId}`;
-        if (!seenUnresolved.has(key)) {
-          seenUnresolved.add(key);
-          warnings.push({
-            targetId: 'react_native',
-            code: 'UNRESOLVED_ALIAS',
-            message: `Variable "${w.variableId}" references missing alias target "${w.targetId}".`,
-            details: { variableId: w.variableId, targetId: w.targetId },
-          });
-        }
-      }
-    }
-  }
-
-  for (const col of graph.collections) {
-    for (const v of col.variables) {
-      for (const [modeId, val] of Object.entries(v.rawValuesByMode ?? {})) {
-        if (val && typeof val === 'object' && val.kind === 'alias') {
-          const targetId = val.targetVariableId;
-          const targetVar = graph.variableIndex.get(targetId);
-          const resolved = v.resolvedValuesByMode?.[modeId];
-          if (!targetVar || resolved === undefined) {
-            const key = `${v.id}:${targetId}`;
-            if (!seenUnresolved.has(key)) {
-              seenUnresolved.add(key);
-              warnings.push({
-                targetId: 'react_native',
-                code: 'UNRESOLVED_ALIAS',
-                message: `Variable "${v.id}" references unresolvable alias "${targetId}".`,
-                details: { variableId: v.id, targetId, modeId },
-              });
-            }
-          }
-        }
-      }
-    }
-  }
 
   // Collect unsupported effects
   for (const s of graph.composites.effectStyles) {

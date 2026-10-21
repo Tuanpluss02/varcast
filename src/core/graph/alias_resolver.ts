@@ -113,11 +113,17 @@ export function resolveVariableLiteral(
       return resolveLiteralValue(variableIdOrValue.value);
     }
     const targetId = variableIdOrValue.targetVariableId;
-    if (visited.has(targetId)) return undefined;
+    if (visited.has(targetId)) {
+      warn?.('CYCLE', `Cycle detected in alias chain involving variable "${targetId}".`);
+      return undefined;
+    }
     visited.add(targetId);
 
     const targetVar = findVariable(targetId, lookup);
-    if (!targetVar) return undefined;
+    if (!targetVar) {
+      warn?.('UNRESOLVED_ALIAS', `Target variable "${targetId}" not found in lookup.`);
+      return undefined;
+    }
 
     let val = targetVar.valuesByMode[modeId];
     if (!val) {
@@ -139,11 +145,17 @@ export function resolveVariableLiteral(
   }
 
   const variableId = variableIdOrValue;
-  if (visited.has(variableId)) return undefined;
+  if (visited.has(variableId)) {
+    warn?.('CYCLE', `Cycle detected in alias chain involving variable "${variableId}".`);
+    return undefined;
+  }
   visited.add(variableId);
 
   const v = findVariable(variableId, lookup);
-  if (!v) return undefined;
+  if (!v) {
+    warn?.('UNRESOLVED_ALIAS', `Target variable "${variableId}" not found in lookup.`);
+    return undefined;
+  }
 
   let val = v.valuesByMode[modeId];
   if (!val) {

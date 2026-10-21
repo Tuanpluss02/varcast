@@ -3,6 +3,7 @@ import type { IR } from '../../../ir/types';
 import { isJsReservedWord } from '../../../targets/react_native/reserved';
 import { prepareRN } from '../../../targets/react_native/generator/prepare';
 import { reactNativeTarget } from '../../../targets/react_native';
+import { runEngine } from '../../../core/emit_engine';
 
 describe('React Native Target Hardening: Reserved Word Guards', () => {
   it('correctly identifies JavaScript reserved keywords', () => {
@@ -195,15 +196,15 @@ describe('React Native Target Hardening: Warnings Diagnostic Output', () => {
       composites: { paintStyles: [], effectStyles: [], textStyles: [] },
     };
 
-    const prepared = prepareRN(ir);
+    const result = runEngine(ir, [reactNativeTarget], null);
 
-    expect(prepared.warnings).toBeDefined();
-    expect(prepared.warnings!.length).toBeGreaterThan(0);
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings.length).toBeGreaterThan(0);
 
-    const aliasWarning = prepared.warnings!.find((w) => w.code === 'UNRESOLVED_ALIAS');
+    const aliasWarning = result.warnings.find((w) => w.code === 'UNRESOLVED_ALIAS');
     expect(aliasWarning).toBeDefined();
-    expect(aliasWarning!.targetId).toBe('react_native');
-    expect(aliasWarning!.details?.targetId).toBe('v:nonexistent');
+    expect(aliasWarning!.targetId).toBe('core');
+    expect(aliasWarning!.message).toContain('v:nonexistent');
   });
 
   it('outputs non-empty warnings when unsupported effect styles occur', () => {
