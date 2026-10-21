@@ -35,9 +35,9 @@ export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> 
   prepare(
     graph: SemanticTokenGraph,
     section: ManifestTargetSection | null = null,
-    _options?: ReactNativeOptions,
+    options?: ReactNativeOptions,
   ): PreparedReactNative {
-    return prepareRN(graph, section);
+    return prepareRN(graph, section, options);
   },
 
   emit(prepared: PreparedReactNative, options?: ReactNativeOptions): EmittedFile[] {

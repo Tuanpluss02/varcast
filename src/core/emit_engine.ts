@@ -58,6 +58,18 @@ export function runEngine(
 
   for (const target of resolvedTargets) {
     const options = optionsByTarget[target.id];
+    if (target.validateOptions) {
+      const optionErrors = target.validateOptions(options);
+      if (optionErrors && optionErrors.length > 0) {
+        for (const message of optionErrors) {
+          allWarnings.push({
+            targetId: target.id,
+            code: 'INVALID_OPTIONS',
+            message,
+          });
+        }
+      }
+    }
     const normalizedOptions = target.normalizeOptions
       ? target.normalizeOptions(options)
       : options;

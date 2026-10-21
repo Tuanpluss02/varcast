@@ -23,16 +23,6 @@ export interface PreparedFlutter extends PreparedTarget {
 
 export type { PreparedFlutterIR };
 
-function toTargetSection(prepared: PreparedFlutterIR): ManifestTargetSection {
-  return (
-    prepared.nextManifestSection ??
-    prepared.nextManifest?.targets?.flutter ?? {
-      variables: {},
-      collections: {},
-    }
-  );
-}
-
 function toTargetWarnings(ws: PreparedWarning[]): TargetWarning[] {
   return ws.map((w) => {
     if (w.type === 'KEYWORD_CONFLICT') {
@@ -71,7 +61,7 @@ export const flutterTarget: Target<FlutterOptions, PreparedFlutter> = {
     return {
       targetId: 'flutter',
       flutterPrepared: prepared,
-      nextManifestSection: toTargetSection(prepared),
+      nextManifestSection: prepared.nextManifestSection,
       warnings: toTargetWarnings(preparedWarnings),
     };
   },

@@ -29,6 +29,7 @@ import { validate } from '../../../ir/validate';
 import { processSegment, splitWords, toCamelCase, toKebabCase, toPascalCase } from '../../../core/sanitize_base';
 import { rgbaToRRGGBBAA } from '../type_mapping';
 import { isJsReservedWord } from '../reserved';
+import type { PartialReactNativeOptions } from '../options';
 
 export type RNPrimitiveType = 'string' | 'number' | 'boolean';
 
@@ -72,7 +73,6 @@ export interface PreparedRN extends PreparedTarget {
   /** Per-mode variable literal index (post alias-resolve). */
   resolvedVarByMode: Record<string /*modeId*/, Record<string /*varId*/, Primitive>>;
   nextManifestSection: ManifestTargetSection;
-  nextManifest?: Manifest;
   warnings: TargetWarning[];
 }
 
@@ -121,6 +121,7 @@ function kebab(raw: string): string {
 export function prepareRN(
   input: SemanticTokenGraph | IR,
   manifest: Manifest | ManifestTargetSection | null = null,
+  _options: PartialReactNativeOptions = {},
 ): PreparedRN {
   const isRawIR = 'version' in input && !('variableIndex' in input);
   const graph: SemanticTokenGraph = isRawIR
@@ -221,17 +222,6 @@ export function prepareRN(
     textStyles,
   });
 
-  const oldTargets: Manifest['targets'] =
-    manifest && 'targets' in manifest ? { ...(manifest as Manifest).targets } : {};
-  oldTargets['react_native'] = nextManifestSection;
-
-  const nextManifest: Manifest = {
-    version: '2.0',
-    fileKey: graph.fileKey,
-    lastExportedAt: new Date().toISOString(),
-    targets: oldTargets,
-  };
-
   return {
     targetId: 'react_native',
     modes,
@@ -241,7 +231,6 @@ export function prepareRN(
     textStyles,
     resolvedVarByMode,
     nextManifestSection,
-    nextManifest,
     warnings,
   };
 }

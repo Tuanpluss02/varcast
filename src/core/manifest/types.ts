@@ -92,19 +92,50 @@ export function getTargetSection(
   return manifest?.targets?.[targetId] ?? null;
 }
 
+function isRecord(val: unknown): val is Record<string, unknown> {
+  return typeof val === 'object' && val !== null && !Array.isArray(val);
+}
+
 /**
  * Normalizes a raw object into a v2 manifest, or returns null if unrecognized.
  * Strictly requires version === '2.0'. No v1 migration logic.
  */
 export function normalizeManifest(raw: unknown): Manifest | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const obj = raw as Record<string, unknown>;
+  if (!isRecord(raw)) return null;
+  const obj = raw;
   if (obj.version !== MANIFEST_VERSION) return null;
   if (typeof obj.fileKey !== 'string') return null;
   if (typeof obj.lastExportedAt !== 'string') return null;
-  if (!obj.targets || typeof obj.targets !== 'object' || Array.isArray(obj.targets)) {
-    return null;
+  if (!isRecord(obj.targets)) return null;
+
+  for (const section of Object.values(obj.targets)) {
+    if (!isRecord(section)) return null;
+    if (!isRecord(section.variables)) return null;
+    if (!isRecord(section.collections)) return null;
+    if (section.composites !== undefined && !isRecord(section.composites)) return null;
+    if (section.figmaNames !== undefined) {
+      if (!isRecord(section.figmaNames)) return null;
+      if (
+        section.figmaNames.variables !== undefined &&
+        !isRecord(section.figmaNames.variables)
+      ) {
+        return null;
+      }
+      if (
+        section.figmaNames.collections !== undefined &&
+        !isRecord(section.figmaNames.collections)
+      ) {
+        return null;
+      }
+      if (
+        section.figmaNames.composites !== undefined &&
+        !isRecord(section.figmaNames.composites)
+      ) {
+        return null;
+      }
+    }
   }
+
   return {
     version: MANIFEST_VERSION,
     fileKey: obj.fileKey,

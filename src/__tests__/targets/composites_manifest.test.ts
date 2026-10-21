@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { IR } from '../../ir/types';
+import { runEngine } from '../../core/emit_engine';
 import { prepareIR as prepareFlutterIR } from '../../targets/flutter/generator/prepare';
 import { flutterTarget } from '../../targets/flutter';
 import { prepareRN } from '../../targets/react_native/generator/prepare';
@@ -78,7 +79,7 @@ function createTestIR(overrides?: {
 }
 
 describe('Composites in Manifest — Flutter', () => {
-  it('records composites and figmaNames in nextManifest and nextManifestSection on first export (null manifest)', () => {
+  it('records composites and figmaNames in nextManifestSection on first export (null manifest)', () => {
     const ir = createTestIR();
     const prepared = prepareFlutterIR(ir, null);
 
@@ -95,7 +96,8 @@ describe('Composites in Manifest — Flutter', () => {
       text_789: 'Typography / Heading Old',
     });
 
-    expect(prepared.nextManifest.targets.flutter.composites).toEqual(
+    const engineOut = runEngine(ir, [flutterTarget], null);
+    expect(engineOut.nextManifest.targets.flutter.composites).toEqual(
       prepared.nextManifestSection.composites,
     );
   });
@@ -106,7 +108,7 @@ describe('Composites in Manifest — Flutter', () => {
       effectFigmaName: 'Elevation / Low Old',
       textFigmaName: 'Typography / Heading Old',
     });
-    const firstExport = prepareFlutterIR(initialIR, null);
+    const firstExport = runEngine(initialIR, [flutterTarget], null);
 
     // Re-export with renamed Figma style names
     const renamedIR = createTestIR({
@@ -115,24 +117,22 @@ describe('Composites in Manifest — Flutter', () => {
       textFigmaName: 'Typography / Heading New Renamed',
     });
 
-    // 1. Pass the full manifest
-    const secondExportWithManifest = prepareFlutterIR(renamedIR, firstExport.nextManifest);
-    expect(secondExportWithManifest.paintStyles[0].getterName).toBe('brandPrimaryOld');
-    expect(secondExportWithManifest.effectStyles[0].getterName).toBe('elevationLowOld');
-    expect(secondExportWithManifest.textStyles[0].getterName).toBe('typographyHeadingOld');
-    expect(secondExportWithManifest.nextManifestSection.composites).toEqual({
+    // 1. Pass the full manifest to engine
+    const secondExportWithManifest = runEngine(renamedIR, [flutterTarget], firstExport.nextManifest);
+    const flutterSec = secondExportWithManifest.nextManifest.targets.flutter;
+    expect(flutterSec.composites).toEqual({
       paint_123: 'brandPrimaryOld',
       effect_456: 'elevationLowOld',
       text_789: 'typographyHeadingOld',
     });
-    expect(secondExportWithManifest.nextManifestSection.figmaNames?.composites).toEqual({
+    expect(flutterSec.figmaNames?.composites).toEqual({
       paint_123: 'Brand / Primary New Renamed',
       effect_456: 'Elevation / Low New Renamed',
       text_789: 'Typography / Heading New Renamed',
     });
 
-    // 2. Pass just the manifest section
-    const secondExportWithSection = prepareFlutterIR(renamedIR, firstExport.nextManifestSection);
+    // 2. Pass just the manifest section to prepareFlutterIR
+    const secondExportWithSection = prepareFlutterIR(renamedIR, firstExport.nextManifest.targets.flutter);
     expect(secondExportWithSection.paintStyles[0].getterName).toBe('brandPrimaryOld');
     expect(secondExportWithSection.effectStyles[0].getterName).toBe('elevationLowOld');
     expect(secondExportWithSection.textStyles[0].getterName).toBe('typographyHeadingOld');
@@ -176,7 +176,7 @@ describe('Composites in Manifest — Flutter', () => {
 });
 
 describe('Composites in Manifest — React Native', () => {
-  it('records composites and figmaNames in nextManifest and nextManifestSection on first export (null manifest)', () => {
+  it('records composites and figmaNames in nextManifestSection on first export (null manifest)', () => {
     const ir = createTestIR();
     const prepared = prepareRN(ir, null);
 
@@ -193,7 +193,8 @@ describe('Composites in Manifest — React Native', () => {
       text_789: 'Typography / Heading Old',
     });
 
-    expect(prepared.nextManifest?.targets.react_native.composites).toEqual(
+    const engineOut = runEngine(ir, [reactNativeTarget], null);
+    expect(engineOut.nextManifest?.targets.react_native.composites).toEqual(
       prepared.nextManifestSection.composites,
     );
   });
@@ -204,7 +205,7 @@ describe('Composites in Manifest — React Native', () => {
       effectFigmaName: 'Elevation / Low Old',
       textFigmaName: 'Typography / Heading Old',
     });
-    const firstExport = prepareRN(initialIR, null);
+    const firstExport = runEngine(initialIR, [reactNativeTarget], null);
 
     // Re-export with renamed Figma style names
     const renamedIR = createTestIR({
@@ -213,24 +214,22 @@ describe('Composites in Manifest — React Native', () => {
       textFigmaName: 'Typography / Heading New Renamed',
     });
 
-    // 1. Pass the full manifest
-    const secondExportWithManifest = prepareRN(renamedIR, firstExport.nextManifest);
-    expect(secondExportWithManifest.paintStyles[0].getterName).toBe('brandPrimaryOld');
-    expect(secondExportWithManifest.effectStyles[0].getterName).toBe('elevationLowOld');
-    expect(secondExportWithManifest.textStyles[0].getterName).toBe('headingOld');
-    expect(secondExportWithManifest.nextManifestSection.composites).toEqual({
+    // 1. Pass the full manifest to engine
+    const secondExportWithManifest = runEngine(renamedIR, [reactNativeTarget], firstExport.nextManifest);
+    const rnSec = secondExportWithManifest.nextManifest.targets.react_native;
+    expect(rnSec.composites).toEqual({
       paint_123: 'brandPrimaryOld',
       effect_456: 'elevationLowOld',
       text_789: 'headingOld',
     });
-    expect(secondExportWithManifest.nextManifestSection.figmaNames?.composites).toEqual({
+    expect(rnSec.figmaNames?.composites).toEqual({
       paint_123: 'Brand / Primary New Renamed',
       effect_456: 'Elevation / Low New Renamed',
       text_789: 'Typography / Heading New Renamed',
     });
 
-    // 2. Pass just the manifest section
-    const secondExportWithSection = prepareRN(renamedIR, firstExport.nextManifestSection);
+    // 2. Pass just the manifest section to prepareRN
+    const secondExportWithSection = prepareRN(renamedIR, firstExport.nextManifest.targets.react_native);
     expect(secondExportWithSection.paintStyles[0].getterName).toBe('brandPrimaryOld');
     expect(secondExportWithSection.effectStyles[0].getterName).toBe('elevationLowOld');
     expect(secondExportWithSection.textStyles[0].getterName).toBe('headingOld');

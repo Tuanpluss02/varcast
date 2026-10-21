@@ -4,7 +4,7 @@
 
 import type { IR } from '../../../ir/types';
 import type { SemanticTokenGraph } from '../../../core/graph/types';
-import type { Manifest } from '../../../core/manifest';
+import type { ManifestTargetSection } from '../../../core/manifest';
 import { prepareIR } from './prepare';
 import type { PreparedIR } from './prepare';
 import type { ExportOptions } from './options';
@@ -35,7 +35,7 @@ export interface EmittedFile {
 export function emitPreparedPackage(
   prepared: Omit<PreparedIR, 'warnings'> & { warnings?: unknown },
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
-): { files: EmittedFile[]; nextManifest: Manifest } {
+): { files: EmittedFile[]; nextManifestSection: ManifestTargetSection } {
   const packageName = options.packageName;
 
   const selectedColIds = options.include?.collections
@@ -126,14 +126,14 @@ export function emitPreparedPackage(
     contents: smokeTestDartFile(packageName),
   });
 
-  return { files, nextManifest: prepared.nextManifest };
+  return { files, nextManifestSection: prepared.nextManifestSection };
 }
 
 export function emitPackage(
   ir: SemanticTokenGraph | IR,
-  manifest: Manifest | null = null,
+  manifest: ManifestTargetSection | null = null,
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
-): { files: EmittedFile[]; nextManifest: Manifest } {
+): { files: EmittedFile[]; nextManifestSection: ManifestTargetSection } {
   const prepared = prepareIR(ir, manifest, options);
   return emitPreparedPackage(prepared, options);
 }

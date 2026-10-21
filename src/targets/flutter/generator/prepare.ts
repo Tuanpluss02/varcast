@@ -123,7 +123,6 @@ export interface PreparedIR {
   effectStyles: PreparedEffectStyle[];
   textStyles: PreparedTextStyle[];
   varIndex: Map<string, VarRef>;
-  nextManifest: Manifest;
   nextManifestSection: ManifestTargetSection;
   warnings: PreparedWarning[];
   /** Original IR for alias resolution fallback */
@@ -192,11 +191,9 @@ export function prepareIR(
     }
   }
 
-  const { nextManifest, nextManifestSection } = buildNextManifest(
-    graph.fileKey,
+  const nextManifestSection = buildNextManifestSection(
     collections,
     { paintStyles, effectStyles, textStyles },
-    manifest,
     figmaVar,
     figmaCol,
   );
@@ -208,7 +205,6 @@ export function prepareIR(
     effectStyles,
     textStyles,
     varIndex,
-    nextManifest,
     nextManifestSection,
     warnings,
     ir,
@@ -372,18 +368,16 @@ function prepareCollection(
   };
 }
 
-function buildNextManifest(
-  fileKey: string,
+function buildNextManifestSection(
   cols: PreparedCollection[],
   composites: {
     paintStyles: PreparedPaintStyle[];
     effectStyles: PreparedEffectStyle[];
     textStyles: PreparedTextStyle[];
   },
-  oldManifest: Manifest | ManifestTargetSection | null,
   figmaVar: Record<string, string>,
   figmaCol: Record<string, string>,
-): { nextManifest: Manifest; nextManifestSection: ManifestTargetSection } {
+): ManifestTargetSection {
   const variables: Record<string, string> = {};
   const collections: Record<string, string> = {};
   const compositeMap: Record<string, string> = {};
@@ -406,7 +400,7 @@ function buildNextManifest(
     figmaComposite[s.id] = s.raw.figmaName;
   }
 
-  const nextManifestSection: ManifestTargetSection = {
+  return {
     variables,
     collections,
     composites: compositeMap,
@@ -416,19 +410,6 @@ function buildNextManifest(
       composites: figmaComposite,
     },
   };
-
-  const oldTargets: Manifest['targets'] =
-    oldManifest && 'targets' in oldManifest ? { ...oldManifest.targets } : {};
-  oldTargets[FLUTTER_TARGET_ID] = nextManifestSection;
-
-  const nextManifest: Manifest = {
-    version: '2.0',
-    fileKey,
-    lastExportedAt: new Date().toISOString(),
-    targets: oldTargets,
-  };
-
-  return { nextManifest, nextManifestSection };
 }
 
 const FLUTTER_TARGET_ID = 'flutter';
