@@ -112,6 +112,9 @@ export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
         emitToPublic,
         resolvedValuesByMode,
         rawValuesByMode,
+        collectionId: col.id,
+        collectionName: col.name,
+        collectionKind: col.kind,
       };
 
       resolvedVariables.push(resolvedVar);

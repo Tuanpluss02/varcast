@@ -8,7 +8,7 @@ import type {
   IRTextValueWithUnit,
 } from '../../ir/types';
 import { processSegment, splitWords, toCamelCase } from '../sanitize_base';
-import { clamp01, roundFloat6, toRGBAValue } from './alias_resolver';
+import { clamp01, isRGBA, roundFloat6, toRGBAValue } from './alias_resolver';
 import type {
   Mode,
   ResolvedComposites,
@@ -16,6 +16,7 @@ import type {
   ResolvedPaintStyle,
   ResolvedTextStyle,
   ResolvedVariable,
+  RGBAValue,
 } from './types';
 
 function sanitizeCompositeName(raw: string): string {
@@ -27,17 +28,18 @@ function resolveColorAndOpacity(
   color: IRColorValue | undefined,
   modeId: string,
   variableIndex: Map<string, ResolvedVariable>,
-): { hex: string | null; opacity: number } {
-  if (!color) return { hex: null, opacity: 1 };
+): { hex: string | null; opacity: number; rgba: RGBAValue | null } {
+  if (!color) return { hex: null, opacity: 1, rgba: null };
 
   if (color.kind === 'literal') {
-    const hex = toRGBAValue(color.rgba).hex;
+    const rgba = toRGBAValue(color.rgba);
+    const hex = rgba.hex;
     const opacity = roundFloat6(clamp01(color.rgba.a));
-    return { hex, opacity };
+    return { hex, opacity, rgba };
   }
 
   const target = variableIndex.get(color.targetVariableId);
-  if (!target) return { hex: null, opacity: 1 };
+  if (!target) return { hex: null, opacity: 1, rgba: null };
 
   let resolved = target.resolvedValuesByMode[modeId];
   if (resolved === undefined) {
@@ -45,24 +47,38 @@ function resolveColorAndOpacity(
     if (keys.length > 0) resolved = target.resolvedValuesByMode[keys[0]];
   }
 
-  if (resolved && typeof resolved === 'object' && 'hex' in resolved) {
-    const opacity =
-      'a' in resolved && typeof resolved.a === 'number'
-        ? roundFloat6(clamp01(resolved.a))
-        : 1;
-    return { hex: resolved.hex, opacity };
+  if (resolved && typeof resolved === 'object' && isRGBA(resolved)) {
+    const rgba: RGBAValue =
+      'hex' in resolved &&
+      typeof resolved.hex === 'string' &&
+      'rgbaString' in resolved &&
+      typeof resolved.rgbaString === 'string'
+        ? (resolved as RGBAValue)
+        : toRGBAValue(resolved);
+    const opacity = roundFloat6(clamp01(rgba.a));
+    return { hex: rgba.hex, opacity, rgba };
   }
 
   if (typeof resolved === 'string' && resolved.startsWith('#')) {
     let opacity = 1;
+    let rgba: RGBAValue | null = null;
     if (resolved.length === 9) {
-      const aa = parseInt(resolved.slice(7, 9), 16);
-      if (Number.isFinite(aa)) opacity = roundFloat6(clamp01(aa / 255));
+      const rr = parseInt(resolved.slice(1, 3), 16) / 255;
+      const gg = parseInt(resolved.slice(3, 5), 16) / 255;
+      const bb = parseInt(resolved.slice(5, 7), 16) / 255;
+      const aa = parseInt(resolved.slice(7, 9), 16) / 255;
+      if (Number.isFinite(aa)) opacity = roundFloat6(clamp01(aa));
+      rgba = toRGBAValue({ r: rr, g: gg, b: bb, a: Number.isFinite(aa) ? aa : 1 });
+    } else if (resolved.length === 7) {
+      const rr = parseInt(resolved.slice(1, 3), 16) / 255;
+      const gg = parseInt(resolved.slice(3, 5), 16) / 255;
+      const bb = parseInt(resolved.slice(5, 7), 16) / 255;
+      rgba = toRGBAValue({ r: rr, g: gg, b: bb, a: 1 });
     }
-    return { hex: resolved, opacity };
+    return { hex: resolved, opacity, rgba };
   }
 
-  return { hex: null, opacity: 1 };
+  return { hex: null, opacity: 1, rgba: null };
 }
 
 function resolvePaintStyle(
@@ -78,20 +94,25 @@ function resolvePaintStyle(
   for (const mode of modes) {
     switch (style.type) {
       case 'SOLID': {
-        const { hex } = resolveColorAndOpacity(style.color, mode.id, variableIndex);
-        valuesByMode[mode.id] = { hex };
+        const { hex, rgba } = resolveColorAndOpacity(style.color, mode.id, variableIndex);
+        valuesByMode[mode.id] = { hex, rgba };
         break;
       }
       case 'GRADIENT_LINEAR':
       case 'GRADIENT_RADIAL':
       case 'GRADIENT_ANGULAR':
       case 'GRADIENT_DIAMOND': {
-        const stops = (style.stops ?? []).map((stop) => ({
-          hex: resolveColorAndOpacity(stop.color, mode.id, variableIndex).hex,
-          position: stop.position,
-        }));
+        const stops = (style.stops ?? []).map((stop) => {
+          const { hex, rgba } = resolveColorAndOpacity(stop.color, mode.id, variableIndex);
+          return {
+            hex,
+            rgba,
+            position: stop.position,
+          };
+        });
         valuesByMode[mode.id] = {
           hex: stops[0]?.hex ?? null,
+          rgba: stops[0]?.rgba ?? null,
           stops,
         };
         break;
@@ -99,12 +120,13 @@ function resolvePaintStyle(
       case 'IMAGE': {
         valuesByMode[mode.id] = {
           hex: null,
+          rgba: null,
           assetName: style.assetName,
         };
         break;
       }
       default: {
-        valuesByMode[mode.id] = { hex: null };
+        valuesByMode[mode.id] = { hex: null, rgba: null };
         break;
       }
     }
@@ -135,7 +157,7 @@ function resolveEffectStyle(
     switch (style.type) {
       case 'DROP_SHADOW':
       case 'INNER_SHADOW': {
-        const { hex, opacity: resolvedOpacity } = resolveColorAndOpacity(
+        const { hex, opacity: resolvedOpacity, rgba } = resolveColorAndOpacity(
           style.color,
           mode.id,
           variableIndex,
@@ -147,6 +169,7 @@ function resolveEffectStyle(
 
         valuesByMode[mode.id] = {
           shadowColor: hex,
+          rgba,
           offsetX: style.offsetX ?? 0,
           offsetY: style.offsetY ?? 0,
           blurRadius: style.blurRadius ?? 0,
@@ -163,6 +186,7 @@ function resolveEffectStyle(
           0;
         valuesByMode[mode.id] = {
           shadowColor: null,
+          rgba: null,
           offsetX: 0,
           offsetY: 0,
           blurRadius,
@@ -174,6 +198,7 @@ function resolveEffectStyle(
       default: {
         valuesByMode[mode.id] = {
           shadowColor: null,
+          rgba: null,
           offsetX: 0,
           offsetY: 0,
           blurRadius: 0,

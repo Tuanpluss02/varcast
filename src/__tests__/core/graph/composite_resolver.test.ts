@@ -35,6 +35,9 @@ describe('Core Composite Resolution', () => {
             m2: { r: 0, g: 0, b: 1, a: 1, hex: '#0000FFFF', rgbaString: 'rgba(0, 0, 255, 1)' },
           },
           rawValuesByMode: {},
+          collectionId: 'c1',
+          collectionName: 'Colors',
+          collectionKind: 'primitive',
         },
       ],
     ]);
@@ -91,6 +94,9 @@ describe('Core Composite Resolution', () => {
             m1: { r: 1, g: 1, b: 0, a: 1, hex: '#FFFF00FF', rgbaString: 'rgba(255, 255, 0, 1)' },
           },
           rawValuesByMode: {},
+          collectionId: 'c1',
+          collectionName: 'Colors',
+          collectionKind: 'primitive',
         },
       ],
     ]);
@@ -153,6 +159,9 @@ describe('Core Composite Resolution', () => {
             m1: { r: 0, g: 0, b: 0, a: 0.25, hex: '#00000040', rgbaString: 'rgba(0, 0, 0, 0.25)' },
           },
           rawValuesByMode: {},
+          collectionId: 'c1',
+          collectionName: 'Colors',
+          collectionKind: 'primitive',
         },
       ],
     ]);
@@ -205,6 +214,9 @@ describe('Core Composite Resolution', () => {
           emitToPublic: true,
           resolvedValuesByMode: { m1: 'Roboto' },
           rawValuesByMode: {},
+          collectionId: 'c1',
+          collectionName: 'Typography',
+          collectionKind: 'primitive',
         },
       ],
       [
@@ -219,6 +231,9 @@ describe('Core Composite Resolution', () => {
           emitToPublic: true,
           resolvedValuesByMode: { m1: 32 },
           rawValuesByMode: {},
+          collectionId: 'c1',
+          collectionName: 'Typography',
+          collectionKind: 'primitive',
         },
       ],
     ]);

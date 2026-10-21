@@ -20,6 +20,17 @@ export interface Mode {
   key: string;
 }
 
+export interface ResolvedPaintValue {
+  readonly hex: string | null;
+  readonly rgba: RGBAValue | null;
+  readonly stops?: Array<{
+    readonly hex: string | null;
+    readonly rgba: RGBAValue | null;
+    readonly position: number;
+  }>;
+  readonly assetName?: string;
+}
+
 export interface ResolvedPaintStyle {
   readonly id: string;
   readonly name: string;
@@ -27,14 +38,17 @@ export interface ResolvedPaintStyle {
   readonly groupPath?: string[];
   readonly type: IRPaintStyle['type'];
   readonly raw: IRPaintStyle;
-  readonly valuesByMode: Record<
-    string,
-    {
-      hex: string | null;
-      stops?: Array<{ hex: string | null; position: number }>;
-      assetName?: string;
-    }
-  >;
+  readonly valuesByMode: Record<string, ResolvedPaintValue>;
+}
+
+export interface ResolvedEffectValue {
+  readonly shadowColor: string | null;
+  readonly rgba: RGBAValue | null;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly blurRadius: number;
+  readonly spread?: number;
+  readonly opacity: number;
 }
 
 export interface ResolvedEffectStyle {
@@ -44,17 +58,7 @@ export interface ResolvedEffectStyle {
   readonly groupPath?: string[];
   readonly type: IREffectStyle['type'];
   readonly raw: IREffectStyle;
-  readonly valuesByMode: Record<
-    string,
-    {
-      shadowColor: string | null;
-      offsetX: number;
-      offsetY: number;
-      blurRadius: number;
-      spread?: number;
-      opacity: number;
-    }
-  >;
+  readonly valuesByMode: Record<string, ResolvedEffectValue>;
 }
 
 export interface ResolvedTextStyle {
@@ -91,6 +95,9 @@ export interface ResolvedVariable {
   emitToPublic: boolean;
   resolvedValuesByMode: Record<string, ResolvedLiteral>;
   rawValuesByMode: Record<string, IRValue>;
+  collectionId: string;
+  collectionName: string;
+  collectionKind: 'primitive' | 'token';
 }
 
 export interface TokenTreeNode {
