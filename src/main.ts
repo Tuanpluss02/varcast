@@ -3,7 +3,7 @@ import { validate } from './ir/validate';
 import type { Manifest } from './core/manifest';
 import { normalizeManifest, diffManifestForTarget } from './core/manifest';
 import { generateChangelog } from './core/manifest/changelog';
-import { buildZip } from './zip';
+import { handleDownloadZip, type PendingExportData } from './download_handler';
 import { runEngine } from './core/emit_engine';
 import { getTarget } from './core/registry';
 // Ensure default targets are registered:
@@ -18,12 +18,7 @@ import {
 
 figma.showUI(__html__, { width: 440, height: 720, themeColors: false });
 
-type Pending = {
-  files: { path: string; contents: string }[];
-  nextManifest: Manifest;
-  packageName: string;
-};
-let pending: Pending | null = null;
+let pending: PendingExportData | null = null;
 
 figma.ui.onmessage = async (msg: unknown) => {
   const m = (msg ?? {}) as { type?: string; options?: unknown };
@@ -150,21 +145,11 @@ figma.ui.onmessage = async (msg: unknown) => {
   }
 
   if (m.type === 'download-zip') {
-    if (!pending) {
-      figma.ui.postMessage({
-        type: 'error',
-        message: 'No pending export. Run Export again.',
-      });
-      return;
-    }
-    figma.ui.postMessage({ type: 'exporting' });
-    await figma.clientStorage.setAsync('manifest_v2', pending.nextManifest);
-    const zipBytes = buildZip(pending.files);
-    figma.ui.postMessage({
-      type: 'zip-ready',
-      filename: `${pending.packageName}.zip`,
-      bytes: zipBytes,
-    });
+    await handleDownloadZip(
+      pending,
+      figma.clientStorage,
+      figma.ui.postMessage.bind(figma.ui),
+    );
   }
 
   if (m.type === 'cancel') {
