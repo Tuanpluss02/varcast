@@ -126,13 +126,6 @@ export function emitPreparedPackage(
     contents: smokeTestDartFile(packageName),
   });
 
-  if (prepared.ir) {
-    files.push({
-      path: '_meta/ir.json',
-      contents: JSON.stringify(prepared.ir, null, 2),
-    });
-  }
-
   return { files, nextManifest: prepared.nextManifest };
 }
 

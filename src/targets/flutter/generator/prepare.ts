@@ -119,7 +119,7 @@ export interface PreparedIR {
   nextManifest: Manifest;
   nextManifestSection: ManifestTargetSection;
   warnings: PreparedWarning[];
-  /** Original IR for debug artifacts (ir.json) */
+  /** Original IR for alias resolution fallback */
   ir?: IR;
 }
 
