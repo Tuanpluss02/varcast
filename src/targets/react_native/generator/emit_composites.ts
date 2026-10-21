@@ -5,11 +5,6 @@ import type {
   PreparedRNPaintStyle,
   PreparedRNTextStyle,
 } from './prepare';
-import {
-  resolveColorValueToHex,
-  resolveTextValue,
-  resolveTextValueWithUnit,
-} from './prepare';
 
 export function emitComposites(prepared: PreparedRN): EmittedFile[] {
   const colorStyles = emitColorStyles(prepared.paintStyles, prepared);
@@ -29,12 +24,11 @@ function emitColorStyles(styles: PreparedRNPaintStyle[], prepared: PreparedRN): 
     unsupported: {},
   };
   for (const s of styles) {
-    const r = s.raw;
-    if (r.type === 'SOLID') {
+    if (s.type === 'SOLID') {
       const byMode: Record<string, string | null> = {};
       for (const mode of prepared.modes) {
-        const hex = resolveColorValueToHex(mode.id, r.color, prepared.resolvedVarByMode);
-        byMode[mode.key] = hex;
+        const modeVal = s.valuesByMode[mode.id] ?? s.valuesByMode[mode.key];
+        byMode[mode.key] = modeVal?.hex ?? null;
       }
       out.solid[s.getterName] = byMode;
     } else {
@@ -57,16 +51,20 @@ function emitShadows(styles: PreparedRNEffectStyle[], prepared: PreparedRN): str
   };
 
   for (const s of styles) {
-    const r = s.raw;
-    if (r.type === 'DROP_SHADOW') {
+    if (s.raw.type === 'DROP_SHADOW') {
+      const r = s.raw;
       const byMode: Record<string, unknown> = {};
       for (const mode of prepared.modes) {
-        const hex = resolveColorValueToHex(mode.id, r.color, prepared.resolvedVarByMode);
-        const opacity = hex ? alphaFromHex(hex) : 1;
+        const modeVal = s.valuesByMode[mode.id] ?? s.valuesByMode[mode.key];
+        const hex = modeVal?.shadowColor ?? null;
+        const opacity = modeVal ? modeVal.opacity : (hex ? alphaFromHex(hex) : 1);
         byMode[mode.key] = {
           shadowColor: hex ?? '#00000000',
-          shadowOffset: { width: r.offsetX, height: r.offsetY },
-          shadowRadius: r.blurRadius,
+          shadowOffset: {
+            width: modeVal?.offsetX ?? r.offsetX,
+            height: modeVal?.offsetY ?? r.offsetY,
+          },
+          shadowRadius: modeVal?.blurRadius ?? r.blurRadius,
           shadowOpacity: opacity,
           elevation: 0,
         };
@@ -89,33 +87,42 @@ function emitTextStyles(styles: PreparedRNTextStyle[], prepared: PreparedRN): st
   const out: Record<string, Record<string, Record<string, Record<string, string | number>>>> = {};
 
   for (const s of styles) {
-    const r = s.raw;
     const byMode: Record<string, Record<string, string | number>> = {};
     for (const mode of prepared.modes) {
-      const fontFamily = resolveTextValue<string>(mode.id, r.fontFamily, prepared.resolvedVarByMode);
-      const fontSize = resolveTextValue<number>(mode.id, r.fontSize, prepared.resolvedVarByMode);
-      const fontWeight = resolveTextValue<number>(mode.id, r.fontWeight, prepared.resolvedVarByMode);
-      const lh = resolveTextValueWithUnit(mode.id, r.lineHeight, prepared.resolvedVarByMode);
-      const ls = resolveTextValueWithUnit(mode.id, r.letterSpacing, prepared.resolvedVarByMode);
-
+      const modeVal = s.valuesByMode[mode.id] ?? s.valuesByMode[mode.key];
       const style: Record<string, string | number> = {};
-      if (fontFamily != null) style.fontFamily = fontFamily;
-      if (fontSize != null) style.fontSize = fontSize;
-      if (fontWeight != null) style.fontWeight = String(Math.round(fontWeight));
 
-      const fsForPercent = fontSize ?? 16;
-      if (lh) {
-        if (lh.unit === 'PIXELS') {
-          style.lineHeight = lh.value;
-        } else if (lh.unit === 'PERCENT') {
-          style.lineHeight = (lh.value / 100) * fsForPercent;
+      if (modeVal) {
+        if (modeVal.fontFamily != null) {
+          style.fontFamily = modeVal.fontFamily;
         }
-      }
-      if (ls) {
-        if (ls.unit === 'PIXELS') {
-          style.letterSpacing = ls.value;
-        } else if (ls.unit === 'PERCENT') {
-          style.letterSpacing = (ls.value / 100) * fsForPercent;
+        if (modeVal.fontSize != null) {
+          style.fontSize = modeVal.fontSize;
+        }
+        if (modeVal.fontWeight != null) {
+          const numWeight = parseFloat(modeVal.fontWeight);
+          style.fontWeight = Number.isFinite(numWeight)
+            ? String(Math.round(numWeight))
+            : modeVal.fontWeight;
+        }
+
+        const fsForPercent = modeVal.fontSize ?? 16;
+        const lh = modeVal.lineHeight;
+        if (lh) {
+          if (lh.unit === 'PIXELS') {
+            style.lineHeight = lh.value;
+          } else if (lh.unit === 'PERCENT') {
+            style.lineHeight = (lh.value / 100) * fsForPercent;
+          }
+        }
+
+        const ls = modeVal.letterSpacing;
+        if (ls) {
+          if (ls.unit === 'PIXELS') {
+            style.letterSpacing = ls.value;
+          } else if (ls.unit === 'PERCENT') {
+            style.letterSpacing = (ls.value / 100) * fsForPercent;
+          }
         }
       }
 

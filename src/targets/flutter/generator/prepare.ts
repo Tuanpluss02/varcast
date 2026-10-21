@@ -87,6 +87,8 @@ export interface PreparedPaintStyle {
   getterName: string; // remaining segments joined into camelCase
   isStable?: boolean;
   raw: IRPaintStyle;
+  resolved?: ResolvedPaintStyle;
+  valuesByMode?: ResolvedPaintStyle['valuesByMode'];
 }
 
 export interface PreparedEffectStyle {
@@ -96,6 +98,8 @@ export interface PreparedEffectStyle {
   getterName: string;
   isStable?: boolean;
   raw: IREffectStyle;
+  resolved?: ResolvedEffectStyle;
+  valuesByMode?: ResolvedEffectStyle['valuesByMode'];
 }
 
 export interface PreparedTextStyle {
@@ -104,6 +108,8 @@ export interface PreparedTextStyle {
   getterName: string;
   isStable?: boolean;
   raw: IRTextStyle;
+  resolved?: ResolvedTextStyle;
+  valuesByMode?: ResolvedTextStyle['valuesByMode'];
 }
 
 export type PreparedWarning =
@@ -418,6 +424,24 @@ function buildNextManifestSection(
 
 const FLUTTER_TARGET_ID = 'flutter';
 
+function isResolvedPaintStyle(
+  s: IRPaintStyle | ResolvedPaintStyle,
+): s is ResolvedPaintStyle {
+  return 'valuesByMode' in s && 'raw' in s;
+}
+
+function isResolvedEffectStyle(
+  s: IREffectStyle | ResolvedEffectStyle,
+): s is ResolvedEffectStyle {
+  return 'valuesByMode' in s && 'raw' in s;
+}
+
+function isResolvedTextStyle(
+  s: IRTextStyle | ResolvedTextStyle,
+): s is ResolvedTextStyle {
+  return 'valuesByMode' in s && 'raw' in s;
+}
+
 function preparePaint(
   s: IRPaintStyle | ResolvedPaintStyle,
   manifestSection?: ManifestTargetSection | null,
@@ -427,13 +451,17 @@ function preparePaint(
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
   const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
   const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  const resolved = isResolvedPaintStyle(s) ? s : undefined;
+  const raw = isResolvedPaintStyle(s) ? s.raw : s;
   return {
     id: s.id,
     type: s.type,
     groupName: 'Paint',
     getterName,
     isStable,
-    raw: 'raw' in s ? s.raw : s,
+    raw,
+    resolved,
+    valuesByMode: resolved?.valuesByMode,
   };
 }
 
@@ -446,13 +474,17 @@ function prepareEffect(
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
   const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
   const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  const resolved = isResolvedEffectStyle(s) ? s : undefined;
+  const raw = isResolvedEffectStyle(s) ? s.raw : s;
   return {
     id: s.id,
     type: s.type,
     groupName: 'Effect',
     getterName,
     isStable,
-    raw: 'raw' in s ? s.raw : s,
+    raw,
+    resolved,
+    valuesByMode: resolved?.valuesByMode,
   };
 }
 
@@ -465,12 +497,16 @@ function prepareText(
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
   const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
   const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  const resolved = isResolvedTextStyle(s) ? s : undefined;
+  const raw = isResolvedTextStyle(s) ? s.raw : s;
   return {
     id: s.id,
     groupName: 'Text',
     getterName,
     isStable,
-    raw: 'raw' in s ? s.raw : s,
+    raw,
+    resolved,
+    valuesByMode: resolved?.valuesByMode,
   };
 }
 

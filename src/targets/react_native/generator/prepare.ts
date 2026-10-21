@@ -1,12 +1,9 @@
 import type {
   IR,
   IRCollection,
-  IRColorValue,
   IREffectStyle,
   IRPaintStyle,
   IRTextStyle,
-  IRTextValue,
-  IRTextValueWithUnit,
   IRValue,
   IRVariable,
 } from '../../../ir/types';
@@ -21,7 +18,6 @@ import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core
 import type { PreparedTarget, TargetWarning } from '../../../core/target';
 import type {
   GraphCollection,
-  ResolvedComposites,
   ResolvedEffectStyle,
   ResolvedLiteral,
   ResolvedPaintStyle,
@@ -31,7 +27,6 @@ import type {
 import { buildSemanticGraph } from '../../../core/graph/build_graph';
 import { validate } from '../../../ir/validate';
 import { processSegment, splitWords, toCamelCase, toKebabCase, toPascalCase } from '../../../core/sanitize_base';
-import { rgbaToRRGGBBAA } from '../type_mapping';
 import { isJsReservedWord } from '../reserved';
 import type { PartialReactNativeOptions } from '../options';
 
@@ -74,8 +69,6 @@ export interface PreparedRN extends PreparedTarget {
   paintStyles: PreparedRNPaintStyle[];
   effectStyles: PreparedRNEffectStyle[];
   textStyles: PreparedRNTextStyle[];
-  /** Per-mode variable literal index (post alias-resolve). */
-  resolvedVarByMode: Record<string /*modeId*/, Record<string /*varId*/, Primitive>>;
   nextManifestSection: ManifestTargetSection;
   warnings: TargetWarning[];
 }
@@ -87,6 +80,8 @@ export interface PreparedRNPaintStyle {
   getterName: string;
   isStable?: boolean;
   raw: IRPaintStyle;
+  resolved: ResolvedPaintStyle;
+  valuesByMode: ResolvedPaintStyle['valuesByMode'];
 }
 
 export interface PreparedRNEffectStyle {
@@ -96,6 +91,8 @@ export interface PreparedRNEffectStyle {
   getterName: string;
   isStable?: boolean;
   raw: IREffectStyle;
+  resolved: ResolvedEffectStyle;
+  valuesByMode: ResolvedEffectStyle['valuesByMode'];
 }
 
 export interface PreparedRNTextStyle {
@@ -104,6 +101,8 @@ export interface PreparedRNTextStyle {
   getterName: string;
   isStable?: boolean;
   raw: IRTextStyle;
+  resolved: ResolvedTextStyle;
+  valuesByMode: ResolvedTextStyle['valuesByMode'];
 }
 
 function words(raw: string): string[] {
@@ -148,8 +147,6 @@ export function prepareRN(
   const collections: PreparedRNCollection[] = graph.collections.map((c) =>
     prepareCollection(c, manifestSection, warnings),
   );
-
-  const resolvedVarByMode = extractResolvedVarByMode(graph);
 
   const paintStyles = dedupGetters(
     graph.composites.paintStyles.map((s) => preparePaint(s, manifestSection)),
@@ -233,7 +230,6 @@ export function prepareRN(
     paintStyles,
     effectStyles,
     textStyles,
-    resolvedVarByMode,
     nextManifestSection,
     warnings,
   };
@@ -432,7 +428,7 @@ function lowerFirst(s: string): string {
 }
 
 function preparePaint(
-  s: IRPaintStyle | ResolvedPaintStyle,
+  s: ResolvedPaintStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedRNPaintStyle {
   const derivedGetterName = camel(s.figmaName);
@@ -448,12 +444,14 @@ function preparePaint(
     groupName: paintBucket(s.type),
     getterName,
     isStable,
-    raw: 'raw' in s ? s.raw : s,
+    raw: s.raw,
+    resolved: s,
+    valuesByMode: s.valuesByMode,
   };
 }
 
 function prepareEffect(
-  s: IREffectStyle | ResolvedEffectStyle,
+  s: ResolvedEffectStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedRNEffectStyle {
   const derivedGetterName = camel(s.figmaName);
@@ -469,12 +467,14 @@ function prepareEffect(
     groupName: effectBucket(s.type),
     getterName,
     isStable,
-    raw: 'raw' in s ? s.raw : s,
+    raw: s.raw,
+    resolved: s,
+    valuesByMode: s.valuesByMode,
   };
 }
 
 function prepareText(
-  s: IRTextStyle | ResolvedTextStyle,
+  s: ResolvedTextStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedRNTextStyle {
   const segs = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
@@ -496,7 +496,9 @@ function prepareText(
     groupName,
     getterName,
     isStable,
-    raw: 'raw' in s ? s.raw : s,
+    raw: s.raw,
+    resolved: s,
+    valuesByMode: s.valuesByMode,
   };
 }
 
@@ -528,67 +530,4 @@ function effectBucket(t: IREffectStyle['type']): string {
     case 'BACKGROUND_BLUR':
       return 'BackgroundBlur';
   }
-}
-
-type Primitive = string | number | boolean;
-
-function extractResolvedVarByMode(
-  graph: SemanticTokenGraph,
-): Record<string, Record<string, Primitive>> {
-  const out: Record<string, Record<string, Primitive>> = {};
-
-  for (const mode of graph.allModes) {
-    out[mode.id] = {};
-  }
-
-  for (const [, v] of graph.variableIndex) {
-    for (const [modeId, resolvedLit] of Object.entries(v.resolvedValuesByMode)) {
-      if (!out[modeId]) {
-        out[modeId] = {};
-      }
-      if (typeof resolvedLit === 'object' && resolvedLit !== null && 'hex' in resolvedLit) {
-        out[modeId][v.id] = resolvedLit.hex;
-      } else if (
-        typeof resolvedLit === 'number' ||
-        typeof resolvedLit === 'string' ||
-        typeof resolvedLit === 'boolean'
-      ) {
-        out[modeId][v.id] = resolvedLit;
-      }
-    }
-  }
-
-  return out;
-}
-
-export function resolveColorValueToHex(
-  modeId: string,
-  c: IRColorValue,
-  resolvedVarByMode: Record<string, Record<string, Primitive>>,
-): string | null {
-  if (c.kind === 'literal') return rgbaToRRGGBBAA(c.rgba);
-  const v = resolvedVarByMode[modeId]?.[c.targetVariableId];
-  return typeof v === 'string' ? v : null;
-}
-
-export function resolveTextValue<T extends Primitive>(
-  modeId: string,
-  v: IRTextValue<T>,
-  resolvedVarByMode: Record<string, Record<string, Primitive>>,
-): T | null {
-  if (v.kind === 'literal') return v.value;
-  const id = v.targetVariableId;
-  const got = resolvedVarByMode[modeId]?.[id];
-  return (got as T) ?? null;
-}
-
-export function resolveTextValueWithUnit(
-  modeId: string,
-  v: IRTextValueWithUnit<number>,
-  resolvedVarByMode: Record<string, Record<string, Primitive>>,
-): { value: number; unit: 'PIXELS' | 'PERCENT' | 'AUTO' } | null {
-  if (v.kind === 'literal') return { value: v.value, unit: v.unit };
-  const id = v.targetVariableId;
-  const got = resolvedVarByMode[modeId]?.[id];
-  return typeof got === 'number' ? { value: got, unit: 'PIXELS' } : null;
 }

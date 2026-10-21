@@ -111,6 +111,17 @@ function emitPaintGetter(
   }
 }
 
+function isRgba(val: unknown): val is { r: number; g: number; b: number; a: number } {
+  return (
+    typeof val === 'object' &&
+    val !== null &&
+    'r' in val &&
+    'g' in val &&
+    'b' in val &&
+    'a' in val
+  );
+}
+
 function colorRef(
   c: IRColorValue,
   varIndex: Map<string, VarRef>,
@@ -126,9 +137,12 @@ function colorRef(
         ref.leafName,
       );
     }
+    if (ref?.resolvedLiteral && isRgba(ref.resolvedLiteral)) {
+      return colorLiteral(ref.resolvedLiteral);
+    }
     const resolved = resolveToLiteralValue(c.targetVariableId, 0, ir);
-    if (resolved && resolved.kind === 'literal' && typeof resolved.value === 'object') {
-      return colorLiteral(resolved.value as { r: number; g: number; b: number; a: number });
+    if (resolved && resolved.kind === 'literal' && typeof resolved.value === 'object' && isRgba(resolved.value)) {
+      return colorLiteral(resolved.value);
     }
     return 'const Color(0x00000000)';
   }
@@ -342,10 +356,18 @@ function aliasExpr(
       ref.leafName,
     );
   }
+  if (ref?.resolvedLiteral !== undefined) {
+    if (type === 'String' && typeof ref.resolvedLiteral === 'string') {
+      return stringLiteral(ref.resolvedLiteral);
+    }
+    if (type === 'double' && typeof ref.resolvedLiteral === 'number') {
+      return doubleLiteral(ref.resolvedLiteral);
+    }
+  }
   const resolved = resolveToLiteralValue(id, 0, ir);
   if (resolved && resolved.kind === 'literal') {
-    if (type === 'String') return stringLiteral(resolved.value as string);
-    return doubleLiteral(resolved.value as number);
+    if (type === 'String' && typeof resolved.value === 'string') return stringLiteral(resolved.value);
+    if (type === 'double' && typeof resolved.value === 'number') return doubleLiteral(resolved.value);
   }
   return type === 'String' ? "''" : '0.0';
 }
