@@ -75,7 +75,7 @@ export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
         leafName = v.groupPath[0];
       } else {
         groupPath = [];
-        leafName = v.figmaName || (v as any).name || 'unnamed';
+        leafName = v.figmaName || 'unnamed';
       }
 
       const rawValuesByMode: Record<string, IRValue> = { ...v.valuesByMode };
