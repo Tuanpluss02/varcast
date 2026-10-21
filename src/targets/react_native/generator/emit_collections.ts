@@ -16,11 +16,27 @@ function valueLiteral(v: IRValue): unknown {
   return rgbaToRRGGBBAA(val);
 }
 
-function setDeep(obj: any, path: string[], leaf: string, value: unknown) {
+export function setDeep(
+  obj: Record<string, any>,
+  path: string[],
+  leaf: string,
+  value: unknown,
+): void {
   let cur = obj;
-  for (const p of path) {
+  for (let i = 0; i < path.length; i++) {
+    const p = path[i];
+    if (cur[p] !== undefined && (typeof cur[p] !== 'object' || cur[p] === null)) {
+      throw new Error(
+        `React Native nesting conflict: Path segment "${p}" in path "${path.join('.')}.${leaf}" is already set to a primitive value.`,
+      );
+    }
     if (!cur[p]) cur[p] = {};
     cur = cur[p];
+  }
+  if (cur[leaf] !== undefined && typeof cur[leaf] === 'object' && cur[leaf] !== null) {
+    throw new Error(
+      `React Native nesting conflict: Leaf "${leaf}" in path "${path.join('.')}.${leaf}" cannot overwrite an existing group object.`,
+    );
   }
   cur[leaf] = value;
 }

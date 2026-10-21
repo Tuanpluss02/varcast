@@ -28,8 +28,8 @@ function flutterManifest(
 describe('manifest', () => {
   it('resolveStableVariableName: rename in Figma keeps stable name by id', () => {
     const m = flutterManifest({ 'var:1': 'n900' });
-    expect(resolveStableVariableName('flutter', 'var:1', 'charcoal', m)).toBe('n900');
-    expect(resolveStableVariableName('flutter', 'var:2', 'n800', m)).toBe('n800');
+    expect(resolveStableVariableName(m.targets.flutter, 'var:1', 'charcoal')).toBe('n900');
+    expect(resolveStableVariableName(m.targets.flutter, 'var:2', 'n800')).toBe('n800');
   });
 
   it('resolveStableName: migrates legacy _2 suffix to Dart-style digit suffix', () => {

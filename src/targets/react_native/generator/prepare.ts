@@ -81,6 +81,7 @@ export interface PreparedRNPaintStyle {
   type: IRPaintStyle['type'];
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IRPaintStyle;
 }
 
@@ -89,6 +90,7 @@ export interface PreparedRNEffectStyle {
   type: IREffectStyle['type'];
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IREffectStyle;
 }
 
@@ -96,6 +98,7 @@ export interface PreparedRNTextStyle {
   id: string;
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IRTextStyle;
 }
 
@@ -132,35 +135,27 @@ export function prepareRN(
 
   const warnings: TargetWarning[] = [];
 
-  const collections: PreparedRNCollection[] = graph.collections.map((c) =>
-    prepareCollection(c, manifest, warnings),
-  );
-
   const manifestSection: ManifestTargetSection | null =
     manifest && 'collections' in manifest
       ? (manifest as ManifestTargetSection)
       : getTargetSection(manifest as Manifest | null, 'react_native');
-  const parentManifest: Manifest | null =
-    manifest && 'targets' in manifest ? (manifest as Manifest) : null;
+
+  const collections: PreparedRNCollection[] = graph.collections.map((c) =>
+    prepareCollection(c, manifestSection, warnings),
+  );
 
   const resolvedVarByMode = extractResolvedVarByMode(graph);
 
   const paintStyles = dedupGetters(
-    graph.composites.paintStyles.map((s) =>
-      preparePaint(s, manifestSection, parentManifest),
-    ),
+    graph.composites.paintStyles.map((s) => preparePaint(s, manifestSection)),
     (s) => s.groupName,
   );
   const effectStyles = dedupGetters(
-    graph.composites.effectStyles.map((s) =>
-      prepareEffect(s, manifestSection, parentManifest),
-    ),
+    graph.composites.effectStyles.map((s) => prepareEffect(s, manifestSection)),
     (s) => s.groupName,
   );
   const textStyles = dedupGetters(
-    graph.composites.textStyles.map((s) =>
-      prepareText(s, manifestSection, parentManifest),
-    ),
+    graph.composites.textStyles.map((s) => prepareText(s, manifestSection)),
     (s) => s.groupName,
   );
 
@@ -186,9 +181,7 @@ export function prepareRN(
 
   for (const col of graph.collections) {
     for (const v of col.variables) {
-      for (const [modeId, val] of Object.entries(
-        v.rawValuesByMode ?? (v as any).valuesByMode ?? {},
-      )) {
+      for (const [modeId, val] of Object.entries(v.rawValuesByMode ?? {})) {
         if (val && typeof val === 'object' && val.kind === 'alias') {
           const targetId = val.targetVariableId;
           const targetVar = graph.variableIndex.get(targetId);
@@ -255,15 +248,14 @@ export function prepareRN(
 
 function prepareCollection(
   col: GraphCollection,
-  manifest: Manifest | ManifestTargetSection | null,
+  manifestSection: ManifestTargetSection | null,
   warnings: TargetWarning[],
 ): PreparedRNCollection {
   const derivedType = pascal(col.name);
   const typeName = resolveStableCollectionName(
-    manifest && 'collections' in manifest ? (manifest as ManifestTargetSection) : 'react_native',
+    manifestSection,
     col.id,
     derivedType,
-    manifest && 'targets' in manifest ? (manifest as Manifest) : null,
   );
   let exportName = lowerFirst(typeName);
   if (isJsReservedWord(exportName)) {
@@ -283,6 +275,19 @@ function prepareCollection(
     key: modeKey(m.name),
   }));
 
+  // Collect all intermediate group paths in this collection to prevent prefix collisions
+  const intermediateGroups = new Set<string>();
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
+    const groupKeys = groupSegs.map(camel);
+    let prefix = '';
+    for (const seg of groupKeys) {
+      prefix = prefix ? `${prefix}/${seg}` : seg;
+      intermediateGroups.add(prefix);
+    }
+  }
+
   const usedByGroup = new Map<string, Set<string>>();
   const variables: PreparedRNVariable[] = [];
   for (const v of col.variables) {
@@ -293,14 +298,27 @@ function prepareCollection(
     const groupPathKeys = groupSegs.map(camel);
     const derivedLeaf = camel(leafSeg);
     const stableLeaf = resolveStableVariableName(
-      manifest && 'variables' in manifest ? (manifest as ManifestTargetSection) : 'react_native',
+      manifestSection,
       v.id,
       derivedLeaf,
-      manifest && 'targets' in manifest ? (manifest as Manifest) : null,
     );
     const groupKey = groupPathKeys.join('/');
-    const finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, stableLeaf);
-    if (finalLeaf !== stableLeaf) {
+
+    // Check if leaf conflicts with an intermediate group prefix
+    let candidateLeaf = stableLeaf;
+    const fullLeafPath = groupKey ? `${groupKey}/${candidateLeaf}` : candidateLeaf;
+    if (intermediateGroups.has(fullLeafPath)) {
+      candidateLeaf = `${candidateLeaf}Value`;
+      warnings.push({
+        targetId: 'react_native',
+        code: 'LEAF_GROUP_CONFLICT',
+        message: `Variable "${v.figmaName}" leaf "${stableLeaf}" conflicts with an intermediate group path under collection "${col.name}"; renamed to "${candidateLeaf}".`,
+        details: { variableId: v.id, original: stableLeaf, fixed: candidateLeaf },
+      });
+    }
+
+    const finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, candidateLeaf);
+    if (finalLeaf !== stableLeaf && candidateLeaf === stableLeaf) {
       warnings.push({
         targetId: 'react_native',
         code: 'DUPLICATE_LEAF_NAME',
@@ -316,7 +334,7 @@ function prepareCollection(
       leafKey: finalLeaf,
       stableLeafKey: finalLeaf,
       type: v.type,
-      valuesByMode: v.rawValuesByMode ?? (v as any).valuesByMode ?? {},
+      valuesByMode: v.rawValuesByMode,
       resolvedValuesByMode: v.resolvedValuesByMode,
     });
   }
@@ -397,20 +415,20 @@ function lowerFirst(s: string): string {
 function preparePaint(
   s: IRPaintStyle,
   manifestSection?: ManifestTargetSection | null,
-  manifest?: Manifest | null,
 ): PreparedRNPaintStyle {
   const derivedGetterName = camel(s.figmaName);
   const getterName = resolveStableCompositeName(
     manifestSection,
     s.id,
     derivedGetterName,
-    manifest,
   );
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
   return {
     id: s.id,
     type: s.type,
     groupName: paintBucket(s.type),
     getterName,
+    isStable,
     raw: s,
   };
 }
@@ -418,20 +436,20 @@ function preparePaint(
 function prepareEffect(
   s: IREffectStyle,
   manifestSection?: ManifestTargetSection | null,
-  manifest?: Manifest | null,
 ): PreparedRNEffectStyle {
   const derivedGetterName = camel(s.figmaName);
   const getterName = resolveStableCompositeName(
     manifestSection,
     s.id,
     derivedGetterName,
-    manifest,
   );
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
   return {
     id: s.id,
     type: s.type,
     groupName: effectBucket(s.type),
     getterName,
+    isStable,
     raw: s,
   };
 }
@@ -439,7 +457,6 @@ function prepareEffect(
 function prepareText(
   s: IRTextStyle,
   manifestSection?: ManifestTargetSection | null,
-  manifest?: Manifest | null,
 ): PreparedRNTextStyle {
   const segs = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   let groupName = 'Main';
@@ -453,12 +470,13 @@ function prepareText(
     manifestSection,
     s.id,
     derivedGetterName,
-    manifest,
   );
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
   return {
     id: s.id,
     groupName,
     getterName,
+    isStable,
     raw: s,
   };
 }

@@ -270,4 +270,46 @@ describe('Composites in Manifest — React Native', () => {
       text_789: 'headingOld',
     });
   });
+
+  it('guarantees stable pinned composite getter is not renamed when a new colliding style appears earlier in array', () => {
+    const baseIR = createTestIR();
+    // Suppose in manifest, paint_123 is pinned to 'primary'
+    const manifestSection = {
+      variables: {},
+      collections: {},
+      composites: {
+        paint_123: 'primary',
+      },
+    };
+
+    // A designer adds a NEW paint style before paint_123, whose derived name is also 'primary'
+    const irWithNewFirst: IR = {
+      ...baseIR,
+      composites: {
+        ...baseIR.composites,
+        paintStyles: [
+          {
+            id: 'paint_new',
+            figmaName: 'Primary',
+            groupPath: ['Primary'],
+            type: 'SOLID',
+            color: { kind: 'literal', rgba: { r: 0, g: 0, b: 1, a: 1 } },
+          },
+          ...baseIR.composites.paintStyles, // paint_123 comes second
+        ],
+      },
+    };
+
+    const flutterPrepared = prepareFlutterIR(irWithNewFirst, manifestSection);
+    const flutterStable = flutterPrepared.paintStyles.find((p) => p.id === 'paint_123');
+    const flutterNew = flutterPrepared.paintStyles.find((p) => p.id === 'paint_new');
+    expect(flutterStable?.getterName).toBe('primary');
+    expect(flutterNew?.getterName).toBe('primary2');
+
+    const rnPrepared = prepareRN(irWithNewFirst, manifestSection);
+    const rnStable = rnPrepared.paintStyles.find((p) => p.id === 'paint_123');
+    const rnNew = rnPrepared.paintStyles.find((p) => p.id === 'paint_new');
+    expect(rnStable?.getterName).toBe('primary');
+    expect(rnNew?.getterName).toBe('primary2');
+  });
 });

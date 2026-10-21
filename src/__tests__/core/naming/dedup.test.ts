@@ -44,6 +44,19 @@ describe('dedupGetters', () => {
     ]);
   });
 
+  it('prioritizes stable pinned items over newly derived ones regardless of array order', () => {
+    // Item 1 is newly added with derived name 'primary'
+    // Item 2 is an existing stable pinned item with stable name 'primary'
+    const items = [
+      { id: 'new', getterName: 'primary', isStable: false },
+      { id: 'stable', getterName: 'primary', isStable: true },
+    ];
+    const result = dedupGetters(items);
+    // Stable item MUST retain 'primary', new item MUST be suffixed 'primary2'
+    expect(result.find((x) => x.id === 'stable')?.getterName).toBe('primary');
+    expect(result.find((x) => x.id === 'new')?.getterName).toBe('primary2');
+  });
+
   it('preserves items that have unique getterNames', () => {
     const items = [
       { id: '1', getterName: 'colorA' },

@@ -81,6 +81,7 @@ export interface PreparedPaintStyle {
   type: IRPaintStyle['type'];
   groupName: string; // first segment of figmaName, sanitized PascalCase
   getterName: string; // remaining segments joined into camelCase
+  isStable?: boolean;
   raw: IRPaintStyle;
 }
 
@@ -89,6 +90,7 @@ export interface PreparedEffectStyle {
   type: IREffectStyle['type'];
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IREffectStyle;
 }
 
@@ -96,6 +98,7 @@ export interface PreparedTextStyle {
   id: string;
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IRTextStyle;
 }
 
@@ -138,11 +141,16 @@ export function prepareIR(
   const graph: SemanticTokenGraph = isRawIR
     ? buildSemanticGraph(input as IR)
     : (input as SemanticTokenGraph);
-  const ir: IR | undefined = isRawIR ? (input as IR) : (input as any).ir;
+  const ir: IR | undefined = isRawIR ? (input as IR) : undefined;
+
+  const manifestSection: ManifestTargetSection | null =
+    manifest && 'collections' in manifest
+      ? (manifest as ManifestTargetSection)
+      : getTargetSection(manifest as Manifest | null, FLUTTER_TARGET_ID);
 
   const warnings: PreparedWarning[] = [];
   const collections = graph.collections.map((c) =>
-    prepareCollection(c, manifest, options, warnings),
+    prepareCollection(c, manifestSection, options, warnings),
   );
 
   const varIndex = new Map<string, VarRef>();
@@ -162,29 +170,16 @@ export function prepareIR(
     }
   }
 
-  const manifestSection: ManifestTargetSection | null =
-    manifest && 'collections' in manifest
-      ? (manifest as ManifestTargetSection)
-      : getTargetSection(manifest as Manifest | null, FLUTTER_TARGET_ID);
-  const parentManifest: Manifest | null =
-    manifest && 'targets' in manifest ? (manifest as Manifest) : null;
-
   const paintStyles = dedupGetters(
-    graph.composites.paintStyles.map((s) =>
-      preparePaint(s, manifestSection, parentManifest),
-    ),
+    graph.composites.paintStyles.map((s) => preparePaint(s, manifestSection)),
     () => `paint`,
   );
   const effectStyles = dedupGetters(
-    graph.composites.effectStyles.map((s) =>
-      prepareEffect(s, manifestSection, parentManifest),
-    ),
+    graph.composites.effectStyles.map((s) => prepareEffect(s, manifestSection)),
     () => `effect`,
   );
   const textStyles = dedupGetters(
-    graph.composites.textStyles.map((s) =>
-      prepareText(s, manifestSection, parentManifest),
-    ),
+    graph.composites.textStyles.map((s) => prepareText(s, manifestSection)),
     () => `text`,
   );
 
@@ -260,28 +255,9 @@ export function resolveStableName(
   return normalizeLegacyLeafName(raw, section, variableId);
 }
 
-function resolveFlutterStableCollectionName(
-  collectionId: string,
-  derivedClassName: string,
-  manifest: Manifest | ManifestTargetSection | null,
-): string {
-  const section =
-    manifest && 'collections' in manifest
-      ? (manifest as ManifestTargetSection)
-      : 'flutter';
-  const parentManifest =
-    manifest && 'targets' in manifest ? (manifest as Manifest) : null;
-  return resolveStableCollectionName(
-    section,
-    collectionId,
-    derivedClassName,
-    parentManifest,
-  );
-}
-
 function prepareCollection(
   col: GraphCollection,
-  manifest: Manifest | ManifestTargetSection | null,
+  manifestSection: ManifestTargetSection | null,
   options: ExportOptions,
   warnings: PreparedWarning[],
 ): PreparedCollection {
@@ -289,7 +265,7 @@ function prepareCollection(
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
     className = `${className}Tokens`;
   }
-  className = resolveFlutterStableCollectionName(col.id, className, manifest);
+  className = resolveStableCollectionName(manifestSection, col.id, className);
   const accessor = lowerFirst(className);
   const modes: PreparedMode[] = col.modes.map((m) => {
     let rawName = m.name;
@@ -327,7 +303,7 @@ function prepareCollection(
         fixed: leafName,
       });
     }
-    let stableLeaf = resolveStableName(v.id, leafName, manifest);
+    let stableLeaf = resolveStableName(v.id, leafName, manifestSection);
     /**
      * Re-apply keyword fix for legacy manifests that may carry a Dart keyword leaf name.
      * Prevents emitting reserved words like `default` which break compilation.
@@ -352,8 +328,8 @@ function prepareCollection(
       leafName: stableLeaf,
       stableLeafName: stableLeaf,
       dartType: dartTypeOf(v.type),
-      valuesByMode: ('rawValuesByMode' in v ? v.rawValuesByMode : (v as any).valuesByMode) as Record<string, IRValue>,
-      resolvedValuesByMode: 'resolvedValuesByMode' in v ? v.resolvedValuesByMode : undefined,
+      valuesByMode: v.rawValuesByMode,
+      resolvedValuesByMode: v.resolvedValuesByMode,
       emitToPublic: v.emitToPublic,
     });
   }
@@ -455,52 +431,37 @@ const FLUTTER_TARGET_ID = 'flutter';
 function preparePaint(
   s: IRPaintStyle,
   manifestSection?: ManifestTargetSection | null,
-  manifest?: Manifest | null,
 ): PreparedPaintStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
-  const getterName = resolveStableCompositeName(
-    manifestSection,
-    s.id,
-    derivedGetterName,
-    manifest,
-  );
-  return { id: s.id, type: s.type, groupName: 'Paint', getterName, raw: s };
+  const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  return { id: s.id, type: s.type, groupName: 'Paint', getterName, isStable, raw: s };
 }
 
 function prepareEffect(
   s: IREffectStyle,
   manifestSection?: ManifestTargetSection | null,
-  manifest?: Manifest | null,
 ): PreparedEffectStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
-  const getterName = resolveStableCompositeName(
-    manifestSection,
-    s.id,
-    derivedGetterName,
-    manifest,
-  );
-  return { id: s.id, type: s.type, groupName: 'Effect', getterName, raw: s };
+  const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  return { id: s.id, type: s.type, groupName: 'Effect', getterName, isStable, raw: s };
 }
 
 function prepareText(
   s: IRTextStyle,
   manifestSection?: ManifestTargetSection | null,
-  manifest?: Manifest | null,
 ): PreparedTextStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
-  const getterName = resolveStableCompositeName(
-    manifestSection,
-    s.id,
-    derivedGetterName,
-    manifest,
-  );
-  return { id: s.id, groupName: 'Text', getterName, raw: s };
+  const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  return { id: s.id, groupName: 'Text', getterName, isStable, raw: s };
 }
 
 function dartTypeOf(t: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN'): DartType {

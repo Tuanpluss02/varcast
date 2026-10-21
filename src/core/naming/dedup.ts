@@ -5,22 +5,40 @@
 /**
  * Deduplicates `getterName` collisions by appending `2`, `3`, etc.
  * If `bucketKey` is provided, items are partitioned by bucket before deduplicating.
+ * Stable pinned items (`isStable: true`) are prioritized in Pass 1 and will never be renamed.
  * Modifies `getterName` on items and returns the deduplicated items.
  */
-export function dedupGetters<T extends { getterName: string }>(
+export function dedupGetters<T extends { getterName: string; isStable?: boolean }>(
   items: T[],
   bucketKey?: (item: T) => string,
 ): T[] {
   const used = new Map<string, Set<string>>();
 
-  return items.map((it) => {
+  const getBucketSet = (it: T): Set<string> => {
     const bucket = bucketKey ? bucketKey(it) : '';
     let set = used.get(bucket);
     if (!set) {
       set = new Set<string>();
       used.set(bucket, set);
     }
+    return set;
+  };
 
+  // Pass 1: Reserve all stable pinned names first to guarantee stability
+  for (const it of items) {
+    if (it.isStable) {
+      const set = getBucketSet(it);
+      set.add(it.getterName);
+    }
+  }
+
+  // Pass 2: Allocate names for non-stable items, suffixing if colliding
+  return items.map((it) => {
+    if (it.isStable) {
+      return it;
+    }
+
+    const set = getBucketSet(it);
     const base = it.getterName;
     let finalName = base;
     if (set.has(finalName)) {

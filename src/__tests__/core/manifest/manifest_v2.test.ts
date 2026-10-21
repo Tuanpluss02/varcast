@@ -338,32 +338,21 @@ describe('Stable Name Resolution', () => {
     expect(resolveStableCompositeName(section, 's:unknown', 'DerivedComp')).toBe('DerivedComp');
   });
 
-  it('resolves stable names passing (targetId, id, derivedName, manifest)', () => {
-    expect(resolveStableVariableName('flutter', 'v:1', 'derivedVar', manifest)).toBe(
-      'stablePrimary',
-    );
-    expect(resolveStableVariableName('flutter', 'v:99', 'derivedVar', manifest)).toBe(
-      'derivedVar',
-    );
-    expect(resolveStableVariableName('unknownTarget', 'v:1', 'derivedVar', manifest)).toBe(
-      'derivedVar',
-    );
-
-    expect(resolveStableCollectionName('flutter', 'c:1', 'DerivedCol', manifest)).toBe(
-      'StableColors',
-    );
-    expect(resolveStableCompositeName('flutter', 's:1', 'DerivedComp', manifest)).toBe(
-      'stableElev',
-    );
+  it('resolves stable names from manifest target section', () => {
+    const flutterSec = manifest.targets.flutter;
+    expect(resolveStableVariableName(flutterSec, 'v:1', 'derivedVar')).toBe('stablePrimary');
+    expect(resolveStableVariableName(flutterSec, 'v:99', 'derivedVar')).toBe('derivedVar');
+    expect(resolveStableCollectionName(flutterSec, 'c:1', 'DerivedCol')).toBe('StableColors');
+    expect(resolveStableCompositeName(flutterSec, 's:1', 'DerivedComp')).toBe('stableElev');
   });
 
-  it('handles null manifest or null targetSection gracefully', () => {
+  it('handles null or undefined targetSection gracefully', () => {
     expect(resolveStableVariableName(null, 'v:1', 'fallback')).toBe('fallback');
     expect(resolveStableCollectionName(null, 'c:1', 'fallback')).toBe('fallback');
     expect(resolveStableCompositeName(null, 's:1', 'fallback')).toBe('fallback');
 
-    expect(resolveStableVariableName('flutter', 'v:1', 'fallback', null)).toBe('fallback');
-    expect(resolveStableCollectionName('flutter', 'c:1', 'fallback', null)).toBe('fallback');
-    expect(resolveStableCompositeName('flutter', 's:1', 'fallback', null)).toBe('fallback');
+    expect(resolveStableVariableName(undefined, 'v:1', 'fallback')).toBe('fallback');
+    expect(resolveStableCollectionName(undefined, 'c:1', 'fallback')).toBe('fallback');
+    expect(resolveStableCompositeName(undefined, 's:1', 'fallback')).toBe('fallback');
   });
 });

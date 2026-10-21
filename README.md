@@ -22,9 +22,18 @@ Export Figma Variables and Styles to **Flutter** and **React Native** as fully-t
 2. Pick **Target** + **Package name**. Toggle which buckets to include.
 3. Click **Export** — the generated package downloads as a ZIP.
 
-## Privacy
+## Privacy & Manifest Persistence
 
-100% client-side. No network calls. The only persistence is `figma.clientStorage` for the per-file stable-identifier manifest, scoped to the current Figma user on the current device.
+100% client-side. No network calls.
+
+### Dual-Store Model & Manifest Sync
+
+Varcast pins identifiers in a stable manifest to guarantee that renaming tokens or styles in Figma never breaks consumer code:
+- **Figma Plugin UI**: Persists the manifest inside Figma's `figma.clientStorage` (local sandbox per-user and per-device).
+- **Node CLI Tool**: Persists the manifest inside `<outputDir>/_meta/manifest.json` on disk.
+
+> [!WARNING]
+> Because `clientStorage` in Figma does not synchronize across different machines or team members, alternating between the Figma Plugin and the CLI without synchronizing `_meta/manifest.json` will result in disjoint manifests and stable ID churn. For consistent team workflows, always treat the git-committed `<outputDir>/_meta/manifest.json` as the canonical source of truth.
 
 ## Development
 

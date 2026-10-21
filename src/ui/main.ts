@@ -7,7 +7,7 @@ import type {
 } from './lib/messages';
 import { postToPlugin } from './lib/messages';
 import { showScreen } from './components/screens';
-import type { Screens } from './components/screens';
+import type { Screens, ScreenName } from './components/screens';
 import {
   collectOptions,
   setToggle,
@@ -53,8 +53,8 @@ const copyCodeBtn = byId<HTMLButtonElement>('copyCode');
 const downloadZipBtn = byId<HTMLButtonElement>('downloadZip');
 const backFromReviewBtn = byId<HTMLButtonElement>('backFromReview');
 
-function go(name: keyof typeof screens) {
-  showScreen(screens, name as any, actionBar);
+function go(name: ScreenName) {
+  showScreen(screens, name, actionBar);
 }
 
 function createChevronSvg(): SVGSVGElement {
@@ -509,8 +509,8 @@ wireCopy(byId<HTMLButtonElement>('copyErrors'), () => errList.textContent || '')
 
 // ================= Plugin Message Handler =================
 
-window.onmessage = (e: MessageEvent) => {
-  const msg = (e.data as any)?.pluginMessage as PluginToUiMessage | undefined;
+window.onmessage = (e: MessageEvent<{ pluginMessage?: PluginToUiMessage }>) => {
+  const msg = e.data?.pluginMessage;
   if (!msg) return;
 
   exportController.resetButtons();
