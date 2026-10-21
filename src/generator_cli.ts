@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { runEngine } from './core/emit_engine';
+import type { Manifest } from './core/manifest';
 import { diffManifestForTarget } from './core/manifest';
 import { generateChangelog } from './core/manifest/changelog';
 import { getTarget } from './core/registry';
@@ -72,7 +73,13 @@ function main() {
     );
   }
 
-  const oldManifest = loadManifest(outDir);
+  let oldManifest: Manifest | null = null;
+  try {
+    oldManifest = loadManifest(outDir);
+  } catch (err: unknown) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
   const targetId = args.target ?? 'flutter';
   const target = getTarget(targetId);
 
