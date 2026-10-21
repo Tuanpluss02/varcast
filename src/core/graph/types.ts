@@ -1,4 +1,5 @@
 import type { IRComposites, IRValue } from '../../ir/types';
+import type { TargetWarning } from '../target';
 
 export type PrimitiveLiteral = string | number | boolean;
 
@@ -47,4 +48,14 @@ export interface SemanticTokenGraph {
   composites: IRComposites;
   variableIndex: Map<string, ResolvedVariable>;
   allModes: Array<{ id: string; name: string; key: string }>;
+  warnings: TargetWarning[];
+}
+
+export function isSemanticGraph(input: unknown): input is SemanticTokenGraph {
+  return Boolean(
+    input &&
+    typeof input === 'object' &&
+    'variableIndex' in input &&
+    'allModes' in input,
+  );
 }

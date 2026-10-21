@@ -10,7 +10,7 @@
  */
 
 import type { IR } from '../ir/types';
-import type { SemanticTokenGraph } from './graph/types';
+import { isSemanticGraph, type SemanticTokenGraph } from './graph/types';
 import { buildSemanticGraph } from './graph/build_graph';
 import type { Manifest, ManifestDiff } from './manifest';
 import { diffTargetSection } from './manifest';
@@ -39,7 +39,7 @@ export interface EngineOutput {
  *                         slice. Missing entries fall back to `undefined`.
  */
 export function runEngine(
-  ir: IR | SemanticTokenGraph,
+  input: IR | SemanticTokenGraph,
   targets: (Target<any, any> | string)[],
   manifest: Manifest | null,
   optionsByTarget: Record<string, unknown> = {},
@@ -47,14 +47,19 @@ export function runEngine(
   const resolvedTargets: Target<any, any>[] = targets.map((t) =>
     typeof t === 'string' ? getTarget(t) : t,
   );
-  const graph: SemanticTokenGraph =
-    'variableIndex' in ir ? (ir as SemanticTokenGraph) : buildSemanticGraph(ir as IR);
+  const graph: SemanticTokenGraph = isSemanticGraph(input)
+    ? input
+    : buildSemanticGraph(input);
 
   const multiTarget = resolvedTargets.length > 1;
   const allFiles: EmittedFile[] = [];
   const allWarnings: TargetWarning[] = [];
   const nextTargets: Manifest['targets'] = { ...(manifest?.targets ?? {}) };
   const diffsByTarget: Record<string, ManifestDiff> = {};
+
+  if (graph.warnings && graph.warnings.length > 0) {
+    allWarnings.push(...graph.warnings);
+  }
 
   for (const target of resolvedTargets) {
     const options = optionsByTarget[target.id];

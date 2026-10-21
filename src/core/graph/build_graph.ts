@@ -1,4 +1,5 @@
 import type { IR, IRCollection, IRValue, IRVariable } from '../../ir/types';
+import type { TargetWarning } from '../target';
 import { toCamelCase } from '../sanitize_base';
 import { resolveVariableLiteral } from './alias_resolver';
 import { buildGroupTree } from './group_tree';
@@ -19,6 +20,19 @@ import type {
  */
 export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
   const variableIndex = new Map<string, ResolvedVariable>();
+  const warnings: TargetWarning[] = [];
+  const seenWarningKeys = new Set<string>();
+  const onWarning = (code: string, message: string) => {
+    const key = `${code}:${message}`;
+    if (!seenWarningKeys.has(key)) {
+      seenWarningKeys.add(key);
+      warnings.push({
+        targetId: 'core',
+        code,
+        message,
+      });
+    }
+  };
 
   // Extract allModes across collections
   const allModes: Array<{ id: string; name: string; key: string }> = [];
@@ -53,15 +67,15 @@ export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
       let groupPath: string[];
       let leafName: string;
 
-      if (v.groupPath.length > 1) {
+      if (v.groupPath && v.groupPath.length > 1) {
         groupPath = v.groupPath.slice(0, -1);
         leafName = v.groupPath[v.groupPath.length - 1];
-      } else if (v.groupPath.length === 1) {
+      } else if (v.groupPath && v.groupPath.length === 1) {
         groupPath = [];
         leafName = v.groupPath[0];
       } else {
         groupPath = [];
-        leafName = v.figmaName || 'unnamed';
+        leafName = v.figmaName || (v as any).name || 'unnamed';
       }
 
       const rawValuesByMode: Record<string, IRValue> = { ...v.valuesByMode };
@@ -76,7 +90,7 @@ export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
       for (const modeId of modeIds) {
         const rawVal = v.valuesByMode[modeId];
         if (rawVal) {
-          const resolved = resolveVariableLiteral(rawVal, modeId, irVarIndex);
+          const resolved = resolveVariableLiteral(rawVal, modeId, irVarIndex, onWarning);
           if (resolved !== undefined) {
             resolvedValuesByMode[modeId] = resolved;
           } else {
@@ -126,5 +140,6 @@ export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
     composites: ir.composites,
     variableIndex,
     allModes,
+    warnings,
   };
 }

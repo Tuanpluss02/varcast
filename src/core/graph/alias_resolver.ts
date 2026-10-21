@@ -47,7 +47,6 @@ export function toRGBAValue(rgba: RGBA): RGBAValue {
   const r255 = Math.round(rClamped * 255);
   const g255 = Math.round(gClamped * 255);
   const b255 = Math.round(bClamped * 255);
-  const a255 = Math.round(aClamped * 255);
 
   const hex = `#${hex2(rgba.r)}${hex2(rgba.g)}${hex2(rgba.b)}${hex2(rgba.a)}`;
   const rgbaString = `rgba(${r255}, ${g255}, ${b255}, ${a})`;
@@ -88,8 +87,27 @@ export function resolveVariableLiteral(
   variableIdOrValue: string | IRValue,
   modeId: string,
   lookup: VariableLookup,
-  visited: Set<string> = new Set(),
+  onWarning?: (code: string, message: string) => void,
+): ResolvedLiteral | undefined;
+export function resolveVariableLiteral(
+  variableIdOrValue: string | IRValue,
+  modeId: string,
+  lookup: VariableLookup,
+  visited?: Set<string>,
+  onWarning?: (code: string, message: string) => void,
+): ResolvedLiteral | undefined;
+export function resolveVariableLiteral(
+  variableIdOrValue: string | IRValue,
+  modeId: string,
+  lookup: VariableLookup,
+  visitedOrOnWarning?: Set<string> | ((code: string, message: string) => void),
+  onWarning?: (code: string, message: string) => void,
 ): ResolvedLiteral | undefined {
+  const visited =
+    visitedOrOnWarning instanceof Set ? visitedOrOnWarning : new Set<string>();
+  const warn =
+    typeof visitedOrOnWarning === 'function' ? visitedOrOnWarning : onWarning;
+
   if (typeof variableIdOrValue !== 'string') {
     if (variableIdOrValue.kind === 'literal') {
       return resolveLiteralValue(variableIdOrValue.value);
@@ -106,11 +124,18 @@ export function resolveVariableLiteral(
       const modeKeys = Object.keys(targetVar.valuesByMode);
       if (modeKeys.length > 0) {
         val = targetVar.valuesByMode[modeKeys[0]];
+        const totalModes = Object.keys(targetVar.valuesByMode).length;
+        if (totalModes > 1) {
+          warn?.(
+            'MODE_FALLBACK_APPROXIMATED',
+            `Target variable "${targetVar.figmaName}" has multiple modes, but mode "${modeId}" was not found; falling back to mode "${modeKeys[0]}".`,
+          );
+        }
       }
     }
     if (!val) return undefined;
 
-    return resolveVariableLiteral(val, modeId, lookup, visited);
+    return resolveVariableLiteral(val, modeId, lookup, visited, warn);
   }
 
   const variableId = variableIdOrValue;
@@ -125,6 +150,13 @@ export function resolveVariableLiteral(
     const modeKeys = Object.keys(v.valuesByMode);
     if (modeKeys.length > 0) {
       val = v.valuesByMode[modeKeys[0]];
+      const totalModes = Object.keys(v.valuesByMode).length;
+      if (totalModes > 1) {
+        warn?.(
+          'MODE_FALLBACK_APPROXIMATED',
+          `Target variable "${v.figmaName}" has multiple modes, but mode "${modeId}" was not found; falling back to mode "${modeKeys[0]}".`,
+        );
+      }
     }
   }
   if (!val) return undefined;
@@ -133,5 +165,5 @@ export function resolveVariableLiteral(
     return resolveLiteralValue(val.value);
   }
 
-  return resolveVariableLiteral(val, modeId, lookup, visited);
+  return resolveVariableLiteral(val, modeId, lookup, visited, warn);
 }
