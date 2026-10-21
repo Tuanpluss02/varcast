@@ -2,6 +2,7 @@ import type { IR, IRCollection, IRValue, IRVariable } from '../../ir/types';
 import type { TargetWarning } from '../target';
 import { toCamelCase } from '../sanitize_base';
 import { resolveVariableLiteral } from './alias_resolver';
+import { resolveComposites } from './composite_resolver';
 import { buildGroupTree } from './group_tree';
 import type {
   GraphCollection,
@@ -133,11 +134,14 @@ export function buildSemanticGraph(ir: IR): SemanticTokenGraph {
     };
   });
 
+  const resolvedComposites = resolveComposites(ir.composites, allModes, variableIndex);
+
   return {
     fileKey: ir.fileKey,
     generatedAt: ir.generatedAt,
     collections,
-    composites: ir.composites,
+    composites: resolvedComposites,
+    resolvedComposites,
     variableIndex,
     allModes,
     warnings,

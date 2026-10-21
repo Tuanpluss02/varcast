@@ -21,7 +21,11 @@ import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core
 import type { PreparedTarget, TargetWarning } from '../../../core/target';
 import type {
   GraphCollection,
+  ResolvedComposites,
+  ResolvedEffectStyle,
   ResolvedLiteral,
+  ResolvedPaintStyle,
+  ResolvedTextStyle,
   SemanticTokenGraph,
 } from '../../../core/graph/types';
 import { buildSemanticGraph } from '../../../core/graph/build_graph';
@@ -428,7 +432,7 @@ function lowerFirst(s: string): string {
 }
 
 function preparePaint(
-  s: IRPaintStyle,
+  s: IRPaintStyle | ResolvedPaintStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedRNPaintStyle {
   const derivedGetterName = camel(s.figmaName);
@@ -444,12 +448,12 @@ function preparePaint(
     groupName: paintBucket(s.type),
     getterName,
     isStable,
-    raw: s,
+    raw: 'raw' in s ? s.raw : s,
   };
 }
 
 function prepareEffect(
-  s: IREffectStyle,
+  s: IREffectStyle | ResolvedEffectStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedRNEffectStyle {
   const derivedGetterName = camel(s.figmaName);
@@ -465,12 +469,12 @@ function prepareEffect(
     groupName: effectBucket(s.type),
     getterName,
     isStable,
-    raw: s,
+    raw: 'raw' in s ? s.raw : s,
   };
 }
 
 function prepareText(
-  s: IRTextStyle,
+  s: IRTextStyle | ResolvedTextStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedRNTextStyle {
   const segs = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
@@ -492,7 +496,7 @@ function prepareText(
     groupName,
     getterName,
     isStable,
-    raw: s,
+    raw: 'raw' in s ? s.raw : s,
   };
 }
 

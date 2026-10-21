@@ -23,7 +23,11 @@ import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core
 import type { PreparedTarget } from '../../../core/target';
 import type {
   GraphCollection,
+  ResolvedComposites,
+  ResolvedEffectStyle,
   ResolvedLiteral,
+  ResolvedPaintStyle,
+  ResolvedTextStyle,
   SemanticTokenGraph,
 } from '../../../core/graph/types';
 import { buildSemanticGraph } from '../../../core/graph/build_graph';
@@ -415,7 +419,7 @@ function buildNextManifestSection(
 const FLUTTER_TARGET_ID = 'flutter';
 
 function preparePaint(
-  s: IRPaintStyle,
+  s: IRPaintStyle | ResolvedPaintStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedPaintStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
@@ -423,11 +427,18 @@ function preparePaint(
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
   const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
   const isStable = Boolean(manifestSection?.composites?.[s.id]);
-  return { id: s.id, type: s.type, groupName: 'Paint', getterName, isStable, raw: s };
+  return {
+    id: s.id,
+    type: s.type,
+    groupName: 'Paint',
+    getterName,
+    isStable,
+    raw: 'raw' in s ? s.raw : s,
+  };
 }
 
 function prepareEffect(
-  s: IREffectStyle,
+  s: IREffectStyle | ResolvedEffectStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedEffectStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
@@ -435,11 +446,18 @@ function prepareEffect(
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
   const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
   const isStable = Boolean(manifestSection?.composites?.[s.id]);
-  return { id: s.id, type: s.type, groupName: 'Effect', getterName, isStable, raw: s };
+  return {
+    id: s.id,
+    type: s.type,
+    groupName: 'Effect',
+    getterName,
+    isStable,
+    raw: 'raw' in s ? s.raw : s,
+  };
 }
 
 function prepareText(
-  s: IRTextStyle,
+  s: IRTextStyle | ResolvedTextStyle,
   manifestSection?: ManifestTargetSection | null,
 ): PreparedTextStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
@@ -447,7 +465,13 @@ function prepareText(
   const derivedGetterName = sanitizeIdentifier(getter, 'camel');
   const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
   const isStable = Boolean(manifestSection?.composites?.[s.id]);
-  return { id: s.id, groupName: 'Text', getterName, isStable, raw: s };
+  return {
+    id: s.id,
+    groupName: 'Text',
+    getterName,
+    isStable,
+    raw: 'raw' in s ? s.raw : s,
+  };
 }
 
 function dartTypeOf(t: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN'): DartType {
