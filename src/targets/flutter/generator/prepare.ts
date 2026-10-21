@@ -6,21 +6,26 @@ import type {
   IRValue,
 } from '../../../ir/types';
 import {
-  newSanitizeContext,
-  sanitize,
+  processSegment,
   sanitizeIdentifier,
   stripOrderingPrefix,
+  toCamelCase,
+  toPascalCase,
 } from '../identifier';
 import { DISALLOWED_COLLECTION_CLASS_NAMES } from '../reserved_names';
 import { DART_KEYWORDS } from '../dart_keywords';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
+  assembleTargetSection,
   getTargetSection,
   resolveStableCollectionName,
   resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
-import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core/naming/dedup';
+import {
+  allocateStableCollectionIdentifiers,
+  dedupGetters,
+} from '../../../core/naming/dedup';
 import type { PreparedTarget } from '../../../core/target';
 import type {
   GraphCollection,
@@ -62,6 +67,8 @@ export interface PreparedVariable {
 
 export interface PreparedCollection {
   id: string;
+  name: string;
+  figmaName: string;
   className: string; // PascalCase, e.g. "ColorBasic"
   accessor: string; // camelCase, e.g. "colorBasic"
   kind: 'primitive' | 'token';
@@ -193,21 +200,11 @@ export function prepareIR(
     () => `text`,
   );
 
-  const figmaVar: Record<string, string> = {};
-  const figmaCol: Record<string, string> = {};
-  for (const c of graph.collections) {
-    figmaCol[c.id] = c.name;
-    for (const v of c.variables) {
-      figmaVar[v.id] = v.figmaName;
-    }
-  }
-
-  const nextManifestSection = buildNextManifestSection(
-    collections,
-    { paintStyles, effectStyles, textStyles },
-    figmaVar,
-    figmaCol,
-  );
+  const nextManifestSection = buildNextManifestSection(collections, {
+    paintStyles,
+    effectStyles,
+    textStyles,
+  });
 
   return {
     targetId: 'flutter',
@@ -262,6 +259,19 @@ export function resolveStableName(
   return normalizeLegacyLeafName(raw, section, variableId);
 }
 
+function computeFlutterVariablePath(v: { groupPath: string[]; leafName?: string }) {
+  const fullPath = v.leafName ? [...v.groupPath, v.leafName] : v.groupPath;
+  const segments = fullPath
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map(processSegment);
+  if (segments.length === 0) segments.push('unnamed');
+  const groupPath = segments.slice(0, -1).map(toPascalCase);
+  const rawLeaf = segments[segments.length - 1];
+  const camelLeaf = toCamelCase(rawLeaf);
+  return { groupPath, camelLeaf };
+}
+
 function prepareCollection(
   col: GraphCollection,
   manifestSection: ManifestTargetSection | null,
@@ -284,82 +294,78 @@ function prepareCollection(
     };
   });
 
-  const ctx = newSanitizeContext();
-  const finalNamesByParent = new Map<string, Set<string>>();
-  const stableReservedByVarId = new Map<string, string>();
-
-  // Pass 1: Pre-reserve all stable pinned variable names under their group paths
+  const pathByVarId = new Map<
+    string,
+    { groupPath: string[]; camelLeaf: string }
+  >();
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
-    if (manifestSection?.variables?.[v.id]) {
-      const fullPath = 'leafName' in v && v.leafName
-        ? [...v.groupPath, v.leafName]
-        : v.groupPath;
-      const { groupPath, leafName } = sanitize(fullPath, ctx);
-      let stableLeaf = resolveStableName(v.id, leafName, manifestSection);
-      if (DART_KEYWORDS.has(stableLeaf)) {
-        stableLeaf = `${stableLeaf}_`;
-      }
-      const allocated = reserveSiblingKey(finalNamesByParent, groupPath.join('/'), stableLeaf);
-      stableReservedByVarId.set(v.id, allocated);
-    }
+    pathByVarId.set(v.id, computeFlutterVariablePath(v));
   }
 
-  // Pass 2: Allocate and deduplicate leaves
+  const allocatedMap = allocateStableCollectionIdentifiers(
+    col.variables,
+    manifestSection,
+    (_leaf, v) => {
+      const info = pathByVarId.get(v.id);
+      if (!info) return 'unnamed';
+      const { camelLeaf } = info;
+      return DART_KEYWORDS.has(camelLeaf) ? `${camelLeaf}_` : camelLeaf;
+    },
+    {
+      getGroupKey: (v) => pathByVarId.get(v.id)?.groupPath.join('/') ?? '',
+      formatStableName: (varId, name) => {
+        let normalized = resolveStableName(varId, name, manifestSection);
+        if (DART_KEYWORDS.has(normalized)) {
+          normalized = `${normalized}_`;
+        }
+        return normalized;
+      },
+    },
+  );
+
   const variables: PreparedVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
-    const fullPath = 'leafName' in v && v.leafName
-      ? [...v.groupPath, v.leafName]
-      : v.groupPath;
-    const { groupPath, leafName, notes } = sanitize(fullPath, ctx);
-    if (notes.keywordFixedFrom) {
+    const { groupPath, camelLeaf } = pathByVarId.get(v.id)!;
+    const isKeyword = DART_KEYWORDS.has(camelLeaf);
+    if (isKeyword) {
       warnings.push({
         type: 'KEYWORD_CONFLICT',
         variableId: v.id,
-        original: notes.keywordFixedFrom,
-        fixed: leafName,
+        original: camelLeaf,
+        fixed: `${camelLeaf}_`,
+      });
+    } else if (
+      manifestSection?.variables?.[v.id] &&
+      DART_KEYWORDS.has(manifestSection.variables[v.id])
+    ) {
+      const legacy = manifestSection.variables[v.id];
+      warnings.push({
+        type: 'KEYWORD_CONFLICT',
+        variableId: v.id,
+        original: legacy,
+        fixed: `${legacy}_`,
       });
     }
-    if (notes.dedupedAs !== undefined) {
-      const base = leafName.slice(0, -String(notes.dedupedAs).length);
+
+    const allocated = allocatedMap.get(v.id)!;
+    if (allocated.wasDeduplicated) {
+      const derivedCandidate = isKeyword ? `${camelLeaf}_` : camelLeaf;
       warnings.push({
         type: 'DUPLICATE_DART_NAME',
         variableId: v.id,
-        original: base,
-        fixed: leafName,
+        original: derivedCandidate,
+        fixed: allocated.stableLeafKey,
       });
     }
 
-    let stableLeaf = resolveStableName(v.id, leafName, manifestSection);
-    /**
-     * Re-apply keyword fix for legacy manifests that may carry a Dart keyword leaf name.
-     * Prevents emitting reserved words like `default` which break compilation.
-     */
-    if (DART_KEYWORDS.has(stableLeaf)) {
-      const fixed = `${stableLeaf}_`;
-      if (notes.keywordFixedFrom === undefined) {
-        warnings.push({
-          type: 'KEYWORD_CONFLICT',
-          variableId: v.id,
-          original: stableLeaf,
-          fixed,
-        });
-      }
-      stableLeaf = fixed;
-    }
-
-    if (stableReservedByVarId.has(v.id)) {
-      stableLeaf = stableReservedByVarId.get(v.id)!;
-    } else {
-      stableLeaf = dedupSiblingKeys(finalNamesByParent, groupPath.join('/'), stableLeaf);
-    }
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
       groupPath,
-      leafName: stableLeaf,
-      stableLeafName: stableLeaf,
+      leafName: allocated.stableLeafKey,
+      stableLeafName: allocated.stableLeafKey,
       dartType: dartTypeOf(v.type),
       valuesByMode: v.rawValuesByMode,
       resolvedValuesByMode: v.resolvedValuesByMode,
@@ -369,6 +375,8 @@ function prepareCollection(
 
   return {
     id: col.id,
+    name: col.name,
+    figmaName: col.name,
     className,
     accessor,
     kind: col.kind,
@@ -386,41 +394,29 @@ function buildNextManifestSection(
     effectStyles: PreparedEffectStyle[];
     textStyles: PreparedTextStyle[];
   },
-  figmaVar: Record<string, string>,
-  figmaCol: Record<string, string>,
 ): ManifestTargetSection {
-  const variables: Record<string, string> = {};
-  const collections: Record<string, string> = {};
-  const compositeMap: Record<string, string> = {};
-  const figmaComposite: Record<string, string> = {};
-
-  for (const c of cols) {
-    collections[c.id] = c.className;
-    for (const v of c.variables) {
-      variables[v.id] = v.stableLeafName;
-    }
-  }
-
   const allComposites = [
     ...composites.paintStyles,
     ...composites.effectStyles,
     ...composites.textStyles,
   ];
-  for (const s of allComposites) {
-    compositeMap[s.id] = s.getterName;
-    figmaComposite[s.id] = s.raw.figmaName;
-  }
-
-  return {
-    variables,
-    collections,
-    composites: compositeMap,
-    figmaNames: {
-      variables: figmaVar,
-      collections: figmaCol,
-      composites: figmaComposite,
-    },
-  };
+  return assembleTargetSection({
+    collections: cols.map((c) => ({
+      id: c.id,
+      name: c.figmaName,
+      exportName: c.className,
+      variables: c.variables.map((v) => ({
+        id: v.id,
+        figmaName: v.figmaName,
+        stableLeafKey: v.stableLeafName,
+      })),
+    })),
+    composites: allComposites.map((s) => ({
+      id: s.id,
+      figmaName: s.raw.figmaName,
+      getterName: s.getterName,
+    })),
+  });
 }
 
 const FLUTTER_TARGET_ID = 'flutter';

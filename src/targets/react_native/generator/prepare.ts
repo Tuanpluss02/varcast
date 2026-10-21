@@ -9,12 +9,16 @@ import type {
 } from '../../../ir/types';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
+  assembleTargetSection,
   getTargetSection,
   resolveStableCollectionName,
   resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
-import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core/naming/dedup';
+import {
+  allocateStableCollectionIdentifiers,
+  dedupGetters,
+} from '../../../core/naming/dedup';
 import type { PreparedTarget, TargetWarning } from '../../../core/target';
 import type {
   GraphCollection,
@@ -180,7 +184,7 @@ export function prepareRN(
     }
   }
 
-  const nextManifestSection = buildNextManifestSection(graph, collections, {
+  const nextManifestSection = buildNextManifestSection(collections, {
     paintStyles,
     effectStyles,
     textStyles,
@@ -241,25 +245,20 @@ function prepareCollection(
     }
   }
 
-  const usedByGroup = new Map<string, Set<string>>();
-  const stableReservedByVarId = new Map<string, string>();
-
-  // Pass 1: Pre-reserve all stable pinned variable names under their group paths
-  for (const v of col.variables) {
-    if (!v.emitToPublic) continue;
-    if (manifestSection?.variables?.[v.id]) {
-      const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
-      const groupPathKeys = groupSegs.map(camel);
-      const derivedLeaf = camel((v.leafName ?? 'unnamed').trim());
-      const stableLeaf = resolveStableVariableName(manifestSection, v.id, derivedLeaf);
-      const groupKey = groupPathKeys.join('/');
-      const allocated = reserveSiblingKey(usedByGroup, groupKey, stableLeaf);
-      stableReservedByVarId.set(v.id, allocated);
+  const varInfoMap = new Map<
+    string,
+    {
+      figmaName: string;
+      groupSegs: string[];
+      leafSeg: string;
+      segs: string[];
+      groupPathKeys: string[];
+      groupKey: string;
+      derivedLeaf: string;
+      hasGroupConflict: boolean;
     }
-  }
+  >();
 
-  // Pass 2: Allocate and deduplicate leaves
-  const variables: PreparedRNVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
     const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
@@ -267,51 +266,70 @@ function prepareCollection(
     const segs = [...groupSegs, leafSeg];
     const groupPathKeys = groupSegs.map(camel);
     const groupKey = groupPathKeys.join('/');
+    const derivedLeaf = camel(leafSeg);
+    varInfoMap.set(v.id, {
+      figmaName: v.figmaName,
+      groupSegs,
+      leafSeg,
+      segs,
+      groupPathKeys,
+      groupKey,
+      derivedLeaf,
+      hasGroupConflict: false,
+    });
+  }
 
-    let finalLeaf: string;
-    let stableLeaf: string;
+  const allocatedMap = allocateStableCollectionIdentifiers(
+    col.variables,
+    manifestSection,
+    (_leaf, v) => varInfoMap.get(v.id)?.derivedLeaf ?? 'unnamed',
+    {
+      getGroupKey: (v) => varInfoMap.get(v.id)?.groupKey ?? '',
+      formatStableName: (varId, name) => {
+        if (manifestSection?.variables?.[varId]) {
+          return name;
+        }
+        const info = varInfoMap.get(varId);
+        if (!info) return name;
+        const fullLeafPath = info.groupKey ? `${info.groupKey}/${name}` : name;
+        if (intermediateGroups.has(fullLeafPath)) {
+          info.hasGroupConflict = true;
+          const fixed = `${name}Value`;
+          warnings.push({
+            targetId: 'react_native',
+            code: 'LEAF_GROUP_CONFLICT',
+            message: `Variable "${info.figmaName}" leaf "${name}" conflicts with an intermediate group path under collection "${col.name}"; renamed to "${fixed}".`,
+            details: { variableId: varId, original: name, fixed },
+          });
+          return fixed;
+        }
+        return name;
+      },
+    },
+  );
 
-    if (stableReservedByVarId.has(v.id)) {
-      stableLeaf = stableReservedByVarId.get(v.id)!;
-      finalLeaf = stableLeaf;
-    } else {
-      const derivedLeaf = camel(leafSeg);
-      stableLeaf = resolveStableVariableName(
-        manifestSection,
-        v.id,
-        derivedLeaf,
-      );
+  const variables: PreparedRNVariable[] = [];
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    const info = varInfoMap.get(v.id)!;
+    const allocated = allocatedMap.get(v.id)!;
 
-      // Check if leaf conflicts with an intermediate group prefix
-      let candidateLeaf = stableLeaf;
-      const fullLeafPath = groupKey ? `${groupKey}/${candidateLeaf}` : candidateLeaf;
-      if (intermediateGroups.has(fullLeafPath)) {
-        candidateLeaf = `${candidateLeaf}Value`;
-        warnings.push({
-          targetId: 'react_native',
-          code: 'LEAF_GROUP_CONFLICT',
-          message: `Variable "${v.figmaName}" leaf "${stableLeaf}" conflicts with an intermediate group path under collection "${col.name}"; renamed to "${candidateLeaf}".`,
-          details: { variableId: v.id, original: stableLeaf, fixed: candidateLeaf },
-        });
-      }
-
-      finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, candidateLeaf);
-      if (finalLeaf !== stableLeaf && candidateLeaf === stableLeaf) {
-        warnings.push({
-          targetId: 'react_native',
-          code: 'DUPLICATE_LEAF_NAME',
-          message: `Variable "${v.figmaName}" collided with sibling leaf name; deduplicated to "${finalLeaf}".`,
-          details: { variableId: v.id, original: stableLeaf, fixed: finalLeaf },
-        });
-      }
+    if (allocated.wasDeduplicated && !info.hasGroupConflict) {
+      warnings.push({
+        targetId: 'react_native',
+        code: 'DUPLICATE_LEAF_NAME',
+        message: `Variable "${v.figmaName}" collided with sibling leaf name; deduplicated to "${allocated.stableLeafKey}".`,
+        details: { variableId: v.id, original: info.derivedLeaf, fixed: allocated.stableLeafKey },
+      });
     }
+
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
-      groupPath: segs,
-      groupPathKeys,
-      leafKey: finalLeaf,
-      stableLeafKey: finalLeaf,
+      groupPath: info.segs,
+      groupPathKeys: info.groupPathKeys,
+      leafKey: allocated.stableLeafKey,
+      stableLeafKey: allocated.stableLeafKey,
       type: v.type,
       valuesByMode: v.rawValuesByMode,
       resolvedValuesByMode: v.resolvedValuesByMode,
@@ -336,7 +354,6 @@ function modeKey(modeName: string): string {
 }
 
 function buildNextManifestSection(
-  graph: SemanticTokenGraph,
   cols: PreparedRNCollection[],
   composites: {
     paintStyles: PreparedRNPaintStyle[];
@@ -344,47 +361,28 @@ function buildNextManifestSection(
     textStyles: PreparedRNTextStyle[];
   },
 ): ManifestTargetSection {
-  const variables: Record<string, string> = {};
-  const collections: Record<string, string> = {};
-  const compositeMap: Record<string, string> = {};
-  const figmaVar: Record<string, string> = {};
-  const figmaCol: Record<string, string> = {};
-  const figmaComposite: Record<string, string> = {};
-
-  for (const c of cols) {
-    collections[c.id] = c.typeName;
-    for (const v of c.variables) {
-      variables[v.id] = v.stableLeafKey;
-    }
-  }
-
   const allComposites = [
     ...composites.paintStyles,
     ...composites.effectStyles,
     ...composites.textStyles,
   ];
-  for (const s of allComposites) {
-    compositeMap[s.id] = s.getterName;
-    figmaComposite[s.id] = s.raw.figmaName;
-  }
-
-  for (const c of graph.collections) {
-    figmaCol[c.id] = c.name;
-    for (const v of c.variables) {
-      figmaVar[v.id] = v.figmaName;
-    }
-  }
-
-  return {
-    variables,
-    collections,
-    composites: compositeMap,
-    figmaNames: {
-      variables: figmaVar,
-      collections: figmaCol,
-      composites: figmaComposite,
-    },
-  };
+  return assembleTargetSection({
+    collections: cols.map((c) => ({
+      id: c.id,
+      name: c.figmaName,
+      exportName: c.typeName,
+      variables: c.variables.map((v) => ({
+        id: v.id,
+        figmaName: v.figmaName,
+        stableLeafKey: v.stableLeafKey,
+      })),
+    })),
+    composites: allComposites.map((s) => ({
+      id: s.id,
+      figmaName: s.raw.figmaName,
+      getterName: s.getterName,
+    })),
+  });
 }
 
 function lowerFirst(s: string): string {
