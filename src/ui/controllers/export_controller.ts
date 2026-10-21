@@ -114,6 +114,12 @@ export class ExportController {
     }
   }
 
+  public handleWarning(message: string): void {
+    if (this.statusEl) {
+      this.statusEl.textContent = 'Warning: ' + message;
+    }
+  }
+
   public handleZipReady(bytes: Uint8Array, filename = 'design_system.zip'): void {
     this.hideLoading();
     if (this.downloadZipBtn) {

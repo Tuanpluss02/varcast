@@ -6,6 +6,7 @@ export function packageJson(o: ReactNativeOptions): string {
       name: o.packageName,
       private: true,
       version: '0.1.0',
+      type: 'module',
       main: 'dist/index.js',
       types: 'dist/index.d.ts',
       files: ['dist'],

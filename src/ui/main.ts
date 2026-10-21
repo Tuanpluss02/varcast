@@ -553,6 +553,11 @@ window.onmessage = (e: MessageEvent) => {
     exportController.handleError(msg.message);
     return;
   }
+
+  if (msg.type === 'warning') {
+    exportController.handleWarning(msg.message);
+    return;
+  }
 };
 
 updateMeta();

@@ -140,7 +140,10 @@ export class ReviewController {
   }
 
   private bindEvents(): void {
-    wireCopy(this.copyCodeBtn, () => this.codeViewer.textContent || '');
+    wireCopy(this.copyCodeBtn, () => {
+      const active = this.files.find((f) => f.path === this.selectedPath);
+      return active ? active.contents : this.codeViewer.textContent || '';
+    });
     if (this.backFromReviewBtn) {
       this.backFromReviewBtn.addEventListener('click', () => {
         if (this.onBack) this.onBack();
