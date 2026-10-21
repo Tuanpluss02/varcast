@@ -45,7 +45,7 @@ export function transliterate(s: string): string {
  * from Figma collection names.
  */
 export function stripOrderingPrefix(name: string): string {
-  return name.replace(/^\s*\[?\s*\d+\s*\]?[.\-_:\s]*/, '').trim() || name;
+  return name.replace(/^(\s*\[\s*\d+\s*\]\s*|\s*\d+\s*[.\-_:]\s*)/, '').trim() || name;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { stripOrderingPrefix, processSegment, sanitizeWords } from '../../core/sanitize_base';
-import { sanitizeIdentifier } from '../../targets/flutter/identifier';
-import { sanitizeJsIdentifier } from '../../targets/react_native/identifier';
+import { sanitizeIdentifier, collectionClassName } from '../../targets/flutter/identifier';
+import { sanitizeJsIdentifier, collectionExportName } from '../../targets/react_native/identifier';
 
 describe('Domain-Driven Sanitization', () => {
   it('strips ordering prefix only for collection names', () => {
@@ -9,6 +9,8 @@ describe('Domain-Driven Sanitization', () => {
     expect(stripOrderingPrefix('01. Typography')).toBe('Typography');
     expect(stripOrderingPrefix('02 - Spacing')).toBe('Spacing');
     expect(stripOrderingPrefix('Normal Collection')).toBe('Normal Collection');
+    expect(stripOrderingPrefix('100 Primary')).toBe('100 Primary');
+    expect(stripOrderingPrefix('12 Spacing')).toBe('12 Spacing');
   });
 
   it('preserves numeric tokens without dropping digits', () => {
@@ -23,5 +25,10 @@ describe('Domain-Driven Sanitization', () => {
     expect(sanitizeIdentifier('400 Regular', 'camel')).toBe('n400Regular');
     expect(sanitizeIdentifier('Regular 400', 'camel')).toBe('regular400');
     expect(sanitizeJsIdentifier('100 Primary')).toBe('n100Primary');
+  });
+
+  it('retains leading digits when generating collection identifiers', () => {
+    expect(collectionClassName('100 Primary')).toBe('N100Primary');
+    expect(collectionExportName('100 Primary')).toBe('n100Primary');
   });
 });

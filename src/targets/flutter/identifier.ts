@@ -90,10 +90,7 @@ export function sanitizeIdentifier(
   raw: string,
   style: 'pascal' | 'camel' = 'pascal',
 ): string {
-  let clean = raw;
-  if (/^\s*\[\s*\d+\s*\]/.test(clean) || /^\s*\d+\s*[.\-_:]/.test(clean)) {
-    clean = stripOrderingPrefix(clean);
-  }
+  const clean = stripOrderingPrefix(raw);
   const processed = processSegment(clean);
   let id = style === 'pascal' ? toPascalCase(processed) : toCamelCase(processed);
   if (style === 'camel' && DART_KEYWORDS.has(id)) id = id + '_';
@@ -119,5 +116,5 @@ export function collectionFileName(raw: string): string {
 }
 
 export function flutterWordsFromRaw(raw: string): string[] {
-  return sanitizeWords(stripOrderingPrefix(raw));
+  return sanitizeWords(raw);
 }

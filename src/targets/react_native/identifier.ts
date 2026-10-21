@@ -28,10 +28,7 @@ export function sanitizeJsIdentifier(
   raw: string,
   style: 'camel' | 'pascal' = 'camel',
 ): string {
-  let clean = raw;
-  if (/^\s*\[\s*\d+\s*\]/.test(clean) || /^\s*\d+\s*[.\-_:]/.test(clean)) {
-    clean = stripOrderingPrefix(clean);
-  }
+  const clean = stripOrderingPrefix(raw);
   const processed = processSegment(clean);
   let id = style === 'pascal' ? toPascalCase(processed) : toCamelCase(processed);
   return id;
@@ -51,6 +48,6 @@ export function collectionExportName(raw: string): string {
 }
 
 export function wordsFromRaw(raw: string): string[] {
-  return sanitizeWords(stripOrderingPrefix(raw));
+  return sanitizeWords(raw);
 }
 
