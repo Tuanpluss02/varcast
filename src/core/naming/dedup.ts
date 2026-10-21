@@ -65,23 +65,7 @@ export function reserveSiblingKey(
   parentKey: string,
   key: string,
 ): string {
-  let set = usedMap.get(parentKey);
-  if (!set) {
-    set = new Set<string>();
-    usedMap.set(parentKey, set);
-  }
-
-  let finalKey = key;
-  if (set.has(finalKey)) {
-    let suffix = 2;
-    while (set.has(`${key}${suffix}`)) {
-      suffix++;
-    }
-    finalKey = `${key}${suffix}`;
-  }
-
-  set.add(finalKey);
-  return finalKey;
+  return dedupSiblingKeys(usedMap, parentKey, key);
 }
 
 /**
