@@ -1,4 +1,7 @@
-import { getTarget, hasTarget } from '../../core/registry/target_registry';
+const DEFAULT_TARGET_NAMES: Record<string, string> = {
+  flutter: 'Flutter',
+  react_native: 'React Native',
+};
 
 export type ExportOptions = {
   targetId: string;
@@ -51,9 +54,21 @@ export function collectOptions(opts: {
   };
 }
 
-export function pillText(o: ExportOptions, totalCollections?: number): string {
+export function pillText(
+  o: ExportOptions,
+  totalCollections?: number,
+  targetDisplayNameResolver?: ((id: string) => string | undefined) | Record<string, string>,
+): string {
   const bits: string[] = [];
-  const displayName = (hasTarget(o.targetId) ? getTarget(o.targetId).displayName : o.targetId) ?? o.targetId;
+  let displayName: string | undefined;
+  if (typeof targetDisplayNameResolver === 'function') {
+    displayName = targetDisplayNameResolver(o.targetId);
+  } else if (targetDisplayNameResolver) {
+    displayName = targetDisplayNameResolver[o.targetId];
+  }
+  if (!displayName) {
+    displayName = DEFAULT_TARGET_NAMES[o.targetId] ?? o.targetId;
+  }
   bits.push(displayName);
   if (o.include.collections && totalCollections !== undefined) {
     if (o.include.collections.length === totalCollections) bits.push('All collections');

@@ -1,16 +1,9 @@
-import { describe, expect, it, beforeAll } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { pillText } from '../../ui/components/options';
 import type { ExportOptions } from '../../ui/components/options';
-import { registerFlutterTarget } from '../../targets/flutter';
-import { registerReactNativeTarget } from '../../targets/react_native';
 
 describe('ui/components/options: pillText', () => {
-  beforeAll(() => {
-    registerFlutterTarget();
-    registerReactNativeTarget();
-  });
-
-  it('resolves displayName from target registry for Flutter', () => {
+  it('resolves displayName for default Flutter target', () => {
     const opts: ExportOptions = {
       targetId: 'flutter',
       packageName: 'design_system',
@@ -44,5 +37,20 @@ describe('ui/components/options: pillText', () => {
       },
     };
     expect(pillText(opts, 1)).toBe('custom_target · All collections · defaults');
+  });
+
+  it('uses targetDisplayNameResolver when provided', () => {
+    const opts: ExportOptions = {
+      targetId: 'custom_target',
+      packageName: 'custom_pkg',
+      include: {
+        collections: ['col1'],
+        composites: { colorStyles: true, shadows: true, textStyles: true },
+      },
+    };
+    expect(pillText(opts, 1, { custom_target: 'Custom UI' })).toBe('Custom UI · All collections · defaults');
+    expect(pillText(opts, 1, (id) => (id === 'custom_target' ? 'Resolved UI' : undefined))).toBe(
+      'Resolved UI · All collections · defaults',
+    );
   });
 });

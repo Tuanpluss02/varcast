@@ -74,11 +74,18 @@ export type CompositesInfo = {
   textStyles: TextStylePreview[];
 };
 
+export interface TargetMetadataItem {
+  id: string;
+  displayName: string;
+  defaultPackageName: string;
+}
+
 export type PluginToUiMessage =
   | {
       type: 'init-data';
       collections: CollectionInfo[];
       composites: CompositesInfo;
+      availableTargets?: TargetMetadataItem[];
     }
   | { type: 'validation-errors'; errors: ValidationErrorMsg[] }
   | { type: 'exporting' }
@@ -89,6 +96,7 @@ export type PluginToUiMessage =
       summary: ExportSummary;
     }
   | { type: 'zip-ready'; bytes: Uint8Array; filename?: string }
+  | { type: 'warning'; message: string }
   | { type: 'error'; message: string };
 
 export function postToPlugin(msg: UiToPluginMessage) {

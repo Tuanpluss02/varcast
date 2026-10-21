@@ -5,7 +5,7 @@ import { normalizeManifest, diffManifestForTarget } from './core/manifest';
 import { generateChangelog } from './core/manifest/changelog';
 import { handleDownloadZip, type PendingExportData } from './download_handler';
 import { runEngine } from './core/emit_engine';
-import { getTarget } from './core/registry';
+import { getAllTargets, getTarget } from './core/registry';
 // Ensure default targets are registered:
 import './targets/flutter';
 import './targets/react_native';
@@ -46,6 +46,11 @@ figma.ui.onmessage = async (msg: unknown) => {
           effectStyles: effectStyles.map((e) => extractEffectPreview(e, collections)),
           textStyles: textStyles.map((t) => extractTextPreview(t, collections)),
         },
+        availableTargets: getAllTargets().map((t) => ({
+          id: t.id,
+          displayName: t.displayName ?? t.id,
+          defaultPackageName: t.defaultPackageName ?? 'tokens',
+        })),
       });
     } catch (err) {
       figma.ui.postMessage({
