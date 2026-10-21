@@ -9,6 +9,7 @@ import {
   newSanitizeContext,
   sanitize,
   sanitizeIdentifier,
+  stripOrderingPrefix,
 } from '../identifier';
 import { DISALLOWED_COLLECTION_CLASS_NAMES } from '../reserved_names';
 import { DART_KEYWORDS } from '../dart_keywords';
@@ -267,7 +268,7 @@ function prepareCollection(
   options: ExportOptions,
   warnings: PreparedWarning[],
 ): PreparedCollection {
-  let className = sanitizeIdentifier(col.name, 'pascal');
+  let className = sanitizeIdentifier(stripOrderingPrefix(col.name), 'pascal');
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
     className = `${className}Tokens`;
   }

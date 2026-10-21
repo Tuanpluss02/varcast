@@ -26,7 +26,14 @@ import type {
 } from '../../../core/graph/types';
 import { buildSemanticGraph } from '../../../core/graph/build_graph';
 import { validate } from '../../../ir/validate';
-import { processSegment, splitWords, toCamelCase, toKebabCase, toPascalCase } from '../../../core/sanitize_base';
+import {
+  processSegment,
+  splitWords,
+  stripOrderingPrefix,
+  toCamelCase,
+  toKebabCase,
+  toPascalCase,
+} from '../../../core/sanitize_base';
 import { isJsReservedWord } from '../reserved';
 import type { PartialReactNativeOptions } from '../options';
 
@@ -240,7 +247,8 @@ function prepareCollection(
   manifestSection: ManifestTargetSection | null,
   warnings: TargetWarning[],
 ): PreparedRNCollection {
-  const derivedType = pascal(col.name);
+  const cleanName = stripOrderingPrefix(col.name);
+  const derivedType = pascal(cleanName);
   const typeName = resolveStableCollectionName(
     manifestSection,
     col.id,
@@ -256,7 +264,7 @@ function prepareCollection(
     });
     exportName = escaped;
   }
-  const fileBaseName = kebab(col.name);
+  const fileBaseName = kebab(cleanName);
 
   const modes: PreparedRNMode[] = col.modes.map((m) => ({
     id: m.id,

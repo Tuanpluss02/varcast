@@ -41,7 +41,16 @@ export function transliterate(s: string): string {
 }
 
 /**
+ * Strips numeric ordering prefix (e.g. "[1] Color-Basic", "01. Typography", "02 - Spacing")
+ * from Figma collection names.
+ */
+export function stripOrderingPrefix(name: string): string {
+  return name.replace(/^\s*\[?\s*\d+\s*\]?[.\-_:\s]*/, '').trim() || name;
+}
+
+/**
  * Normalizes a raw segment into space-separated alphanumeric words.
+ * Preserves all numeric tokens without dropping digits.
  */
 export function processSegment(seg: string): string {
   let out = transliterate(seg);
@@ -51,11 +60,9 @@ export function processSegment(seg: string): string {
   if (out.length === 0) return 'unnamed';
   const words = out.split(/\s+/);
   const hasAlpha = words.some((w) => /[a-zA-Z]/.test(w));
-  if (hasAlpha) {
-    while (words.length > 0 && /^\d+$/.test(words[0])) words.shift();
-    out = words.join(' ');
+  if (!hasAlpha && /^\d/.test(out)) {
+    out = 'n' + out;
   }
-  if (/^\d/.test(out)) out = 'n' + out;
   return out;
 }
 
@@ -78,25 +85,52 @@ export function splitWords(s: string): string[] {
  * Normalizes and splits a raw segment into sanitized constituent words.
  */
 export function sanitizeWords(seg: string): string[] {
-  return splitWords(processSegment(seg));
+  let out = transliterate(seg);
+  out = out.replace(/[\s\-_.]+/g, ' ');
+  out = out.replace(/[^a-zA-Z0-9 ]/g, '');
+  out = out.trim();
+  if (out.length === 0) return ['unnamed'];
+  return splitWords(out).map((w) => w.toLowerCase());
 }
 
-export function toPascalCase(s: string): string {
-  return splitWords(s).map(capitalize).join('');
+export function toPascalCase(input: string | string[]): string {
+  const words = Array.isArray(input) ? input : splitWords(input);
+  if (words.length === 0) return 'Unnamed';
+  let first = capitalize(words[0]);
+  if (/^\d/.test(first)) {
+    first = 'N' + first;
+  }
+  return first + words.slice(1).map(capitalize).join('');
 }
 
-export function toCamelCase(s: string): string {
-  const words = splitWords(s);
+export function toCamelCase(input: string | string[]): string {
+  const words = Array.isArray(input) ? input : splitWords(input);
   if (words.length === 0) return 'unnamed';
-  return words[0].toLowerCase() + words.slice(1).map(capitalize).join('');
+  let first = words[0].toLowerCase();
+  if (/^\d/.test(first)) {
+    first = 'n' + first;
+  }
+  return first + words.slice(1).map(capitalize).join('');
 }
 
-export function toSnakeCase(s: string): string {
-  return splitWords(s).map((w) => w.toLowerCase()).join('_');
+export function toSnakeCase(input: string | string[]): string {
+  const words = Array.isArray(input) ? input : splitWords(input);
+  if (words.length === 0) return 'unnamed';
+  let first = words[0].toLowerCase();
+  if (/^\d/.test(first)) {
+    first = 'n_' + first;
+  }
+  return [first, ...words.slice(1).map((w) => w.toLowerCase())].join('_');
 }
 
-export function toKebabCase(s: string): string {
-  return splitWords(s).map((w) => w.toLowerCase()).join('-');
+export function toKebabCase(input: string | string[]): string {
+  const words = Array.isArray(input) ? input : splitWords(input);
+  if (words.length === 0) return 'unnamed';
+  let first = words[0].toLowerCase();
+  if (/^\d/.test(first)) {
+    first = 'n-' + first;
+  }
+  return [first, ...words.slice(1).map((w) => w.toLowerCase())].join('-');
 }
 
 function capitalize(w: string): string {

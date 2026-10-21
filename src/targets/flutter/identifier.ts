@@ -3,11 +3,22 @@ import {
   processSegment,
   sanitizeWords,
   splitWords,
+  stripOrderingPrefix,
   toCamelCase,
   toPascalCase,
+  toSnakeCase,
 } from '../../core/sanitize_base';
 
-export { processSegment, splitWords, sanitizeWords, toPascalCase, toCamelCase, DART_KEYWORDS };
+export {
+  processSegment,
+  splitWords,
+  sanitizeWords,
+  stripOrderingPrefix,
+  toPascalCase,
+  toCamelCase,
+  toSnakeCase,
+  DART_KEYWORDS,
+};
 
 export interface SanitizeContext {
   existingByParent: Map<string, Set<string>>;
@@ -79,12 +90,34 @@ export function sanitizeIdentifier(
   raw: string,
   style: 'pascal' | 'camel' = 'pascal',
 ): string {
-  const processed = processSegment(raw);
+  let clean = raw;
+  if (/^\s*\[\s*\d+\s*\]/.test(clean) || /^\s*\d+\s*[.\-_:]/.test(clean)) {
+    clean = stripOrderingPrefix(clean);
+  }
+  const processed = processSegment(clean);
   let id = style === 'pascal' ? toPascalCase(processed) : toCamelCase(processed);
   if (style === 'camel' && DART_KEYWORDS.has(id)) id = id + '_';
   return id;
 }
 
+/**
+ * Sanitizes a Figma collection name into a valid Dart PascalCase class name,
+ * stripping any numeric ordering prefixes (e.g. "[1] Color-Basic" -> "ColorBasic").
+ */
+export function collectionClassName(raw: string): string {
+  const stripped = stripOrderingPrefix(raw);
+  return sanitizeIdentifier(stripped, 'pascal');
+}
+
+/**
+ * Sanitizes a Figma collection name into a valid Dart file base name (snake_case),
+ * stripping any numeric ordering prefixes.
+ */
+export function collectionFileName(raw: string): string {
+  const stripped = stripOrderingPrefix(raw);
+  return toSnakeCase(processSegment(stripped));
+}
+
 export function flutterWordsFromRaw(raw: string): string[] {
-  return sanitizeWords(raw);
+  return sanitizeWords(stripOrderingPrefix(raw));
 }

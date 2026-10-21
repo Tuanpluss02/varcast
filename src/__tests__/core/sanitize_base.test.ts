@@ -3,6 +3,7 @@ import {
   sanitizeWords,
   processSegment,
   splitWords,
+  stripOrderingPrefix,
   toCamelCase,
   toPascalCase,
   toSnakeCase,
@@ -26,13 +27,13 @@ describe('Sanitize Base Numeric Segments', () => {
     expect(toPascalCase(processed)).toBe('N100200');
     expect(toSnakeCase(processed)).toBe('n_100_200');
     expect(toKebabCase(processed)).toBe('n-100-200');
-    expect(sanitizeWords('100 200')).toEqual(['n', '100', '200']);
+    expect(sanitizeWords('100 200')).toEqual(['100', '200']);
   });
 
   it('preserves triple numeric segments without dropping words', () => {
     const processed = processSegment('100 200 300');
     expect(processed).toBe('n100 200 300');
-    expect(sanitizeWords('100 200 300')).toEqual(['n', '100', '200', '300']);
+    expect(sanitizeWords('100 200 300')).toEqual(['100', '200', '300']);
   });
 
   it('preserves single numeric segment with n-prefix', () => {
@@ -40,22 +41,23 @@ describe('Sanitize Base Numeric Segments', () => {
     expect(processed).toBe('n100');
     expect(toCamelCase(processed)).toBe('n100');
     expect(toPascalCase(processed)).toBe('N100');
-    expect(sanitizeWords('100')).toEqual(['n', '100']);
+    expect(sanitizeWords('100')).toEqual(['100']);
   });
 
-  it('drops leading numeric ordering prefix only when followed by alphabetic words', () => {
-    const processed = processSegment('[1] Color-Basic');
+  it('strips leading numeric ordering prefix with stripOrderingPrefix', () => {
+    const stripped = stripOrderingPrefix('[1] Color-Basic');
+    const processed = processSegment(stripped);
     expect(processed).toBe('Color Basic');
     expect(toPascalCase(processed)).toBe('ColorBasic');
     expect(toCamelCase(processed)).toBe('colorBasic');
-    expect(sanitizeWords('[1] Color-Basic')).toEqual(['Color', 'Basic']);
+    expect(sanitizeWords(stripped)).toEqual(['color', 'basic']);
   });
 
   it('handles empty, symbol-only, and diacritic segments', () => {
     expect(processSegment('')).toBe('unnamed');
     expect(processSegment('$$$')).toBe('unnamed');
     expect(processSegment('Đỏ')).toBe('Do');
-    expect(sanitizeWords('Mặc định')).toEqual(['Mac', 'dinh']);
+    expect(sanitizeWords('Mặc định')).toEqual(['mac', 'dinh']);
   });
 });
 
