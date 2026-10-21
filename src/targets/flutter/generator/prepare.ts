@@ -19,7 +19,7 @@ import {
   resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
-import { dedupGetters } from '../../../core/naming/dedup';
+import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core/naming/dedup';
 import type { PreparedTarget } from '../../../core/target';
 import type {
   GraphCollection,
@@ -279,6 +279,26 @@ function prepareCollection(
 
   const ctx = newSanitizeContext();
   const finalNamesByParent = new Map<string, Set<string>>();
+  const stableReservedByVarId = new Map<string, string>();
+
+  // Pass 1: Pre-reserve all stable pinned variable names under their group paths
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    if (manifestSection?.variables?.[v.id]) {
+      const fullPath = 'leafName' in v && v.leafName
+        ? [...v.groupPath, v.leafName]
+        : v.groupPath;
+      const { groupPath, leafName } = sanitize(fullPath, ctx);
+      let stableLeaf = resolveStableName(v.id, leafName, manifestSection);
+      if (DART_KEYWORDS.has(stableLeaf)) {
+        stableLeaf = `${stableLeaf}_`;
+      }
+      const allocated = reserveSiblingKey(finalNamesByParent, groupPath.join('/'), stableLeaf);
+      stableReservedByVarId.set(v.id, allocated);
+    }
+  }
+
+  // Pass 2: Allocate and deduplicate leaves
   const variables: PreparedVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
@@ -303,6 +323,7 @@ function prepareCollection(
         fixed: leafName,
       });
     }
+
     let stableLeaf = resolveStableName(v.id, leafName, manifestSection);
     /**
      * Re-apply keyword fix for legacy manifests that may carry a Dart keyword leaf name.
@@ -320,7 +341,12 @@ function prepareCollection(
       }
       stableLeaf = fixed;
     }
-    stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
+
+    if (stableReservedByVarId.has(v.id)) {
+      stableLeaf = stableReservedByVarId.get(v.id)!;
+    } else {
+      stableLeaf = dedupSiblingKeys(finalNamesByParent, groupPath.join('/'), stableLeaf);
+    }
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
@@ -344,27 +370,6 @@ function prepareCollection(
     variables,
     fileBaseName: pascalToSnake(className),
   };
-}
-
-function dedupLeafName(
-  usedByParent: Map<string, Set<string>>,
-  parentKey: string,
-  leaf: string,
-): string {
-  let used = usedByParent.get(parentKey);
-  if (!used) {
-    used = new Set();
-    usedByParent.set(parentKey, used);
-  }
-  if (!used.has(leaf)) {
-    used.add(leaf);
-    return leaf;
-  }
-  let i = 2;
-  while (used.has(`${leaf}${i}`)) i++;
-  const next = `${leaf}${i}`;
-  used.add(next);
-  return next;
 }
 
 function buildNextManifest(

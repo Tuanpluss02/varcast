@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { dedupGetters, dedupSiblingKeys } from '../../../core/naming/dedup';
+import {
+  dedupGetters,
+  dedupSiblingKeys,
+  reserveSiblingKey,
+} from '../../../core/naming/dedup';
 
 describe('dedupGetters', () => {
   it('deduplicates getterName collision with numeric suffixes', () => {
@@ -84,5 +88,19 @@ describe('dedupSiblingKeys', () => {
     const used = new Map<string, Set<string>>();
     used.set('colors', new Set(['bg', 'bg2']));
     expect(dedupSiblingKeys(used, 'colors', 'bg')).toBe('bg3');
+  });
+
+  it('guarantees pre-reserved stable sibling key is never displaced by newly derived keys', () => {
+    const used = new Map<string, Set<string>>();
+    // Pass 1: Stable key 'primary' is pre-reserved
+    const reservedStable = reserveSiblingKey(used, 'buttons', 'primary');
+    expect(reservedStable).toBe('primary');
+
+    // Pass 2: A newly derived key 'primary' arrives first
+    const newAllocated = dedupSiblingKeys(used, 'buttons', 'primary');
+    expect(newAllocated).toBe('primary2');
+
+    // The stable key was preserved as 'primary'
+    expect(reservedStable).toBe('primary');
   });
 });

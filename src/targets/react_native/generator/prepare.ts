@@ -17,7 +17,7 @@ import {
   resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
-import { dedupGetters, dedupSiblingKeys } from '../../../core/naming/dedup';
+import { dedupGetters, dedupSiblingKeys, reserveSiblingKey } from '../../../core/naming/dedup';
 import type { PreparedTarget, TargetWarning } from '../../../core/target';
 import type {
   GraphCollection,
@@ -289,6 +289,23 @@ function prepareCollection(
   }
 
   const usedByGroup = new Map<string, Set<string>>();
+  const stableReservedByVarId = new Map<string, string>();
+
+  // Pass 1: Pre-reserve all stable pinned variable names under their group paths
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    if (manifestSection?.variables?.[v.id]) {
+      const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
+      const groupPathKeys = groupSegs.map(camel);
+      const derivedLeaf = camel((v.leafName ?? 'unnamed').trim());
+      const stableLeaf = resolveStableVariableName(manifestSection, v.id, derivedLeaf);
+      const groupKey = groupPathKeys.join('/');
+      const allocated = reserveSiblingKey(usedByGroup, groupKey, stableLeaf);
+      stableReservedByVarId.set(v.id, allocated);
+    }
+  }
+
+  // Pass 2: Allocate and deduplicate leaves
   const variables: PreparedRNVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
@@ -296,35 +313,44 @@ function prepareCollection(
     const leafSeg = (v.leafName ?? 'unnamed').trim();
     const segs = [...groupSegs, leafSeg];
     const groupPathKeys = groupSegs.map(camel);
-    const derivedLeaf = camel(leafSeg);
-    const stableLeaf = resolveStableVariableName(
-      manifestSection,
-      v.id,
-      derivedLeaf,
-    );
     const groupKey = groupPathKeys.join('/');
 
-    // Check if leaf conflicts with an intermediate group prefix
-    let candidateLeaf = stableLeaf;
-    const fullLeafPath = groupKey ? `${groupKey}/${candidateLeaf}` : candidateLeaf;
-    if (intermediateGroups.has(fullLeafPath)) {
-      candidateLeaf = `${candidateLeaf}Value`;
-      warnings.push({
-        targetId: 'react_native',
-        code: 'LEAF_GROUP_CONFLICT',
-        message: `Variable "${v.figmaName}" leaf "${stableLeaf}" conflicts with an intermediate group path under collection "${col.name}"; renamed to "${candidateLeaf}".`,
-        details: { variableId: v.id, original: stableLeaf, fixed: candidateLeaf },
-      });
-    }
+    let finalLeaf: string;
+    let stableLeaf: string;
 
-    const finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, candidateLeaf);
-    if (finalLeaf !== stableLeaf && candidateLeaf === stableLeaf) {
-      warnings.push({
-        targetId: 'react_native',
-        code: 'DUPLICATE_LEAF_NAME',
-        message: `Variable "${v.figmaName}" collided with sibling leaf name; deduplicated to "${finalLeaf}".`,
-        details: { variableId: v.id, original: stableLeaf, fixed: finalLeaf },
-      });
+    if (stableReservedByVarId.has(v.id)) {
+      stableLeaf = stableReservedByVarId.get(v.id)!;
+      finalLeaf = stableLeaf;
+    } else {
+      const derivedLeaf = camel(leafSeg);
+      stableLeaf = resolveStableVariableName(
+        manifestSection,
+        v.id,
+        derivedLeaf,
+      );
+
+      // Check if leaf conflicts with an intermediate group prefix
+      let candidateLeaf = stableLeaf;
+      const fullLeafPath = groupKey ? `${groupKey}/${candidateLeaf}` : candidateLeaf;
+      if (intermediateGroups.has(fullLeafPath)) {
+        candidateLeaf = `${candidateLeaf}Value`;
+        warnings.push({
+          targetId: 'react_native',
+          code: 'LEAF_GROUP_CONFLICT',
+          message: `Variable "${v.figmaName}" leaf "${stableLeaf}" conflicts with an intermediate group path under collection "${col.name}"; renamed to "${candidateLeaf}".`,
+          details: { variableId: v.id, original: stableLeaf, fixed: candidateLeaf },
+        });
+      }
+
+      finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, candidateLeaf);
+      if (finalLeaf !== stableLeaf && candidateLeaf === stableLeaf) {
+        warnings.push({
+          targetId: 'react_native',
+          code: 'DUPLICATE_LEAF_NAME',
+          message: `Variable "${v.figmaName}" collided with sibling leaf name; deduplicated to "${finalLeaf}".`,
+          details: { variableId: v.id, original: stableLeaf, fixed: finalLeaf },
+        });
+      }
     }
     variables.push({
       id: v.id,

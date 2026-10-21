@@ -56,6 +56,35 @@ export function dedupGetters<T extends { getterName: string; isStable?: boolean 
 }
 
 /**
+ * Pre-reserves a stable sibling key under a parent namespace so that
+ * later newly derived sibling keys will not collide with or displace it.
+ * If the key was already taken by a prior stable item, resolves collision by suffixing.
+ */
+export function reserveSiblingKey(
+  usedMap: Map<string, Set<string>>,
+  parentKey: string,
+  key: string,
+): string {
+  let set = usedMap.get(parentKey);
+  if (!set) {
+    set = new Set<string>();
+    usedMap.set(parentKey, set);
+  }
+
+  let finalKey = key;
+  if (set.has(finalKey)) {
+    let suffix = 2;
+    while (set.has(`${key}${suffix}`)) {
+      suffix++;
+    }
+    finalKey = `${key}${suffix}`;
+  }
+
+  set.add(finalKey);
+  return finalKey;
+}
+
+/**
  * Deduplicates sibling keys under a parent namespace.
  * If `key` is unused in the parent's set, records and returns `key`.
  * Otherwise tries `${key}2`, `${key}3`, etc., records the first available candidate, and returns it.
