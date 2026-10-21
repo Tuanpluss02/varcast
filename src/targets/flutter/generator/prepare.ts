@@ -14,9 +14,12 @@ import { DISALLOWED_COLLECTION_CLASS_NAMES } from '../reserved_names';
 import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
+  getTargetSection,
   resolveStableCollectionName,
+  resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
+import { dedupGetters } from '../../../core/naming/dedup';
 import type { PreparedTarget } from '../../../core/target';
 import type {
   GraphCollection,
@@ -157,16 +160,29 @@ export function prepareIR(
     }
   }
 
-  const paintStyles = dedupCompositeGetters(
-    graph.composites.paintStyles.map((s) => preparePaint(s)),
+  const manifestSection: ManifestTargetSection | null =
+    manifest && 'collections' in manifest
+      ? (manifest as ManifestTargetSection)
+      : getTargetSection(manifest as Manifest | null, FLUTTER_TARGET_ID);
+  const parentManifest: Manifest | null =
+    manifest && 'targets' in manifest ? (manifest as Manifest) : null;
+
+  const paintStyles = dedupGetters(
+    graph.composites.paintStyles.map((s) =>
+      preparePaint(s, manifestSection, parentManifest),
+    ),
     () => `paint`,
   );
-  const effectStyles = dedupCompositeGetters(
-    graph.composites.effectStyles.map((s) => prepareEffect(s)),
+  const effectStyles = dedupGetters(
+    graph.composites.effectStyles.map((s) =>
+      prepareEffect(s, manifestSection, parentManifest),
+    ),
     () => `effect`,
   );
-  const textStyles = dedupCompositeGetters(
-    graph.composites.textStyles.map((s) => prepareText(s)),
+  const textStyles = dedupGetters(
+    graph.composites.textStyles.map((s) =>
+      prepareText(s, manifestSection, parentManifest),
+    ),
     () => `text`,
   );
 
@@ -182,6 +198,7 @@ export function prepareIR(
   const { nextManifest, nextManifestSection } = buildNextManifest(
     graph.fileKey,
     collections,
+    { paintStyles, effectStyles, textStyles },
     manifest,
     figmaVar,
     figmaCol,
@@ -200,6 +217,8 @@ export function prepareIR(
     ir,
   };
 }
+
+export const prepareFlutterIR = prepareIR;
 
 
 function normalizeLegacyLeafName(
@@ -373,12 +392,19 @@ function dedupLeafName(
 function buildNextManifest(
   fileKey: string,
   cols: PreparedCollection[],
+  composites: {
+    paintStyles: PreparedPaintStyle[];
+    effectStyles: PreparedEffectStyle[];
+    textStyles: PreparedTextStyle[];
+  },
   oldManifest: Manifest | ManifestTargetSection | null,
   figmaVar: Record<string, string>,
   figmaCol: Record<string, string>,
 ): { nextManifest: Manifest; nextManifestSection: ManifestTargetSection } {
   const variables: Record<string, string> = {};
   const collections: Record<string, string> = {};
+  const compositeMap: Record<string, string> = {};
+  const figmaComposite: Record<string, string> = {};
 
   for (const c of cols) {
     collections[c.id] = c.className;
@@ -387,10 +413,25 @@ function buildNextManifest(
     }
   }
 
+  const allComposites = [
+    ...composites.paintStyles,
+    ...composites.effectStyles,
+    ...composites.textStyles,
+  ];
+  for (const s of allComposites) {
+    compositeMap[s.id] = s.getterName;
+    figmaComposite[s.id] = s.raw.figmaName;
+  }
+
   const nextManifestSection: ManifestTargetSection = {
     variables,
     collections,
-    figmaNames: { variables: figmaVar, collections: figmaCol },
+    composites: compositeMap,
+    figmaNames: {
+      variables: figmaVar,
+      collections: figmaCol,
+      composites: figmaComposite,
+    },
   };
 
   const oldTargets: Manifest['targets'] =
@@ -409,45 +450,55 @@ function buildNextManifest(
 
 const FLUTTER_TARGET_ID = 'flutter';
 
-function preparePaint(s: IRPaintStyle): PreparedPaintStyle {
+function preparePaint(
+  s: IRPaintStyle,
+  manifestSection?: ManifestTargetSection | null,
+  manifest?: Manifest | null,
+): PreparedPaintStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  const getterName = sanitizeIdentifier(getter, 'camel');
+  const derivedGetterName = sanitizeIdentifier(getter, 'camel');
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+    manifest,
+  );
   return { id: s.id, type: s.type, groupName: 'Paint', getterName, raw: s };
 }
 
-function prepareEffect(s: IREffectStyle): PreparedEffectStyle {
+function prepareEffect(
+  s: IREffectStyle,
+  manifestSection?: ManifestTargetSection | null,
+  manifest?: Manifest | null,
+): PreparedEffectStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  const getterName = sanitizeIdentifier(getter, 'camel');
+  const derivedGetterName = sanitizeIdentifier(getter, 'camel');
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+    manifest,
+  );
   return { id: s.id, type: s.type, groupName: 'Effect', getterName, raw: s };
 }
 
-function prepareText(s: IRTextStyle): PreparedTextStyle {
+function prepareText(
+  s: IRTextStyle,
+  manifestSection?: ManifestTargetSection | null,
+  manifest?: Manifest | null,
+): PreparedTextStyle {
   const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  const getterName = sanitizeIdentifier(getter, 'camel');
+  const derivedGetterName = sanitizeIdentifier(getter, 'camel');
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+    manifest,
+  );
   return { id: s.id, groupName: 'Text', getterName, raw: s };
-}
-
-function dedupCompositeGetters<T extends { getterName: string }>(
-  items: T[],
-  bucketKey: (item: T) => string,
-): T[] {
-  const used = new Map<string, number>();
-  for (const it of items) {
-    const base = it.getterName;
-    const key = `${bucketKey(it)}::${base}`;
-    const n = used.get(key);
-    if (n === undefined) {
-      used.set(key, 1);
-      continue;
-    }
-    const next = n + 1;
-    used.set(key, next);
-    it.getterName = `${base}${next}`;
-  }
-  return items;
 }
 
 function dartTypeOf(t: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN'): DartType {

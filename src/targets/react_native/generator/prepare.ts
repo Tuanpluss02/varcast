@@ -12,9 +12,12 @@ import type {
 } from '../../../ir/types';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
+  getTargetSection,
   resolveStableCollectionName,
+  resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
+import { dedupGetters } from '../../../core/naming/dedup';
 import type { PreparedTarget, TargetWarning } from '../../../core/target';
 import type {
   GraphCollection,
@@ -129,22 +132,39 @@ export function prepareRN(
     prepareCollection(c, manifest),
   );
 
+  const manifestSection: ManifestTargetSection | null =
+    manifest && 'collections' in manifest
+      ? (manifest as ManifestTargetSection)
+      : getTargetSection(manifest as Manifest | null, 'react_native');
+  const parentManifest: Manifest | null =
+    manifest && 'targets' in manifest ? (manifest as Manifest) : null;
+
   const resolvedVarByMode = extractResolvedVarByMode(graph);
 
-  const paintStyles = dedupCompositeGetters(
-    graph.composites.paintStyles.map((s) => preparePaint(s)),
+  const paintStyles = dedupGetters(
+    graph.composites.paintStyles.map((s) =>
+      preparePaint(s, manifestSection, parentManifest),
+    ),
     (s) => s.groupName,
   );
-  const effectStyles = dedupCompositeGetters(
-    graph.composites.effectStyles.map((s) => prepareEffect(s)),
+  const effectStyles = dedupGetters(
+    graph.composites.effectStyles.map((s) =>
+      prepareEffect(s, manifestSection, parentManifest),
+    ),
     (s) => s.groupName,
   );
-  const textStyles = dedupCompositeGetters(
-    graph.composites.textStyles.map((s) => prepareText(s)),
+  const textStyles = dedupGetters(
+    graph.composites.textStyles.map((s) =>
+      prepareText(s, manifestSection, parentManifest),
+    ),
     (s) => s.groupName,
   );
 
-  const nextManifestSection = buildNextManifestSection(graph, collections);
+  const nextManifestSection = buildNextManifestSection(graph, collections, {
+    paintStyles,
+    effectStyles,
+    textStyles,
+  });
 
   const oldTargets: Manifest['targets'] =
     manifest && 'targets' in manifest ? { ...(manifest as Manifest).targets } : {};
@@ -238,17 +258,34 @@ function modeKey(modeName: string): string {
 function buildNextManifestSection(
   graph: SemanticTokenGraph,
   cols: PreparedRNCollection[],
+  composites: {
+    paintStyles: PreparedRNPaintStyle[];
+    effectStyles: PreparedRNEffectStyle[];
+    textStyles: PreparedRNTextStyle[];
+  },
 ): ManifestTargetSection {
   const variables: Record<string, string> = {};
   const collections: Record<string, string> = {};
+  const compositeMap: Record<string, string> = {};
   const figmaVar: Record<string, string> = {};
   const figmaCol: Record<string, string> = {};
+  const figmaComposite: Record<string, string> = {};
 
   for (const c of cols) {
     collections[c.id] = c.typeName;
     for (const v of c.variables) {
       variables[v.id] = v.stableLeafKey;
     }
+  }
+
+  const allComposites = [
+    ...composites.paintStyles,
+    ...composites.effectStyles,
+    ...composites.textStyles,
+  ];
+  for (const s of allComposites) {
+    compositeMap[s.id] = s.getterName;
+    figmaComposite[s.id] = s.raw.figmaName;
   }
 
   for (const c of graph.collections) {
@@ -261,7 +298,12 @@ function buildNextManifestSection(
   return {
     variables,
     collections,
-    figmaNames: { variables: figmaVar, collections: figmaCol },
+    composites: compositeMap,
+    figmaNames: {
+      variables: figmaVar,
+      collections: figmaCol,
+      composites: figmaComposite,
+    },
   };
 }
 
@@ -269,27 +311,53 @@ function lowerFirst(s: string): string {
   return s ? s[0].toLowerCase() + s.slice(1) : s;
 }
 
-function preparePaint(s: IRPaintStyle): PreparedRNPaintStyle {
+function preparePaint(
+  s: IRPaintStyle,
+  manifestSection?: ManifestTargetSection | null,
+  manifest?: Manifest | null,
+): PreparedRNPaintStyle {
+  const derivedGetterName = camel(s.figmaName);
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+    manifest,
+  );
   return {
     id: s.id,
     type: s.type,
     groupName: paintBucket(s.type),
-    getterName: camel(s.figmaName),
+    getterName,
     raw: s,
   };
 }
 
-function prepareEffect(s: IREffectStyle): PreparedRNEffectStyle {
+function prepareEffect(
+  s: IREffectStyle,
+  manifestSection?: ManifestTargetSection | null,
+  manifest?: Manifest | null,
+): PreparedRNEffectStyle {
+  const derivedGetterName = camel(s.figmaName);
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+    manifest,
+  );
   return {
     id: s.id,
     type: s.type,
     groupName: effectBucket(s.type),
-    getterName: camel(s.figmaName),
+    getterName,
     raw: s,
   };
 }
 
-function prepareText(s: IRTextStyle): PreparedRNTextStyle {
+function prepareText(
+  s: IRTextStyle,
+  manifestSection?: ManifestTargetSection | null,
+  manifest?: Manifest | null,
+): PreparedRNTextStyle {
   const segs = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   let groupName = 'Main';
   let getterParts: string[] = segs;
@@ -297,10 +365,17 @@ function prepareText(s: IRTextStyle): PreparedRNTextStyle {
     groupName = pascal(segs[0]);
     getterParts = segs.slice(1);
   }
+  const derivedGetterName = camel(getterParts.join(' '));
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+    manifest,
+  );
   return {
     id: s.id,
     groupName,
-    getterName: camel(getterParts.join(' ')),
+    getterName,
     raw: s,
   };
 }
@@ -333,26 +408,6 @@ function effectBucket(t: IREffectStyle['type']): string {
     case 'BACKGROUND_BLUR':
       return 'BackgroundBlur';
   }
-}
-
-function dedupCompositeGetters<T extends { getterName: string }>(
-  items: T[],
-  bucketKey: (item: T) => string,
-): T[] {
-  const used = new Map<string, number>();
-  for (const it of items) {
-    const base = it.getterName;
-    const key = `${bucketKey(it)}::${base}`;
-    const n = used.get(key);
-    if (n === undefined) {
-      used.set(key, 1);
-      continue;
-    }
-    const next = n + 1;
-    used.set(key, next);
-    it.getterName = `${base}${next}`;
-  }
-  return items;
 }
 
 type Primitive = string | number | boolean;
