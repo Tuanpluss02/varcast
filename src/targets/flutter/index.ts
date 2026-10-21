@@ -1,6 +1,5 @@
-import type { IR } from '../../ir/types';
 import type { SemanticTokenGraph } from '../../core/graph/types';
-import type { Manifest, ManifestTargetSection } from '../../core/manifest';
+import type { ManifestTargetSection } from '../../core/manifest';
 import type { EmittedFile, PreparedTarget, Target, TargetWarning } from '../../core/target';
 import { hasTarget, registerTarget } from '../../core/registry/target_registry';
 import type { ExportOptions, PartialExportOptions } from './generator/options';
@@ -62,12 +61,12 @@ export const flutterTarget: Target<FlutterOptions, PreparedFlutter> = {
   normalizeOptions: normalizeExportOptions,
 
   prepare(
-    input: SemanticTokenGraph | IR,
-    manifest: Manifest | ManifestTargetSection | null = null,
+    graph: SemanticTokenGraph,
+    section: ManifestTargetSection | null = null,
     options?: FlutterOptions,
   ): PreparedFlutter {
     const o = normalizeExportOptions(options);
-    const prepared = prepareFlutterIR(input, manifest, o);
+    const prepared = prepareFlutterIR(graph, section, o);
     const { warnings: preparedWarnings } = prepared;
     return {
       targetId: 'flutter',

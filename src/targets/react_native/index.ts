@@ -1,14 +1,12 @@
 import type { SemanticTokenGraph } from '../../core/graph/types';
-import type { Manifest, ManifestTargetSection } from '../../core/manifest';
+import type { ManifestTargetSection } from '../../core/manifest';
 import { hasTarget, registerTarget } from '../../core/registry/target_registry';
 import type { EmittedFile, Target } from '../../core/target';
-import type { IR } from '../../ir/types';
 import { emitCollections } from './generator/emit_collections';
 import { emitComposites } from './generator/emit_composites';
 import { emitRuntime } from './generator/emit_runtime';
 import { prepareRN } from './generator/prepare';
 import type { PreparedRN } from './generator/prepare';
-import { reactNativeIdentifierProfile } from './identifier';
 import type { PartialReactNativeOptions } from './options';
 import { DEFAULT_RN_OPTIONS, mergeRnOptions, sanitizePackageName } from './options';
 import {
@@ -20,13 +18,11 @@ import {
   themeProviderTsx,
   tsconfigJson,
 } from './static_files';
-import { reactNativeTypeMapping } from './type_mapping';
 
 export type PreparedReactNative = PreparedRN;
 export type ReactNativeOptions = PartialReactNativeOptions;
 export type { PartialReactNativeOptions };
 export { DEFAULT_RN_OPTIONS, mergeRnOptions, sanitizePackageName };
-export { reactNativeIdentifierProfile, reactNativeTypeMapping };
 
 export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> = {
   id: 'react_native',
@@ -37,11 +33,11 @@ export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> 
   normalizeOptions: mergeRnOptions,
 
   prepare(
-    input: SemanticTokenGraph | IR,
-    manifest: Manifest | ManifestTargetSection | null = null,
+    graph: SemanticTokenGraph,
+    section: ManifestTargetSection | null = null,
     _options?: ReactNativeOptions,
   ): PreparedReactNative {
-    return prepareRN(input, manifest);
+    return prepareRN(graph, section);
   },
 
   emit(prepared: PreparedReactNative, options?: ReactNativeOptions): EmittedFile[] {

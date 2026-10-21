@@ -73,7 +73,7 @@ export interface PreparedRN extends PreparedTarget {
   resolvedVarByMode: Record<string /*modeId*/, Record<string /*varId*/, Primitive>>;
   nextManifestSection: ManifestTargetSection;
   nextManifest?: Manifest;
-  warnings?: TargetWarning[];
+  warnings: TargetWarning[];
 }
 
 export interface PreparedRNPaintStyle {

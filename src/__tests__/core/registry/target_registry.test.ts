@@ -20,6 +20,7 @@ function createMockTarget(
     prepare: () => ({
       targetId: id,
       nextManifestSection: { variables: {}, collections: {} },
+      warnings: [],
     }),
     emit: (): EmittedFile[] => [],
     ...extra,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { IR } from '../../ir/types';
+import { buildSemanticGraph } from '../../core/graph/build_graph';
 import {
   TargetRegistry,
   clearRegistry,
@@ -54,7 +55,7 @@ function createTestIR(): IR {
 describe('Target Boundary Type-Safety & Elimination of as any', () => {
   it('flutterTarget.prepare returns strictly typed PreparedFlutter with flutterPrepared', () => {
     const ir = createTestIR();
-    const prepared: PreparedFlutter = flutterTarget.prepare(ir, null, {
+    const prepared: PreparedFlutter = flutterTarget.prepare(buildSemanticGraph(ir), null, {
       packageName: 'my_flutter_ds',
     });
 
@@ -68,7 +69,7 @@ describe('Target Boundary Type-Safety & Elimination of as any', () => {
 
   it('flutterTarget.emit consumes PreparedFlutter directly without any cast', () => {
     const ir = createTestIR();
-    const prepared = flutterTarget.prepare(ir, null, {
+    const prepared = flutterTarget.prepare(buildSemanticGraph(ir), null, {
       packageName: 'my_flutter_ds',
     });
 
@@ -84,7 +85,7 @@ describe('Target Boundary Type-Safety & Elimination of as any', () => {
 
   it('reactNativeTarget.prepare returns strictly typed PreparedReactNative', () => {
     const ir = createTestIR();
-    const prepared: PreparedReactNative = reactNativeTarget.prepare(ir, null, {
+    const prepared: PreparedReactNative = reactNativeTarget.prepare(buildSemanticGraph(ir), null, {
       packageName: 'my-rn-ds',
     });
 
@@ -96,7 +97,7 @@ describe('Target Boundary Type-Safety & Elimination of as any', () => {
 
   it('reactNativeTarget.emit consumes PreparedReactNative cleanly without any cast', () => {
     const ir = createTestIR();
-    const prepared = reactNativeTarget.prepare(ir, null);
+    const prepared = reactNativeTarget.prepare(buildSemanticGraph(ir), null);
 
     const files: EmittedFile[] = reactNativeTarget.emit(prepared, {
       packageName: 'my-rn-ds',
@@ -117,14 +118,14 @@ describe('Target Boundary Type-Safety & Elimination of as any', () => {
     expect(typedFlutter.id).toBe('flutter');
 
     const ir = createTestIR();
-    const flutterPrepared: PreparedFlutter = typedFlutter.prepare(ir, null);
+    const flutterPrepared: PreparedFlutter = typedFlutter.prepare(buildSemanticGraph(ir), null);
     const flutterFiles: EmittedFile[] = typedFlutter.emit(flutterPrepared);
     expect(flutterFiles.length).toBeGreaterThan(0);
 
     const typedRN = registry.get<ReactNativeOptions, PreparedReactNative>('react_native');
     expect(typedRN.id).toBe('react_native');
 
-    const rnPrepared: PreparedReactNative = typedRN.prepare(ir, null);
+    const rnPrepared: PreparedReactNative = typedRN.prepare(buildSemanticGraph(ir), null);
     const rnFiles: EmittedFile[] = typedRN.emit(rnPrepared);
     expect(rnFiles.length).toBeGreaterThan(0);
   });
@@ -133,7 +134,7 @@ describe('Target Boundary Type-Safety & Elimination of as any', () => {
     const target = getTarget<FlutterOptions, PreparedFlutter>('flutter');
     const ir = createTestIR();
 
-    const prepared = target.prepare(ir, null, { packageName: 'global_test_ds' });
+    const prepared = target.prepare(buildSemanticGraph(ir), null, { packageName: 'global_test_ds' });
     expect(prepared.targetId).toBe('flutter');
     expect(prepared.flutterPrepared).toBeDefined();
 

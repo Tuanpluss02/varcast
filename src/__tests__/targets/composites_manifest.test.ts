@@ -5,6 +5,7 @@ import { flutterTarget } from '../../targets/flutter';
 import { prepareRN } from '../../targets/react_native/generator/prepare';
 import { reactNativeTarget } from '../../targets/react_native';
 import { diffManifestForTarget } from '../../core/manifest/diff';
+import { buildSemanticGraph } from '../../core/graph/build_graph';
 
 function createTestIR(overrides?: {
   paintFigmaName?: string;
@@ -164,7 +165,7 @@ describe('Composites in Manifest — Flutter', () => {
 
   it('flutterTarget.prepare integrates nextManifestSection with composites', () => {
     const ir = createTestIR();
-    const result = flutterTarget.prepare(ir, null);
+    const result = flutterTarget.prepare(buildSemanticGraph(ir), null);
 
     expect(result.nextManifestSection.composites).toEqual({
       paint_123: 'brandPrimaryOld',
@@ -262,7 +263,7 @@ describe('Composites in Manifest — React Native', () => {
 
   it('reactNativeTarget.prepare integrates nextManifestSection with composites', () => {
     const ir = createTestIR();
-    const result = reactNativeTarget.prepare(ir, null);
+    const result = reactNativeTarget.prepare(buildSemanticGraph(ir), null);
 
     expect(result.nextManifestSection.composites).toEqual({
       paint_123: 'brandPrimaryOld',

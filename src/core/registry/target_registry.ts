@@ -1,15 +1,18 @@
-import type { AnyTarget, PreparedTarget, Target } from '../target';
+import type { PreparedTarget, Target } from '../target';
 
 export class TargetRegistry {
-  private readonly targets = new Map<string, AnyTarget>();
+  private readonly targets = new Map<string, Target<any, PreparedTarget>>();
 
   /**
    * Registers a target into this registry instance.
-   * Throws an error if a target with the same ID is already registered.
+   * Throws an error if target ID format is invalid or already registered.
    */
   register<TOptions = any, TPrepared extends PreparedTarget = any>(
     target: Target<TOptions, TPrepared>,
   ): void {
+    if (!/^[a-z][a-z0-9_-]*$/.test(target.id)) {
+      throw new Error(`Invalid target ID format: "${target.id}". Must match /^[a-z][a-z0-9_-]*$/.`);
+    }
     if (this.targets.has(target.id)) {
       throw new Error(`Target with ID "${target.id}" is already registered.`);
     }
@@ -40,7 +43,7 @@ export class TargetRegistry {
   /**
    * Returns all registered targets in their insertion (registration) order.
    */
-  getAll(): AnyTarget[] {
+  getAll(): Target<any, PreparedTarget>[] {
     return Array.from(this.targets.values());
   }
 
@@ -87,7 +90,7 @@ export function hasTarget(id: string): boolean {
 /**
  * Returns all registered targets in registration order from the global target registry.
  */
-export function getAllTargets(): AnyTarget[] {
+export function getAllTargets(): Target<any, PreparedTarget>[] {
   return defaultRegistry.getAll();
 }
 

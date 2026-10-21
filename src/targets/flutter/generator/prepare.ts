@@ -11,7 +11,7 @@ import {
   sanitizeIdentifier,
 } from '../identifier';
 import { DISALLOWED_COLLECTION_CLASS_NAMES } from '../reserved_names';
-import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
+import { DART_KEYWORDS } from '../dart_keywords';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
   getTargetSection,
