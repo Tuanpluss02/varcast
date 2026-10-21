@@ -10,6 +10,7 @@ import {
   sanitize,
   sanitizeIdentifier,
 } from '../identifier';
+import { DISALLOWED_COLLECTION_CLASS_NAMES } from '../reserved_names';
 import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
@@ -200,31 +201,6 @@ export function prepareIR(
   };
 }
 
-/**
- * Reserved Flutter/Dart SDK symbols to prevent collisions in generated files.
- * Shadowing these would break imports in the consumer codebase.
- */
-const DISALLOWED_COLLECTION_CLASS_NAMES = new Set([
-  'FontWeight',
-  'Color',
-  'TextStyle',
-  'BoxShadow',
-  'Gradient',
-  'LinearGradient',
-  'RadialGradient',
-  'SweepGradient',
-  'ImageFilter',
-  'AnimationController',
-  'ChangeNotifier',
-  'ThemeData',
-  'AppTheme',
-  'DesignSystemController',
-  'DSColorStyles',
-  'DSShadows',
-  'DSStyles',
-  'DSTextStyle',
-  'DSShadow',
-]);
 
 function normalizeLegacyLeafName(
   name: string,
