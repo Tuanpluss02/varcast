@@ -1,3 +1,6 @@
+import type { ManifestTargetSection } from '../manifest/types';
+import { resolveStableVariableName } from '../manifest/stable_names';
+
 /**
  * Centralized naming deduplication utilities.
  */
@@ -96,3 +99,99 @@ export function dedupSiblingKeys(
   set.add(finalKey);
   return finalKey;
 }
+
+export interface AllocatedIdentifier {
+  stableLeafKey: string;
+  isStable: boolean;
+  wasDeduplicated?: boolean;
+}
+
+/**
+ * 2-pass stable identifier allocator with deduplication across variables in a collection.
+ * Pass 1: Pre-reserves pinned stable names from manifest under group namespaces.
+ * Pass 2: Allocates remaining variables, deduplicating collisions against reserved stable names.
+ */
+export function allocateStableCollectionIdentifiers<
+  TVar extends {
+    id: string;
+    figmaName: string;
+    groupPath?: string[];
+    leafName?: string;
+    emitToPublic?: boolean;
+  },
+>(
+  variables: TVar[],
+  manifestSection: ManifestTargetSection | null,
+  sanitizeLeaf: (leaf: string, v: TVar) => string,
+  options?: {
+    getGroupKey?: (v: TVar) => string;
+    formatStableName?: (variableId: string, derivedLeaf: string) => string;
+  },
+): Map<string, AllocatedIdentifier> {
+  const usedByGroup = new Map<string, Set<string>>();
+  const stableReservedByVarId = new Map<string, AllocatedIdentifier>();
+  const resultMap = new Map<string, AllocatedIdentifier>();
+
+  const computeGroupKey = (v: TVar): string => {
+    if (options?.getGroupKey) {
+      return options.getGroupKey(v);
+    }
+    return v.groupPath ? v.groupPath.join('/') : '';
+  };
+
+  // Pass 1: Pre-reserve all stable pinned variable names under their group paths
+  for (const v of variables) {
+    if (v.emitToPublic === false) {
+      continue;
+    }
+    if (manifestSection?.variables?.[v.id]) {
+      const derivedLeaf = sanitizeLeaf(v.leafName ?? 'unnamed', v);
+      let stableLeaf = resolveStableVariableName(
+        manifestSection,
+        v.id,
+        derivedLeaf,
+      );
+      if (options?.formatStableName) {
+        stableLeaf = options.formatStableName(v.id, stableLeaf);
+      }
+      const groupKey = computeGroupKey(v);
+      const allocated = reserveSiblingKey(usedByGroup, groupKey, stableLeaf);
+      stableReservedByVarId.set(v.id, {
+        stableLeafKey: allocated,
+        isStable: true,
+      });
+    }
+  }
+
+  // Pass 2: Allocate and deduplicate leaves
+  for (const v of variables) {
+    if (v.emitToPublic === false) {
+      continue;
+    }
+    const reserved = stableReservedByVarId.get(v.id);
+    if (reserved) {
+      resultMap.set(v.id, reserved);
+      continue;
+    }
+
+    const groupKey = computeGroupKey(v);
+    const derivedLeaf = sanitizeLeaf(v.leafName ?? 'unnamed', v);
+    let candidateLeaf = resolveStableVariableName(
+      manifestSection,
+      v.id,
+      derivedLeaf,
+    );
+    if (options?.formatStableName) {
+      candidateLeaf = options.formatStableName(v.id, candidateLeaf);
+    }
+    const finalLeaf = dedupSiblingKeys(usedByGroup, groupKey, candidateLeaf);
+    resultMap.set(v.id, {
+      stableLeafKey: finalLeaf,
+      isStable: false,
+      wasDeduplicated: finalLeaf !== candidateLeaf,
+    });
+  }
+
+  return resultMap;
+}
+
