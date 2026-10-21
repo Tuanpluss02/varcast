@@ -9,12 +9,11 @@ describe('Core Composite Resolution', () => {
       paintStyles: [
         {
           id: 'ps_1',
-          name: 'brandPrimary',
           figmaName: 'brand/primary',
+          groupPath: ['brand'],
           type: 'SOLID',
           color: { kind: 'alias', targetVariableId: 'var_1' },
-          opacity: 1,
-        } as any,
+        },
       ],
       effectStyles: [],
       textStyles: [],
