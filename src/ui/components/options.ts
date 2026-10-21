@@ -46,7 +46,7 @@ export function collectOptions(opts: {
 
   return {
     targetId: targetId.value || 'flutter',
-    packageName: packageName.value || 'design_system',
+    packageName: packageName.value.trim() || packageName.placeholder || 'design_system',
     include: {
       collections: selectedCols,
       composites,

@@ -46,6 +46,10 @@ export class TargetController {
       this.targetSelect.appendChild(opt);
     }
 
+    if (this.targets.length > 0 && !this.targets.some((t) => t.id === this.targetSelect.value)) {
+      this.targetSelect.value = this.targets[0].id;
+    }
+
     this.updatePlaceholder();
   }
 

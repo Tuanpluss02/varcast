@@ -166,6 +166,22 @@ describe('TargetController', () => {
     expect(packageNameInput.value).toBe('design_system');
     expect(packageNameInput.placeholder).toBe('design_system');
   });
+
+  it('falls back to first target when current selection is not in targets', () => {
+    const ctrl = new TargetController({
+      targetSelect,
+      packageNameInput,
+    });
+
+    targetSelect.value = 'non_existent';
+    ctrl.setAvailableTargets([
+      { id: 'custom_a', displayName: 'Custom A', defaultPackageName: 'pkg_a' },
+      { id: 'custom_b', displayName: 'Custom B', defaultPackageName: 'pkg_b' },
+    ]);
+
+    expect(targetSelect.value).toBe('custom_a');
+    expect(packageNameInput.placeholder).toBe('pkg_a');
+  });
 });
 
 describe('ExportController', () => {
@@ -297,6 +313,44 @@ describe('ExportController', () => {
     expect(downloadZipBtn.disabled).toBe(true);
     expect(loadingTitle.textContent).toBe('Packing zip…');
     expect(postMessage).toHaveBeenCalledWith({ type: 'download-zip' });
+  });
+
+  it('triggers download with proper blob and filename', () => {
+    const ctrl = new ExportController({
+      elements: {
+        exportBtn,
+        loadingOverlay,
+        loadingTitle,
+        loadingSub,
+      },
+    });
+
+    const createObjectURL = vi.fn().mockReturnValue('blob:mock-url');
+    const revokeObjectURL = vi.fn();
+    (globalThis as any).URL = { createObjectURL, revokeObjectURL };
+
+    let clickCalled = false;
+    let downloadedName = '';
+    const origCreateElement = (globalThis as any).document.createElement;
+    (globalThis as any).document.createElement = (tag: string) => {
+      const el = origCreateElement(tag);
+      if (tag === 'a') {
+        el.click = () => {
+          clickCalled = true;
+          downloadedName = el.download;
+        };
+      }
+      return el;
+    };
+
+    const bytes = new Uint8Array([1, 2, 3]);
+    ctrl.triggerDownload(bytes, 'output.zip');
+
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(clickCalled).toBe(true);
+    expect(downloadedName).toBe('output.zip');
+
+    (globalThis as any).document.createElement = origCreateElement;
   });
 });
 

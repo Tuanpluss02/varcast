@@ -125,7 +125,7 @@ export class ExportController {
   public triggerDownload(bytes: Uint8Array, filename: string): void {
     if (typeof URL === 'undefined' || typeof document === 'undefined') return;
     const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as any);
-    const blob = new Blob([arr.buffer], { type: 'application/zip' });
+    const blob = new Blob([arr], { type: 'application/zip' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
