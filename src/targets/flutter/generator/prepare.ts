@@ -127,6 +127,8 @@ export interface PreparedIR {
   ir?: IR;
 }
 
+export type PreparedFlutterIR = PreparedIR;
+
 export function prepareIR(
   input: SemanticTokenGraph | IR,
   manifest: Manifest | ManifestTargetSection | null = null,

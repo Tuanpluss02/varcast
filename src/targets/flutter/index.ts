@@ -10,20 +10,21 @@ import {
   sanitizePackageName,
 } from './generator/options';
 import { prepareIR as prepareFlutterIR } from './generator/prepare';
-import type { PreparedWarning } from './generator/prepare';
+import type { PreparedFlutterIR, PreparedWarning } from './generator/prepare';
 import { emitPreparedPackage } from './generator/emit';
-import { flutterIdentifierProfile } from './identifier';
-import { flutterTypeMapping } from './type_mapping';
 
 export type FlutterOptions = PartialExportOptions;
 
 export interface PreparedFlutter extends PreparedTarget {
-  flutterPrepared: ReturnType<typeof prepareFlutterIR>;
+  readonly targetId: 'flutter';
+  readonly flutterPrepared: PreparedFlutterIR;
+  readonly nextManifestSection: ManifestTargetSection;
+  readonly warnings: TargetWarning[];
 }
 
-export { flutterIdentifierProfile, flutterTypeMapping };
+export type { PreparedFlutterIR };
 
-function toTargetSection(prepared: ReturnType<typeof prepareFlutterIR>): ManifestTargetSection {
+function toTargetSection(prepared: PreparedFlutterIR): ManifestTargetSection {
   return (
     prepared.nextManifestSection ??
     prepared.nextManifest?.targets?.flutter ?? {
@@ -78,8 +79,7 @@ export const flutterTarget: Target<FlutterOptions, PreparedFlutter> = {
 
   emit(prepared: PreparedFlutter, options?: FlutterOptions): EmittedFile[] {
     const o = normalizeExportOptions(options);
-    const flutterPrepared = 'flutterPrepared' in prepared ? prepared.flutterPrepared : prepared;
-    const out = emitPreparedPackage(flutterPrepared as any, o);
+    const out = emitPreparedPackage(prepared.flutterPrepared, o);
     return out.files;
   },
 };

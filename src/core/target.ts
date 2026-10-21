@@ -39,6 +39,8 @@ export interface PreparedTarget {
  */
 export type PreparedIR = PreparedTarget;
 
+export type AnyTarget = Target<any, any>;
+
 export interface Target<TOptions = unknown, TPrepared extends PreparedTarget = PreparedTarget>
   extends Partial<TargetMetadata<TOptions>> {
   readonly id: string;

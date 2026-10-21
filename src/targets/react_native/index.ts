@@ -9,7 +9,7 @@ import { emitRuntime } from './generator/emit_runtime';
 import { prepareRN } from './generator/prepare';
 import type { PreparedRN } from './generator/prepare';
 import { reactNativeIdentifierProfile } from './identifier';
-import type { PartialReactNativeOptions, ReactNativeOptions } from './options';
+import type { PartialReactNativeOptions } from './options';
 import { DEFAULT_RN_OPTIONS, mergeRnOptions, sanitizePackageName } from './options';
 import {
   modesTs,
@@ -23,7 +23,8 @@ import {
 import { reactNativeTypeMapping } from './type_mapping';
 
 export type PreparedReactNative = PreparedRN;
-export type { ReactNativeOptions, PartialReactNativeOptions };
+export type ReactNativeOptions = PartialReactNativeOptions;
+export type { PartialReactNativeOptions };
 export { DEFAULT_RN_OPTIONS, mergeRnOptions, sanitizePackageName };
 export { reactNativeIdentifierProfile, reactNativeTypeMapping };
 
@@ -45,7 +46,6 @@ export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> 
 
   emit(prepared: PreparedReactNative, options?: ReactNativeOptions): EmittedFile[] {
     const o = mergeRnOptions(options);
-    const rnPrepared = (prepared as any).reactNativePrepared ?? prepared;
     const base: EmittedFile[] = [
       { path: 'package.json', contents: packageJson(o) },
       { path: 'tsconfig.json', contents: tsconfigJson() },
@@ -55,12 +55,12 @@ export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> 
       { path: 'src/runtime/modes.ts', contents: modesTs() },
       { path: 'src/react-shim.d.ts', contents: reactShimDts() },
     ];
-    const filteredCollections = rnPrepared.collections.filter((c: any) => {
+    const filteredCollections = prepared.collections.filter((c) => {
       if (c.kind === 'primitive' && !o.include.primitives) return false;
       if (c.kind === 'token' && !o.include.tokens) return false;
       return true;
     });
-    const filtered: PreparedReactNative = { ...rnPrepared, collections: filteredCollections };
+    const filtered: PreparedReactNative = { ...prepared, collections: filteredCollections };
     const colFiles = emitCollections(filtered);
     const runtimeFiles = emitRuntime(filtered);
     const compositeFiles = emitComposites(filtered).filter((f) => {
