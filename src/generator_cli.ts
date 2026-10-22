@@ -1,29 +1,27 @@
-// CLI: read IR JSON, validate, write a Flutter package.
-//
-// Usage:
-//   npx tsx src/generator_cli.ts --ir path/to/ir.json --out path/to/out [--name design_system]
-//
-// Or after `npm run build:cli` (esbuild bundle to dist/cli.js):
-//   node dist/cli.js --ir path/to/ir.json --out path/to/out
+/**
+ * Command-line interface for reading IR JSON, validating, and generating packages.
+ */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { runEngine } from './core/emit_engine';
+import type { Manifest } from './core/manifest';
+import { generateMultiTargetChangelog } from './core/manifest/changelog';
+import { getTarget } from './core/registry';
 import type { IR } from './ir/types';
 import { validate } from './ir/validate';
-import { diffManifest } from './manifest';
 import { loadManifest, saveManifest } from './manifest_node';
-import { generateChangelog } from './targets/flutter/generator/changelog';
-import { DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
-import { runEngine } from './core/emit_engine';
-import { flutterTarget } from './targets/flutter';
-import { reactNativeTarget } from './targets/react_native';
-import { writePackage } from './targets/flutter/generator/write_node';
+import { writePackage } from './writer/node_writer';
+// Ensure default targets are registered:
+import './targets/flutter';
+import './targets/react_native';
 
 interface Args {
   ir: string;
   out: string;
   name?: string;
   target?: string;
+  collections?: string[];
 }
 
 function parseArgs(argv: string[]): Args {
@@ -34,10 +32,15 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--name') args.name = argv[++i];
     else if (a === '--target') args.target = argv[++i];
+    else if (a === '--collections')
+      args.collections = argv[++i]
+        ?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
   }
   if (!args.ir || !args.out) {
     console.error(
-      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--name <package>]',
+      'Usage: generator_cli --ir <ir.json> --out <dir> [--target <id>] [--name <package>] [--collections <id1,id2>]',
     );
     process.exit(2);
   }
@@ -69,23 +72,45 @@ function main() {
     );
   }
 
-  const oldManifest = loadManifest(outDir);
+  let oldManifest: Manifest | null = null;
+  try {
+    oldManifest = loadManifest(outDir);
+  } catch (err: unknown) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
   const targetId = args.target ?? 'flutter';
-  const options = { ...DEFAULT_EXPORT_OPTIONS, packageName: args.name ?? 'design_system' };
-  const targets =
-    targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
-  const { files, nextManifest } = runEngine(ir, targets, oldManifest, targetId === 'react_native' ? {
-    react_native: options,
-  } : {
-    flutter: options,
-  });
-  const diff = diffManifest(oldManifest, nextManifest);
+  const target = getTarget(targetId);
+
+  const defaultPkg = target.defaultPackageName ?? 'tokens';
+  const packageName = args.name
+    ? (target.sanitizePackageName ? target.sanitizePackageName(args.name) : args.name)
+    : defaultPkg;
+
+  const targetOptions: Record<string, unknown> = {
+    ...(target.defaultOptions ?? {}),
+    packageName,
+  };
+
+  if (args.collections) {
+    targetOptions.include = {
+      ...((targetOptions.include as Record<string, unknown>) ?? {}),
+      collections: args.collections,
+    };
+  }
+
+  const { files, nextManifest, diffsByTarget } = runEngine(
+    ir,
+    [target],
+    oldManifest,
+    { [targetId]: targetOptions },
+  );
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
   saveManifest(outDir, nextManifest);
   fs.writeFileSync(
     path.join(outDir, 'CHANGELOG.md'),
-    generateChangelog(diff) + '\n',
+    generateMultiTargetChangelog(diffsByTarget) + '\n',
   );
 
   console.log(

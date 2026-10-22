@@ -1,47 +1,78 @@
-import { readVariables } from './reader/variables';
-import { readPaintStyles } from './reader/paint_styles';
-import { readEffectStyles } from './reader/effect_styles';
-import { readTextStyles } from './reader/text_styles';
+import { readIR } from './reader';
 import { validate } from './ir/validate';
-import type { IR } from './ir/types';
-import { diffManifest } from './manifest';
 import type { Manifest } from './core/manifest';
-import { normalizeManifest } from './core/manifest';
-import { generateChangelog } from './targets/flutter/generator/changelog';
-import { buildZip } from './zip';
-import { normalizeExportOptions, DEFAULT_EXPORT_OPTIONS } from './targets/flutter/generator/options';
+import { normalizeManifest, diffManifestForTarget } from './core/manifest';
+import { generateMultiTargetChangelog } from './core/manifest/changelog';
+import { handleDownloadZip, type PendingExportData } from './download_handler';
 import { runEngine } from './core/emit_engine';
-import { flutterTarget } from './targets/flutter';
-import { reactNativeTarget } from './targets/react_native';
+import { getAllTargets, getTarget } from './core/registry';
+// Ensure default targets are registered:
+import './targets/flutter';
+import './targets/react_native';
+import {
+  extractVariablePreview,
+  extractPaintPreview,
+  extractEffectPreview,
+  extractTextPreview,
+} from './ui/preview_adapter';
 
 figma.showUI(__html__, { width: 440, height: 720, themeColors: false });
 
-// Cached between Export and Download so we don't re-read or re-prepare the IR.
-// Cleared on a fresh Export run, on cancel, or once the ZIP is delivered.
-type Pending = {
-  files: { path: string; contents: string }[];
-  nextManifest: Manifest;
-  packageName: string;
-};
-let pending: Pending | null = null;
+let pending: PendingExportData | null = null;
 
-figma.ui.onmessage = async (msg: { type: string }) => {
-  if (msg.type === 'export') {
+figma.ui.onmessage = async (msg: unknown) => {
+  const m = (msg ?? {}) as { type?: string; options?: unknown };
+  if (m.type === 'init') {
+    try {
+      const ir = await readIR();
+      const { collections } = ir;
+      const { paintStyles, effectStyles, textStyles } = ir.composites;
+
+      figma.ui.postMessage({
+        type: 'init-data',
+        collections: collections.map((c) => ({
+          id: c.id,
+          name: c.name,
+          kind: c.kind,
+          variableCount: c.variables.length,
+          modeCount: c.modes.length,
+          variables: c.variables.map((v) => extractVariablePreview(v, collections)),
+        })),
+        composites: {
+          paintStylesCount: paintStyles.length,
+          effectStylesCount: effectStyles.length,
+          textStylesCount: textStyles.length,
+          paintStyles: paintStyles.map((p) => extractPaintPreview(p, collections)),
+          effectStyles: effectStyles.map((e) => extractEffectPreview(e, collections)),
+          textStyles: textStyles.map((t) => extractTextPreview(t, collections)),
+        },
+        availableTargets: getAllTargets().map((t) => ({
+          id: t.id,
+          displayName: t.displayName ?? t.id,
+          defaultPackageName: t.defaultPackageName ?? 'tokens',
+        })),
+      });
+    } catch (err) {
+      figma.ui.postMessage({
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (m.type === 'export') {
     try {
       pending = null;
-      const options = normalizeExportOptions((msg as any).options ?? DEFAULT_EXPORT_OPTIONS);
-      const targetId = ((msg as any).options?.targetId as string | undefined) ?? 'flutter';
-      const ir: IR = {
-        version: '1.0',
-        fileKey: figma.fileKey ?? 'unknown',
-        generatedAt: new Date().toISOString(),
-        collections: await readVariables(),
-        composites: {
-          paintStyles: await readPaintStyles(),
-          effectStyles: await readEffectStyles(),
-          textStyles: await readTextStyles(),
-        },
-      };
+      const rawOptions = (m.options ?? {}) as Record<string, unknown>;
+      const targetId = (rawOptions.targetId as string | undefined) ?? 'flutter';
+      const target = getTarget(targetId);
+
+      const rawPkg = rawOptions.packageName as string | undefined;
+      const packageName = rawPkg
+        ? (target.sanitizePackageName ? target.sanitizePackageName(rawPkg) : rawPkg)
+        : (target.defaultPackageName ?? 'tokens');
+
+      const ir = await readIR();
 
       const result = validate(ir);
       if (result.errors.length > 0) {
@@ -56,16 +87,15 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         (await figma.clientStorage.getAsync('manifest_v2')) ??
         (await figma.clientStorage.getAsync('manifest_v1'));
       const oldManifest = normalizeManifest(rawManifest);
-      const targets =
-        targetId === 'react_native' ? [reactNativeTarget] : [flutterTarget];
-      const { files, nextManifest } = runEngine(
+
+      const { files, nextManifest, diffsByTarget } = runEngine(
         ir,
-        targets,
+        [target],
         oldManifest,
-        targetId === 'react_native' ? { react_native: options } : { flutter: options },
+        { [targetId]: rawOptions },
       );
-      const diff = diffManifest(oldManifest, nextManifest);
-      const changelog = generateChangelog(diff);
+      const diff = diffsByTarget[targetId] ?? diffManifestForTarget(oldManifest, nextManifest, targetId);
+      const changelog = generateMultiTargetChangelog(diffsByTarget);
 
       const allFiles = [
         ...files,
@@ -79,7 +109,7 @@ figma.ui.onmessage = async (msg: { type: string }) => {
       pending = {
         files: allFiles,
         nextManifest,
-        packageName: options.packageName,
+        packageName,
       };
 
       const previewFiles = allFiles.map((f) => ({
@@ -93,9 +123,18 @@ figma.ui.onmessage = async (msg: { type: string }) => {
         type: 'preview-ready',
         files: previewFiles,
         diff: {
-          added: diff.added.length,
-          removed: diff.removed.length,
-          renamed: diff.renamed.length,
+          added:
+            diff.variables.added.length +
+            diff.collections.added.length +
+            diff.composites.added.length,
+          removed:
+            diff.variables.removed.length +
+            diff.collections.removed.length +
+            diff.composites.removed.length,
+          renamed:
+            diff.variables.renamed.length +
+            diff.collections.renamed.length +
+            diff.composites.renamed.length,
         },
         summary: {
           fileCount: previewFiles.length,
@@ -110,31 +149,20 @@ figma.ui.onmessage = async (msg: { type: string }) => {
     }
   }
 
-  if (msg.type === 'download-zip') {
-    if (!pending) {
-      figma.ui.postMessage({
-        type: 'error',
-        message: 'No pending export. Run Export again.',
-      });
-      return;
-    }
-    figma.ui.postMessage({ type: 'exporting' });
-    await figma.clientStorage.setAsync('manifest_v2', pending.nextManifest);
-    const zipBytes = buildZip(pending.files);
-    figma.ui.postMessage({
-      type: 'zip-ready',
-      filename: `${pending.packageName}.zip`,
-      bytes: zipBytes,
-    });
+  if (m.type === 'download-zip') {
+    await handleDownloadZip(
+      pending,
+      figma.clientStorage,
+      figma.ui.postMessage.bind(figma.ui),
+    );
   }
 
-  if (msg.type === 'cancel') {
+  if (m.type === 'cancel') {
     pending = null;
     figma.closePlugin();
   }
 };
 
-// Figma's plugin sandbox doesn't expose TextEncoder, so count UTF-8 bytes by hand.
 function byteLength(s: string): number {
   let n = 0;
   for (const ch of s) {

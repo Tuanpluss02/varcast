@@ -1,26 +1,27 @@
-import type { IR } from '../../ir/types';
-import type { Manifest, ManifestTargetSection } from '../../core/manifest';
-import type { EmittedFile, PreparedIR, Target, TargetWarning } from '../../core/target';
-import type { ExportOptions } from './generator/options';
-import { DEFAULT_EXPORT_OPTIONS } from './generator/options';
+import type { SemanticTokenGraph } from '../../core/graph/types';
+import type { ManifestTargetSection } from '../../core/manifest';
+import type { EmittedFile, PreparedTarget, Target, TargetWarning } from '../../core/target';
+import { hasTarget, registerTarget } from '../../core/registry/target_registry';
+import type { ExportOptions, PartialExportOptions } from './generator/options';
+import {
+  DEFAULT_EXPORT_OPTIONS,
+  normalizeExportOptions,
+  sanitizePackageName,
+} from './generator/options';
 import { prepareIR as prepareFlutterIR } from './generator/prepare';
-import type { PreparedWarning } from './generator/prepare';
+import type { PreparedFlutterIR, PreparedWarning } from './generator/prepare';
 import { emitPreparedPackage } from './generator/emit';
-import { flutterIdentifierProfile } from './identifier';
-import { flutterTypeMapping } from './type_mapping';
 
-export type FlutterOptions = ExportOptions;
+export type FlutterOptions = PartialExportOptions;
 
-type PreparedFlutter = Omit<ReturnType<typeof prepareFlutterIR>, 'warnings'> & PreparedIR;
-
-function toTargetSection(prepared: ReturnType<typeof prepareFlutterIR>): ManifestTargetSection {
-  return (
-    prepared.nextManifest.targets.flutter ?? {
-      variables: {},
-      collections: {},
-    }
-  );
+export interface PreparedFlutter extends PreparedTarget {
+  readonly targetId: 'flutter';
+  readonly flutterPrepared: PreparedFlutterIR;
+  readonly nextManifestSection: ManifestTargetSection;
+  readonly warnings: TargetWarning[];
 }
+
+export type { PreparedFlutterIR };
 
 function toTargetWarnings(ws: PreparedWarning[]): TargetWarning[] {
   return ws.map((w) => {
@@ -41,26 +42,41 @@ function toTargetWarnings(ws: PreparedWarning[]): TargetWarning[] {
   });
 }
 
-export const flutterTarget: Target = {
+export const flutterTarget: Target<FlutterOptions, PreparedFlutter> = {
   id: 'flutter',
-  profile: flutterIdentifierProfile,
-  typeMapping: flutterTypeMapping,
+  displayName: 'Flutter',
+  defaultPackageName: 'design_system',
+  defaultOptions: DEFAULT_EXPORT_OPTIONS,
+  sanitizePackageName,
+  normalizeOptions: normalizeExportOptions,
 
-  prepare(ir: IR, manifest: Manifest | null, options: unknown): PreparedFlutter {
-    const o = (options as FlutterOptions | undefined) ?? DEFAULT_EXPORT_OPTIONS;
-    const prepared = prepareFlutterIR(ir, manifest as any, o);
-    const { warnings: preparedWarnings, ...rest } = prepared;
+  prepare(
+    graph: SemanticTokenGraph,
+    section: ManifestTargetSection | null = null,
+    options?: FlutterOptions,
+  ): PreparedFlutter {
+    const o = normalizeExportOptions(options);
+    const prepared = prepareFlutterIR(graph, section, o);
+    const { warnings: preparedWarnings } = prepared;
     return {
-      ...rest,
-      nextManifestSection: toTargetSection(prepared),
+      targetId: 'flutter',
+      flutterPrepared: prepared,
+      nextManifestSection: prepared.nextManifestSection,
       warnings: toTargetWarnings(preparedWarnings),
     };
   },
 
-  emit(prepared: PreparedIR, options: unknown): EmittedFile[] {
-    const o = (options as FlutterOptions | undefined) ?? DEFAULT_EXPORT_OPTIONS;
-    const out = emitPreparedPackage(prepared as any, o);
+  emit(prepared: PreparedFlutter, options?: FlutterOptions): EmittedFile[] {
+    const o = normalizeExportOptions(options);
+    const out = emitPreparedPackage(prepared.flutterPrepared, o);
     return out.files;
   },
 };
 
+export function registerFlutterTarget(): void {
+  if (!hasTarget('flutter')) {
+    registerTarget(flutterTarget);
+  }
+}
+
+registerFlutterTarget();

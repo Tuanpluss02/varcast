@@ -3,9 +3,11 @@ import {
   sanitize,
   sanitizeIdentifier,
   newSanitizeContext,
+} from '../targets/flutter/identifier';
+import {
   toPascalCase,
   toCamelCase,
-} from '../sanitize';
+} from '../core/sanitize_base';
 
 describe('sanitize', () => {
   it('splits Figma path into PascalCase groups + camelCase leaf', () => {

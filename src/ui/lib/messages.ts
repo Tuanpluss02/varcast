@@ -1,4 +1,5 @@
 export type UiToPluginMessage =
+  | { type: 'init' }
   | { type: 'export'; options: unknown }
   | { type: 'cancel' }
   | { type: 'download-zip' };
@@ -22,7 +23,70 @@ export type ExportSummary = {
   totalBytes: number;
 };
 
+export type VariablePreview = {
+  id: string;
+  name: string;
+  type: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN';
+  valuePreview: string; // e.g. '#FF5733', '16px', 'Inter', 'true'
+  colorHex?: string;
+  colorRgba?: { r: number; g: number; b: number; a: number };
+  isAlias?: boolean;
+};
+
+export type CollectionInfo = {
+  id: string;
+  name: string;
+  kind: 'primitive' | 'token';
+  variableCount: number;
+  modeCount: number;
+  variables: VariablePreview[];
+};
+
+export type PaintStylePreview = {
+  id: string;
+  name: string;
+  type: string;
+  colorHex?: string;
+  gradientCss?: string;
+};
+
+export type EffectStylePreview = {
+  id: string;
+  name: string;
+  type: string;
+  boxShadowCss?: string;
+};
+
+export type TextStylePreview = {
+  id: string;
+  name: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+};
+
+export type CompositesInfo = {
+  paintStylesCount: number;
+  effectStylesCount: number;
+  textStylesCount: number;
+  paintStyles: PaintStylePreview[];
+  effectStyles: EffectStylePreview[];
+  textStyles: TextStylePreview[];
+};
+
+export interface TargetMetadataItem {
+  id: string;
+  displayName: string;
+  defaultPackageName: string;
+}
+
 export type PluginToUiMessage =
+  | {
+      type: 'init-data';
+      collections: CollectionInfo[];
+      composites: CompositesInfo;
+      availableTargets?: TargetMetadataItem[];
+    }
   | { type: 'validation-errors'; errors: ValidationErrorMsg[] }
   | { type: 'exporting' }
   | {
@@ -32,6 +96,7 @@ export type PluginToUiMessage =
       summary: ExportSummary;
     }
   | { type: 'zip-ready'; bytes: Uint8Array; filename?: string }
+  | { type: 'warning'; message: string }
   | { type: 'error'; message: string };
 
 export function postToPlugin(msg: UiToPluginMessage) {

@@ -1,9 +1,5 @@
-/* ============================================================
-   Varcast UI · Flat dark theme
-   ============================================================ */
-
 :root {
-  /* Neutral gray dark — bg lighter than before, cards visibly elevated. */
+  
   --bg: #1c1c1f;
   --bg-elev: #2a2a2f;
   --bg-elev-2: #34343a;
@@ -54,9 +50,6 @@ body {
   overflow: hidden;
 }
 
-/* ============================================================
-   Cards
-   ============================================================ */
 main {
   flex: 1 1 auto;
   min-height: 0;
@@ -110,9 +103,6 @@ main {
   align-items: flex-end;
 }
 
-/* ============================================================
-   Info button + tooltip (CSS-only)
-   ============================================================ */
 .info {
   width: 14px;
   height: 14px;
@@ -160,9 +150,6 @@ main {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
 }
 
-/* ============================================================
-   Fields
-   ============================================================ */
 .field {
   display: flex;
   flex-direction: column;
@@ -233,9 +220,6 @@ code {
   color: var(--ink-dim);
 }
 
-/* ============================================================
-   Toggle (accessible switch)
-   ============================================================ */
 .toggle {
   display: flex;
   align-items: center;
@@ -279,6 +263,7 @@ code {
   background: var(--border-strong);
   position: relative;
   flex-shrink: 0;
+  cursor: pointer;
   transition: background var(--t-med) var(--ease);
 }
 .switch__thumb {
@@ -291,11 +276,25 @@ code {
   background: #fff;
   transition: transform var(--t-med) var(--ease);
 }
-.toggle[aria-checked='true'] .switch {
+[aria-checked='true'] > .switch,
+.toggle[aria-checked='true'] .switch,
+.accordion-header[aria-checked='true'] .switch {
   background: var(--accent);
 }
-.toggle[aria-checked='true'] .switch__thumb {
+[aria-checked='true'] > .switch .switch__thumb,
+.toggle[aria-checked='true'] .switch__thumb,
+.accordion-header[aria-checked='true'] .switch__thumb {
   transform: translateX(12px);
+}
+[aria-checked='false'] > .switch,
+.toggle[aria-checked='false'] .switch,
+.accordion-header[aria-checked='false'] .switch {
+  background: var(--border-strong);
+}
+[aria-checked='false'] > .switch .switch__thumb,
+.toggle[aria-checked='false'] .switch__thumb,
+.accordion-header[aria-checked='false'] .switch__thumb {
+  transform: translateX(0);
 }
 
 .count-pill {
@@ -309,9 +308,6 @@ code {
   white-space: nowrap;
 }
 
-/* ============================================================
-   Review screen — diff bar, file tree, code viewer
-   ============================================================ */
 .diff-bar {
   display: flex;
   flex-wrap: wrap;
@@ -423,7 +419,6 @@ code {
   min-height: 0;
 }
 
-/* Syntax tokens (set by highlight.ts) */
 .code .tok-comment { color: #6b7280; font-style: italic; }
 .code .tok-string  { color: #a6e3a1; }
 .code .tok-keyword { color: #c792ea; }
@@ -431,9 +426,6 @@ code {
 .code .tok-type    { color: #82aaff; }
 .code .tok-key     { color: #82aaff; }
 
-/* ============================================================
-   Buttons
-   ============================================================ */
 .cta {
   font-family: inherit;
   font-size: 12px;
@@ -512,9 +504,6 @@ code {
   border-color: rgba(52, 211, 153, 0.4);
 }
 
-/* ============================================================
-   Action bar
-   ============================================================ */
 .actions {
   flex-shrink: 0;
   padding: 10px 14px;
@@ -531,9 +520,6 @@ code {
   gap: 10px;
 }
 
-/* ============================================================
-   Status / log / spinner
-   ============================================================ */
 .status-line {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
@@ -584,9 +570,6 @@ code {
   }
 }
 
-/* ============================================================
-   Loading overlay
-   ============================================================ */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -610,9 +593,6 @@ code {
   color: var(--ink-mute);
 }
 
-/* ============================================================
-   Screens & utilities
-   ============================================================ */
 .screen {
   display: flex;
   flex-direction: column;
@@ -630,7 +610,6 @@ code {
   display: none !important;
 }
 
-/* Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -646,7 +625,6 @@ code {
   background: var(--ink-mute);
 }
 
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -654,4 +632,167 @@ code {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accordion-group {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  transition: border-color var(--t-fast) var(--ease);
+}
+.accordion-group:hover {
+  border-color: var(--border-strong);
+}
+.accordion-group.is-expanded {
+  border-color: var(--border-strong);
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--bg-elev-2);
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  top: -1px;
+  z-index: 5;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background var(--t-fast) var(--ease);
+}
+.accordion-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.accordion-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.accordion-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-mute);
+  transition: transform var(--t-fast) var(--ease);
+  flex-shrink: 0;
+}
+.accordion-group.is-expanded .accordion-chevron {
+  transform: rotate(90deg);
+  color: var(--ink);
+}
+
+.accordion-body {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  max-height: 260px;
+  overflow-y: auto;
+}
+.accordion-group.is-expanded .accordion-body {
+  display: flex;
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  font-size: 11px;
+}
+.preview-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.preview-row__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.preview-row__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  font-size: 11.5px;
+}
+
+.preview-row__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.color-swatch-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+  background-image: conic-gradient(#444 25%, transparent 0 50%, #444 0 75%, transparent 0);
+  background-size: 6px 6px;
+  position: relative;
+  overflow: hidden;
+}
+.color-swatch-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.gradient-swatch-box {
+  width: 32px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+
+.shadow-box-sample {
+  width: 24px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.val-chip {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink-dim);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.text-sample-line {
+  font-size: 11px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

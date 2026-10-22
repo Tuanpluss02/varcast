@@ -5,8 +5,6 @@ export const FILE_HEADER = `// GENERATED FILE — do not edit by hand.
 
 `;
 
-// ── Number / color literal formatting ─────────────────────────────────────
-
 export function rgbaToHex(rgba: RGBA): string {
   const hex = (v: number) =>
     Math.round(clamp01(v) * 255)
@@ -20,8 +18,9 @@ export function colorLiteral(rgba: RGBA): string {
   return `const Color(${rgbaToHex(rgba)})`;
 }
 
-// Doubles round to 6 decimals (matches Phase 3 float-noise rule) then trim
-// trailing zeros. Integers always emit with `.0` so Dart treats them as double.
+/**
+ * Formats a number as a valid Dart double literal.
+ */
 export function doubleLiteral(n: number): string {
   if (!Number.isFinite(n)) return '0.0';
   if (Number.isInteger(n)) return `${n}.0`;
@@ -41,8 +40,6 @@ function clamp01(n: number): number {
   return n < 0 ? 0 : n > 1 ? 1 : n;
 }
 
-// ── Indent helpers ─────────────────────────────────────────────────────────
-
 export function indent(s: string, n = 2): string {
   const pad = ' '.repeat(n);
   return s
@@ -51,8 +48,9 @@ export function indent(s: string, n = 2): string {
     .join('\n');
 }
 
-// ── Linear gradient angle → Alignment pair (pre-computed at emit time) ─────
-
+/**
+ * Maps an angle in radians to Flutter Alignment coordinates for linear gradients.
+ */
 export function angleToAlignmentDart(radians: number): {
   begin: string;
   end: string;

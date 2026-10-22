@@ -1,29 +1,10 @@
-import type { IR, RGBA } from '../ir/types';
-import type { Manifest, ManifestTargetSection } from './manifest';
+import type { SemanticTokenGraph } from './graph/types';
+import type { ManifestTargetSection } from './manifest';
 
 export interface EmittedFile {
   /** Path relative to the target output root. */
   path: string;
   contents: string;
-}
-
-export interface IdentifierProfile {
-  reservedWords: ReadonlySet<string>;
-  classCase(words: string[]): string;
-  memberCase(words: string[]): string;
-  fileNameCase(words: string[]): string;
-  fixReservedWord(name: string): string;
-}
-
-export interface TypeMapping {
-  color: string;
-  number: string;
-  string: string;
-  bool: string;
-  literalColor(rgba: RGBA): string;
-  literalNumber(n: number): string;
-  literalString(s: string): string;
-  literalBool(b: boolean): string;
 }
 
 export interface TargetWarning {
@@ -37,19 +18,36 @@ export interface TargetWarning {
   details?: Record<string, unknown>;
 }
 
-export interface PreparedIR {
-  /** Per-target manifest section for this run. */
-  nextManifestSection: ManifestTargetSection;
-  /** Optional non-fatal diagnostics (keyword fixes, dedup, etc.). */
-  warnings?: TargetWarning[];
-}
-
-export interface Target {
+export interface TargetMetadata<TOptions = unknown> {
   readonly id: string;
-  readonly profile: IdentifierProfile;
-  readonly typeMapping: TypeMapping;
-
-  prepare(ir: IR, manifest: Manifest | null, options: unknown): PreparedIR;
-  emit(prepared: PreparedIR, options: unknown): EmittedFile[];
+  readonly displayName: string;
+  readonly defaultPackageName: string;
+  readonly defaultOptions?: TOptions;
+  sanitizePackageName?(raw: string): string;
+  normalizeOptions?(raw?: unknown): TOptions;
+  validateOptions?(raw?: unknown): string[] | null;
 }
 
+export interface PreparedTarget {
+  readonly nextManifestSection: ManifestTargetSection;
+  readonly warnings: TargetWarning[];
+}
+
+export interface Target<TOptions = unknown, TPrepared extends PreparedTarget = PreparedTarget>
+  extends Partial<TargetMetadata<TOptions>> {
+  readonly id: string;
+  readonly displayName: string;
+  readonly defaultPackageName: string;
+  readonly defaultOptions?: TOptions;
+  sanitizePackageName?(raw: string): string;
+  normalizeOptions?(raw?: unknown): TOptions;
+  validateOptions?(raw?: unknown): string[] | null;
+
+  prepare(
+    graph: SemanticTokenGraph,
+    section: ManifestTargetSection | null,
+    options?: TOptions,
+  ): TPrepared;
+
+  emit(prepared: TPrepared, options?: TOptions): EmittedFile[];
+}

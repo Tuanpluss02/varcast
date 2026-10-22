@@ -32,99 +32,21 @@
 
         <div class="card">
           <div class="card__head">
-            <h2 class="card__title">Tokens</h2>
-            <span class="count-pill" id="tokensCount" aria-live="polite">2 of 2</span>
+            <h2 class="card__title">Collections</h2>
+            <span class="count-pill" id="collectionsCount" aria-live="polite">0 of 0</span>
           </div>
-          <div class="toggle" id="tPrimitives" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tPrimitives-label">
-            <div class="toggle__copy">
-              <div class="toggle__title" id="tPrimitives-label">Primitives</div>
-              <button class="info" type="button" tabindex="0" aria-label="Primitives info" data-tooltip="Raw value collections (e.g. ColorBasic, NumberBasic)">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
-                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
-                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
-          </div>
-          <div class="toggle" id="tTokens" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tTokens-label">
-            <div class="toggle__copy">
-              <div class="toggle__title" id="tTokens-label">Semantic tokens</div>
-              <button class="info" type="button" tabindex="0" aria-label="Semantic tokens info" data-tooltip="Aliased collections that reference primitives (e.g. ColorToken, TextToken)">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
-                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
-                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
-          </div>
-        </div>
-
-        <div class="card" id="archCard">
-          <div class="card__head">
-            <h2 class="card__title">Architecture</h2>
-          </div>
-          <div class="toggle" id="tArchContext" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tArchContext-label">
-            <div class="toggle__copy">
-              <div class="toggle__title" id="tArchContext-label">Context-based access</div>
-              <button class="info" type="button" tabindex="0" aria-label="Context-based access info" data-tooltip="Recommended. Uses InheritedNotifier so widgets — including const ones — rebuild correctly on mode changes. Access via AppTheme.of(context) or context.colorToken. Uncheck for static AppTheme.colorToken access (no rebuild for const widgets).">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
-                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
-                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
+          <div id="collectionsList" class="accordion-list">
+            <div style="padding: 12px 0; color: var(--color-text-muted); font-size: 11px; text-align: center;">Scanning collections...</div>
           </div>
         </div>
 
         <div class="card">
           <div class="card__head">
             <h2 class="card__title">Composite styles</h2>
-            <span class="count-pill" id="compositesCount" aria-live="polite">3 of 3</span>
+            <span class="count-pill" id="compositesCount" aria-live="polite">0 of 3</span>
           </div>
-          <div class="toggle" id="tColorStyles" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tColorStyles-label">
-            <div class="toggle__copy">
-              <div class="toggle__title" id="tColorStyles-label">Color styles</div>
-              <button class="info" type="button" tabindex="0" aria-label="Color styles info" data-tooltip="Paint styles emitted as DSColorStyles (solids and gradients)">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
-                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
-                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
-          </div>
-          <div class="toggle" id="tShadows" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tShadows-label">
-            <div class="toggle__copy">
-              <div class="toggle__title" id="tShadows-label">Shadows</div>
-              <button class="info" type="button" tabindex="0" aria-label="Shadows info" data-tooltip="Effect styles emitted as DSShadows (drop, inner, blur)">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
-                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
-                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
-          </div>
-          <div class="toggle" id="tTextStyles" role="switch" tabindex="0" aria-checked="true" aria-labelledby="tTextStyles-label">
-            <div class="toggle__copy">
-              <div class="toggle__title" id="tTextStyles-label">Text styles</div>
-              <button class="info" type="button" tabindex="0" aria-label="Text styles info" data-tooltip="Text styles emitted as DSStyles / DSTextStyle">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1" />
-                  <circle cx="6" cy="3.4" r="0.7" fill="currentColor" />
-                  <path d="M6 5.5v3.4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div class="switch" aria-hidden="true"><span class="switch__thumb"></span></div>
+          <div id="compositesList" class="accordion-list">
+            <!-- Rendered dynamically with previews -->
           </div>
         </div>
 

@@ -6,13 +6,16 @@
  * - Namespaces output files under `<targetId>/` if multiple targets are exported.
  * - Merges emitted files and per-target manifest sections into a single v2 manifest.
  * - Preserves manifest sections for targets not included in the current run.
+ * - Computes target-scoped diffs for each exported target.
  */
 
 import type { IR } from '../ir/types';
-import type { Manifest } from './manifest';
+import { isSemanticGraph, type SemanticTokenGraph } from './graph/types';
+import { buildSemanticGraph } from './graph/build_graph';
+import type { Manifest, ManifestDiff } from './manifest';
+import { diffTargetSection } from './manifest';
 import type { EmittedFile, Target, TargetWarning } from './target';
-
-// ── Engine output ──────────────────────────────────────────────────────────
+import { getTarget } from './registry/target_registry';
 
 export interface EngineOutput {
   /** Flat list of emitted files. Paths are prefixed with "<targetId>/" when
@@ -22,48 +25,88 @@ export interface EngineOutput {
   nextManifest: Manifest;
   /** Aggregated non-fatal diagnostics from each target's prepare step. */
   warnings: TargetWarning[];
+  /** Target-scoped diffs calculated per target against the input manifest. */
+  diffsByTarget: Record<string, ManifestDiff>;
 }
-
-// ── Engine ─────────────────────────────────────────────────────────────────
 
 /**
  * Run the emit pipeline for one or more targets.
  *
- * @param ir             Validated IR produced by the reader.
- * @param targets        Targets to emit. Order is deterministic.
- * @param manifest       Last-saved manifest (null on first export).
+ * @param ir              Validated IR produced by the reader or pre-built SemanticTokenGraph.
+ * @param targets         Targets or target IDs to emit. Order is deterministic.
+ * @param manifest        Last-saved manifest (null on first export).
  * @param optionsByTarget Per-target options objects; targets receive their own
- *                        slice. Missing entries fall back to `undefined`.
+ *                         slice. Missing entries fall back to `undefined`.
  */
 export function runEngine(
-  ir: IR,
-  targets: Target[],
+  input: IR | SemanticTokenGraph,
+  targets: (Target<any, any> | string)[],
   manifest: Manifest | null,
   optionsByTarget: Record<string, unknown> = {},
 ): EngineOutput {
-  const multiTarget = targets.length > 1;
+  const resolvedTargets: Target<any, any>[] = targets.map((t) =>
+    typeof t === 'string' ? getTarget(t) : t,
+  );
+  const graph: SemanticTokenGraph = isSemanticGraph(input)
+    ? input
+    : buildSemanticGraph(input);
+
+  const multiTarget = resolvedTargets.length > 1;
   const allFiles: EmittedFile[] = [];
   const allWarnings: TargetWarning[] = [];
   const nextTargets: Manifest['targets'] = { ...(manifest?.targets ?? {}) };
+  const diffsByTarget: Record<string, ManifestDiff> = {};
 
-  for (const target of targets) {
+  if (graph.warnings && graph.warnings.length > 0) {
+    allWarnings.push(...graph.warnings);
+  }
+
+  for (const target of resolvedTargets) {
     const options = optionsByTarget[target.id];
-    const prepared = target.prepare(ir, manifest, options);
-    const files = target.emit(prepared, options);
+    if (target.validateOptions) {
+      const optionErrors = target.validateOptions(options);
+      if (optionErrors && optionErrors.length > 0) {
+        for (const message of optionErrors) {
+          allWarnings.push({
+            targetId: target.id,
+            code: 'INVALID_OPTIONS',
+            message,
+          });
+        }
+      }
+    }
+    const normalizedOptions = target.normalizeOptions
+      ? target.normalizeOptions(options)
+      : options;
+    const section = manifest?.targets?.[target.id] ?? null;
+    const prepared = target.prepare(graph, section, normalizedOptions);
+    const files = target.emit(prepared, normalizedOptions);
     const prefix = multiTarget ? `${target.id}/` : '';
     for (const f of files) {
       allFiles.push({ path: `${prefix}${f.path}`, contents: f.contents });
     }
     nextTargets[target.id] = prepared.nextManifestSection;
-    if (prepared.warnings) allWarnings.push(...prepared.warnings);
+    if (prepared.warnings) {
+      allWarnings.push(...prepared.warnings);
+    }
+    diffsByTarget[target.id] = diffTargetSection(
+      manifest?.targets?.[target.id] ?? null,
+      nextTargets[target.id],
+      target.id,
+    );
   }
 
   const nextManifest: Manifest = {
     version: '2.0',
-    fileKey: ir.fileKey,
+    fileKey: graph.fileKey,
     lastExportedAt: new Date().toISOString(),
     targets: nextTargets,
   };
 
-  return { files: allFiles, nextManifest, warnings: allWarnings };
+  return {
+    files: allFiles,
+    nextManifest,
+    warnings: allWarnings,
+    diffsByTarget,
+  };
 }

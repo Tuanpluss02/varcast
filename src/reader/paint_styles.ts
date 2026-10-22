@@ -5,12 +5,9 @@ import type {
   RGBA,
 } from '../ir/types';
 
-// Reads all local PaintStyles. Each style emits exactly one IR entry derived
-// from its first paint (Figma styles can hold multiple paints, but we treat
-// the style as the primary paint — secondary fills are rare and out of scope).
-//
-// Variable-bound stop colors are preserved as `{ kind: 'alias' }` so the
-// generator can emit `AppTheme.xxx` references rather than baked-in literals.
+/**
+ * Reads local Figma paint styles into IR representations.
+ */
 export async function readPaintStyles(): Promise<IRPaintStyle[]> {
   const styles = await figma.getLocalPaintStylesAsync();
   const out: IRPaintStyle[] = [];
@@ -81,8 +78,6 @@ function buildPaintStyle(style: PaintStyle): IRPaintStyle | null {
       };
 
     case 'IMAGE':
-      // Intentionally skipped: the plugin does not export binary assets yet.
-      // If needed later, we can add an assets/ pipeline + pubspec.yaml entries.
       return null;
 
     default:
@@ -114,32 +109,28 @@ function solidColorValue(fill: SolidPaint): IRColorValue {
   };
 }
 
-function toRGBA(c: any): RGBA {
+function toRGBA(c: { r: number; g: number; b: number; a?: number }): RGBA {
   return { r: c.r, g: c.g, b: c.b, a: c.a ?? 1 };
 }
 
-// Figma's gradientTransform is a 2x3 affine matrix mapping the gradient line
-// from object-space [(0,0)→(1,0)] into the layer's [0..1] coordinate space.
-// The direction vector of the gradient is the first column [t[0][0], t[1][0]].
-// We return atan2(dx, -dy) so that 0 rad = top→bottom (Figma's default).
+/**
+ * Extracts the rotation angle in radians from a 2x3 affine matrix.
+ */
 function extractLinearAngle(t: Transform): number {
   const dx = t[0][0];
   const dy = t[1][0];
   return Math.atan2(dx, -dy);
 }
 
-// Radial / angular gradients: invert the 2x3 affine to recover the gradient's
-// center (object-space origin) and the half-axis lengths in object-space.
-// `radius` is the average of the two half-axes in [0..1] layer coordinates so
-// downstream targets can map it to their own gradient parameters.
+/**
+ * Recovers radial/angular gradient center and radius from a 2x3 affine matrix.
+ */
 function extractRadialGeometry(t: Transform): {
   center: { x: number; y: number };
   radius: number;
 } {
   const inv = invertAffine(t);
   if (!inv) return { center: { x: 0.5, y: 0.5 }, radius: 0.5 };
-  // Center = inv * (0.5, 0.5) — Figma defines the gradient origin at (0.5, 0.5)
-  // in the object's gradient space.
   const cx = inv[0][0] * 0.5 + inv[0][1] * 0.5 + inv[0][2];
   const cy = inv[1][0] * 0.5 + inv[1][1] * 0.5 + inv[1][2];
   const rx = Math.hypot(inv[0][0], inv[1][0]) * 0.5;
@@ -147,12 +138,13 @@ function extractRadialGeometry(t: Transform): {
   return { center: { x: cx, y: cy }, radius: (rx + ry) / 2 };
 }
 
+/**
+ * Extracts start and end angles for an angular/sweep gradient.
+ */
 function extractAngularRange(t: Transform): {
   startAngle: number;
   endAngle: number;
 } {
-  // For sweep gradients Figma encodes the start direction in the matrix's
-  // first column. The default sweep covers a full circle (2π).
   const dx = t[0][0];
   const dy = t[1][0];
   const start = Math.atan2(dy, dx);

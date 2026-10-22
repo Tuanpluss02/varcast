@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { IR } from '../../ir/types';
-import type { Manifest } from '../../manifest';
+import type { Manifest } from '../../core/manifest';
 import { prepareIR } from '../../targets/flutter/generator/prepare';
 
 function baseIR(variables: IR['collections'][0]['variables']): IR {
@@ -90,8 +90,8 @@ describe('prepareIR stable naming dedup', () => {
     const bg = col.variables.filter((v) => v.groupPath.join('/') === 'Background');
     expect(bg.map((v) => v.leafName)).toEqual(['bgSecondary', 'bgSecondary2']);
 
-    // next manifest should persist the unique names under the flutter target
-    expect(prepared.nextManifest.targets.flutter.variables['var:2']).toBe('bgSecondary2');
+    // next manifest section should persist the unique names under the flutter target
+    expect(prepared.nextManifestSection.variables['var:2']).toBe('bgSecondary2');
   });
 });
 

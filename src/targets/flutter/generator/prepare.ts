@@ -1,19 +1,42 @@
 import type {
   IR,
-  IRCollection,
   IRPaintStyle,
   IREffectStyle,
   IRTextStyle,
   IRValue,
 } from '../../../ir/types';
 import {
-  newSanitizeContext,
-  sanitize,
+  processSegment,
   sanitizeIdentifier,
-} from '../../../sanitize';
-import { DART_KEYWORDS } from '../../../conventions/dart_keywords';
-import type { Manifest } from '../../../manifest';
-import { resolveStableCollectionName, resolveStableName } from '../../../manifest';
+  stripOrderingPrefix,
+  toCamelCase,
+  toPascalCase,
+} from '../identifier';
+import { DISALLOWED_COLLECTION_CLASS_NAMES } from '../reserved_names';
+import { DART_KEYWORDS } from '../dart_keywords';
+import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
+import {
+  assembleTargetSection,
+  getTargetSection,
+  resolveStableCollectionName,
+  resolveStableCompositeName,
+  resolveStableVariableName,
+} from '../../../core/manifest';
+import {
+  allocateStableCollectionIdentifiers,
+  dedupGetters,
+} from '../../../core/naming/dedup';
+import type { PreparedTarget } from '../../../core/target';
+import type {
+  GraphCollection,
+  ResolvedComposites,
+  ResolvedEffectStyle,
+  ResolvedLiteral,
+  ResolvedPaintStyle,
+  ResolvedTextStyle,
+  SemanticTokenGraph,
+} from '../../../core/graph/types';
+import { buildSemanticGraph } from '../../../core/graph/build_graph';
 import type { ExportOptions } from './options';
 import { DEFAULT_EXPORT_OPTIONS } from './options';
 
@@ -38,11 +61,14 @@ export interface PreparedVariable {
   stableLeafName: string; // persisted in manifest (no prefix/suffix)
   dartType: DartType;
   valuesByMode: Record<string, IRValue>;
+  resolvedValuesByMode?: Record<string, ResolvedLiteral>;
   emitToPublic: boolean;
 }
 
 export interface PreparedCollection {
   id: string;
+  name: string;
+  figmaName: string;
   className: string; // PascalCase, e.g. "ColorBasic"
   accessor: string; // camelCase, e.g. "colorBasic"
   kind: 'primitive' | 'token';
@@ -53,10 +79,13 @@ export interface PreparedCollection {
 }
 
 export interface VarRef {
-  collectionAccessor: string;
+  collectionId: string;
+  collectionAccessor: string; // camelCase, e.g. "colorBasic"
+  collectionClassName: string; // PascalCase, e.g. "ColorBasic"
   groupPath: string[]; // PascalCase
   leafName: string; // camelCase
   dartType: DartType;
+  resolvedLiteral?: ResolvedLiteral;
 }
 
 export interface PreparedPaintStyle {
@@ -64,7 +93,10 @@ export interface PreparedPaintStyle {
   type: IRPaintStyle['type'];
   groupName: string; // first segment of figmaName, sanitized PascalCase
   getterName: string; // remaining segments joined into camelCase
+  isStable?: boolean;
   raw: IRPaintStyle;
+  resolved?: ResolvedPaintStyle;
+  valuesByMode?: ResolvedPaintStyle['valuesByMode'];
 }
 
 export interface PreparedEffectStyle {
@@ -72,14 +104,20 @@ export interface PreparedEffectStyle {
   type: IREffectStyle['type'];
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IREffectStyle;
+  resolved?: ResolvedEffectStyle;
+  valuesByMode?: ResolvedEffectStyle['valuesByMode'];
 }
 
 export interface PreparedTextStyle {
   id: string;
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IRTextStyle;
+  resolved?: ResolvedTextStyle;
+  valuesByMode?: ResolvedTextStyle['valuesByMode'];
 }
 
 export type PreparedWarning =
@@ -97,162 +135,248 @@ export type PreparedWarning =
     };
 
 export interface PreparedIR {
+  targetId?: string;
   collections: PreparedCollection[];
   paintStyles: PreparedPaintStyle[];
   effectStyles: PreparedEffectStyle[];
   textStyles: PreparedTextStyle[];
   varIndex: Map<string, VarRef>;
-  nextManifest: Manifest;
+  nextManifestSection: ManifestTargetSection;
   warnings: PreparedWarning[];
+  /** Original IR for alias resolution fallback */
+  ir?: IR;
 }
 
+export type PreparedFlutterIR = PreparedIR;
+
 export function prepareIR(
-  ir: IR,
-  manifest: Manifest | null = null,
+  input: SemanticTokenGraph | IR,
+  manifest: Manifest | ManifestTargetSection | null = null,
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): PreparedIR {
+  const isRawIR = 'version' in input && !('variableIndex' in input);
+  const graph: SemanticTokenGraph = isRawIR
+    ? buildSemanticGraph(input as IR)
+    : (input as SemanticTokenGraph);
+  const ir: IR | undefined = isRawIR ? (input as IR) : undefined;
+
+  const manifestSection: ManifestTargetSection | null =
+    manifest && 'collections' in manifest
+      ? (manifest as ManifestTargetSection)
+      : getTargetSection(manifest as Manifest | null, FLUTTER_TARGET_ID);
+
   const warnings: PreparedWarning[] = [];
-  const collections = ir.collections.map((c) =>
-    prepareCollection(c, manifest, options, warnings),
+  const collections = graph.collections.map((c) =>
+    prepareCollection(c, manifestSection, options, warnings),
   );
+
   const varIndex = new Map<string, VarRef>();
   for (const col of collections) {
     for (const v of col.variables) {
+      const firstModeId = col.modes[0]?.id;
+      const firstResolved = firstModeId ? v.resolvedValuesByMode?.[firstModeId] : undefined;
       varIndex.set(v.id, {
+        collectionId: col.id,
         collectionAccessor: col.accessor,
+        collectionClassName: col.className,
         groupPath: v.groupPath,
         leafName: v.leafName,
         dartType: v.dartType,
+        resolvedLiteral: firstResolved,
       });
     }
   }
 
-  const paintStyles = dedupCompositeGetters(
-    ir.composites.paintStyles.map((s) => preparePaint(s)),
+  const paintStyles = dedupGetters(
+    graph.composites.paintStyles.map((s) => preparePaint(s, manifestSection)),
     () => `paint`,
   );
-  const effectStyles = dedupCompositeGetters(
-    ir.composites.effectStyles.map((s) => prepareEffect(s)),
+  const effectStyles = dedupGetters(
+    graph.composites.effectStyles.map((s) => prepareEffect(s, manifestSection)),
     () => `effect`,
   );
-  const textStyles = dedupCompositeGetters(
-    ir.composites.textStyles.map((s) => prepareText(s)),
+  const textStyles = dedupGetters(
+    graph.composites.textStyles.map((s) => prepareText(s, manifestSection)),
     () => `text`,
   );
 
-  const nextManifest = buildNextManifest(ir, collections, manifest);
+  const nextManifestSection = buildNextManifestSection(collections, {
+    paintStyles,
+    effectStyles,
+    textStyles,
+  });
 
   return {
+    targetId: 'flutter',
     collections,
     paintStyles,
     effectStyles,
     textStyles,
     varIndex,
-    nextManifest,
+    nextManifestSection,
     warnings,
+    ir,
   };
 }
 
-/**
- * Reserved Flutter/Dart SDK symbols to prevent collisions in generated files.
- * Shadowing these would break imports in the consumer codebase.
- */
-const DISALLOWED_COLLECTION_CLASS_NAMES = new Set([
-  'FontWeight',
-  'Color',
-  'TextStyle',
-  'BoxShadow',
-  'Gradient',
-  'LinearGradient',
-  'RadialGradient',
-  'SweepGradient',
-  'ImageFilter',
-  'AnimationController',
-  'ChangeNotifier',
-  'ThemeData',
-  'AppTheme',
-  'DesignSystemController',
-  'DSColorStyles',
-  'DSShadows',
-  'DSStyles',
-  'DSTextStyle',
-  'DSShadow',
-]);
+export const prepareFlutterIR = prepareIR;
+
+
+function normalizeLegacyLeafName(
+  name: string,
+  section: ManifestTargetSection | undefined,
+  variableId: string,
+): string {
+  const m = /^(.+)_([0-9]+)$/.exec(name);
+  if (!m) return name;
+  const base = m[1];
+  const n = m[2];
+  if (base.endsWith('_')) return name;
+  const renamed = `${base}${n}`;
+  if (section?.variables) {
+    for (const [otherId, otherName] of Object.entries(section.variables)) {
+      if (otherId === variableId) continue;
+      if (otherName === renamed) return name;
+    }
+  }
+  return renamed;
+}
+
+export function resolveStableName(
+  variableId: string,
+  derivedLeafName: string,
+  manifest: Manifest | ManifestTargetSection | null,
+): string {
+  const section =
+    manifest && 'variables' in manifest
+      ? (manifest as ManifestTargetSection)
+      : (manifest as Manifest | null)?.targets?.flutter;
+  const raw = resolveStableVariableName(
+    section,
+    variableId,
+    derivedLeafName,
+  );
+  return normalizeLegacyLeafName(raw, section, variableId);
+}
+
+function computeFlutterVariablePath(v: { groupPath: string[]; leafName?: string }) {
+  const fullPath = v.leafName ? [...v.groupPath, v.leafName] : v.groupPath;
+  const segments = fullPath
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map(processSegment);
+  if (segments.length === 0) segments.push('unnamed');
+  const groupPath = segments.slice(0, -1).map(toPascalCase);
+  const rawLeaf = segments[segments.length - 1];
+  const camelLeaf = toCamelCase(rawLeaf);
+  return { groupPath, camelLeaf };
+}
 
 function prepareCollection(
-  col: IRCollection,
-  manifest: Manifest | null,
+  col: GraphCollection,
+  manifestSection: ManifestTargetSection | null,
   options: ExportOptions,
   warnings: PreparedWarning[],
 ): PreparedCollection {
-  let className = sanitizeIdentifier(col.name, 'pascal');
+  let className = sanitizeIdentifier(stripOrderingPrefix(col.name), 'pascal');
   if (DISALLOWED_COLLECTION_CLASS_NAMES.has(className)) {
     className = `${className}Tokens`;
   }
-  className = resolveStableCollectionName(col.id, className, manifest);
+  className = resolveStableCollectionName(manifestSection, col.id, className);
   const accessor = lowerFirst(className);
-  const modes: PreparedMode[] = col.modes.map((m) => ({
-    id: m.id,
-    pascal: sanitizeIdentifier(m.name, 'pascal'),
-    camel: sanitizeIdentifier(m.name, 'camel'),
-  }));
+  const modes: PreparedMode[] = col.modes.map((m) => {
+    let rawName = m.name;
+    if (rawName === 'Mode') rawName = 'default';
+    return {
+      id: m.id,
+      pascal: sanitizeIdentifier(rawName, 'pascal'),
+      camel: sanitizeIdentifier(rawName, 'camel'),
+    };
+  });
 
-  // Sanitize each variable's path. Dedup is per-collection (a fresh ctx).
-  const ctx = newSanitizeContext();
-  const finalNamesByParent = new Map<string, Set<string>>();
+  const pathByVarId = new Map<
+    string,
+    { groupPath: string[]; camelLeaf: string }
+  >();
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    pathByVarId.set(v.id, computeFlutterVariablePath(v));
+  }
+
+  const allocatedMap = allocateStableCollectionIdentifiers(
+    col.variables,
+    manifestSection,
+    (_leaf, v) => {
+      const info = pathByVarId.get(v.id);
+      if (!info) return 'unnamed';
+      const { camelLeaf } = info;
+      return DART_KEYWORDS.has(camelLeaf) ? `${camelLeaf}_` : camelLeaf;
+    },
+    {
+      getGroupKey: (v) => pathByVarId.get(v.id)?.groupPath.join('/') ?? '',
+      formatStableName: (varId, name) => {
+        let normalized = resolveStableName(varId, name, manifestSection);
+        if (DART_KEYWORDS.has(normalized)) {
+          normalized = `${normalized}_`;
+        }
+        return normalized;
+      },
+    },
+  );
+
   const variables: PreparedVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
-    const { groupPath, leafName, notes } = sanitize(v.groupPath, ctx);
-    if (notes.keywordFixedFrom) {
+    const { groupPath, camelLeaf } = pathByVarId.get(v.id)!;
+    const isKeyword = DART_KEYWORDS.has(camelLeaf);
+    if (isKeyword) {
       warnings.push({
         type: 'KEYWORD_CONFLICT',
         variableId: v.id,
-        original: notes.keywordFixedFrom,
-        fixed: leafName,
+        original: camelLeaf,
+        fixed: `${camelLeaf}_`,
+      });
+    } else if (
+      manifestSection?.variables?.[v.id] &&
+      DART_KEYWORDS.has(manifestSection.variables[v.id])
+    ) {
+      const legacy = manifestSection.variables[v.id];
+      warnings.push({
+        type: 'KEYWORD_CONFLICT',
+        variableId: v.id,
+        original: legacy,
+        fixed: `${legacy}_`,
       });
     }
-    if (notes.dedupedAs !== undefined) {
-      const base = leafName.slice(0, -String(notes.dedupedAs).length);
+
+    const allocated = allocatedMap.get(v.id)!;
+    if (allocated.wasDeduplicated) {
+      const derivedCandidate = isKeyword ? `${camelLeaf}_` : camelLeaf;
       warnings.push({
         type: 'DUPLICATE_DART_NAME',
         variableId: v.id,
-        original: base,
-        fixed: leafName,
+        original: derivedCandidate,
+        fixed: allocated.stableLeafKey,
       });
     }
-    let stableLeaf = resolveStableName(v.id, leafName, manifest);
-    /**
-     * Re-apply keyword fix for legacy manifests that may carry a Dart keyword leaf name.
-     * Prevents emitting reserved words like `default` which break compilation.
-     */
-    if (DART_KEYWORDS.has(stableLeaf)) {
-      const fixed = `${stableLeaf}_`;
-      if (notes.keywordFixedFrom === undefined) {
-        warnings.push({
-          type: 'KEYWORD_CONFLICT',
-          variableId: v.id,
-          original: stableLeaf,
-          fixed,
-        });
-      }
-      stableLeaf = fixed;
-    }
-    stableLeaf = dedupLeafName(finalNamesByParent, groupPath.join('/'), stableLeaf);
+
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
       groupPath,
-      leafName: stableLeaf,
-      stableLeafName: stableLeaf,
+      leafName: allocated.stableLeafKey,
+      stableLeafName: allocated.stableLeafKey,
       dartType: dartTypeOf(v.type),
-      valuesByMode: v.valuesByMode,
+      valuesByMode: v.rawValuesByMode,
+      resolvedValuesByMode: v.resolvedValuesByMode,
       emitToPublic: v.emitToPublic,
     });
   }
 
   return {
     id: col.id,
+    name: col.name,
+    figmaName: col.name,
     className,
     accessor,
     kind: col.kind,
@@ -263,109 +387,124 @@ function prepareCollection(
   };
 }
 
-function dedupLeafName(
-  usedByParent: Map<string, Set<string>>,
-  parentKey: string,
-  leaf: string,
-): string {
-  let used = usedByParent.get(parentKey);
-  if (!used) {
-    used = new Set();
-    usedByParent.set(parentKey, used);
-  }
-  if (!used.has(leaf)) {
-    used.add(leaf);
-    return leaf;
-  }
-  let i = 2;
-  while (used.has(`${leaf}${i}`)) i++;
-  const next = `${leaf}${i}`;
-  used.add(next);
-  return next;
-}
-
-function buildNextManifest(
-  ir: IR,
+function buildNextManifestSection(
   cols: PreparedCollection[],
-  oldManifest: Manifest | null,
-): Manifest {
-  const variables: Record<string, string> = {};
-  const collections: Record<string, string> = {};
-  const figmaVar: Record<string, string> = {};
-  const figmaCol: Record<string, string> = {};
-
-  for (const c of cols) {
-    collections[c.id] = c.className;
-  }
-  for (const c of ir.collections) {
-    figmaCol[c.id] = c.name;
-    for (const v of c.variables) {
-      figmaVar[v.id] = v.figmaName;
-    }
-  }
-  for (const c of cols) {
-    for (const v of c.variables) {
-      variables[v.id] = v.stableLeafName;
-    }
-  }
-
-  const preservedTargets: Manifest['targets'] = { ...(oldManifest?.targets ?? {}) };
-  preservedTargets[FLUTTER_TARGET_ID] = {
-    variables,
-    collections,
-    figmaNames: { variables: figmaVar, collections: figmaCol },
-  };
-
-  return {
-    version: '2.0',
-    fileKey: ir.fileKey,
-    lastExportedAt: new Date().toISOString(),
-    targets: preservedTargets,
-  };
+  composites: {
+    paintStyles: PreparedPaintStyle[];
+    effectStyles: PreparedEffectStyle[];
+    textStyles: PreparedTextStyle[];
+  },
+): ManifestTargetSection {
+  const allComposites = [
+    ...composites.paintStyles,
+    ...composites.effectStyles,
+    ...composites.textStyles,
+  ];
+  return assembleTargetSection({
+    collections: cols.map((c) => ({
+      id: c.id,
+      name: c.figmaName,
+      exportName: c.className,
+      variables: c.variables.map((v) => ({
+        id: v.id,
+        figmaName: v.figmaName,
+        stableLeafKey: v.stableLeafName,
+      })),
+    })),
+    composites: allComposites.map((s) => ({
+      id: s.id,
+      figmaName: s.raw.figmaName,
+      getterName: s.getterName,
+    })),
+  });
 }
 
 const FLUTTER_TARGET_ID = 'flutter';
 
-function preparePaint(s: IRPaintStyle): PreparedPaintStyle {
-  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
-  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  const getterName = sanitizeIdentifier(getter, 'camel');
-  return { id: s.id, type: s.type, groupName: 'Paint', getterName, raw: s };
+function isResolvedPaintStyle(
+  s: IRPaintStyle | ResolvedPaintStyle,
+): s is ResolvedPaintStyle {
+  return 'valuesByMode' in s && 'raw' in s;
 }
 
-function prepareEffect(s: IREffectStyle): PreparedEffectStyle {
-  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
-  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  const getterName = sanitizeIdentifier(getter, 'camel');
-  return { id: s.id, type: s.type, groupName: 'Effect', getterName, raw: s };
+function isResolvedEffectStyle(
+  s: IREffectStyle | ResolvedEffectStyle,
+): s is ResolvedEffectStyle {
+  return 'valuesByMode' in s && 'raw' in s;
 }
 
-function prepareText(s: IRTextStyle): PreparedTextStyle {
-  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
-  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
-  const getterName = sanitizeIdentifier(getter, 'camel');
-  return { id: s.id, groupName: 'Text', getterName, raw: s };
+function isResolvedTextStyle(
+  s: IRTextStyle | ResolvedTextStyle,
+): s is ResolvedTextStyle {
+  return 'valuesByMode' in s && 'raw' in s;
 }
 
-function dedupCompositeGetters<T extends { getterName: string }>(
-  items: T[],
-  bucketKey: (item: T) => string,
-): T[] {
-  const used = new Map<string, number>();
-  for (const it of items) {
-    const base = it.getterName;
-    const key = `${bucketKey(it)}::${base}`;
-    const n = used.get(key);
-    if (n === undefined) {
-      used.set(key, 1);
-      continue;
-    }
-    const next = n + 1;
-    used.set(key, next);
-    // Dart lowerCamelCase: "shadowMd" + 2 = "shadowMd2", not "shadowMd_2".
-    it.getterName = `${base}${next}`;
-  }
-  return items;
+function preparePaint(
+  s: IRPaintStyle | ResolvedPaintStyle,
+  manifestSection?: ManifestTargetSection | null,
+): PreparedPaintStyle {
+  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
+  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
+  const derivedGetterName = sanitizeIdentifier(getter, 'camel');
+  const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  const resolved = isResolvedPaintStyle(s) ? s : undefined;
+  const raw = isResolvedPaintStyle(s) ? s.raw : s;
+  return {
+    id: s.id,
+    type: s.type,
+    groupName: 'Paint',
+    getterName,
+    isStable,
+    raw,
+    resolved,
+    valuesByMode: resolved?.valuesByMode,
+  };
+}
+
+function prepareEffect(
+  s: IREffectStyle | ResolvedEffectStyle,
+  manifestSection?: ManifestTargetSection | null,
+): PreparedEffectStyle {
+  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
+  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
+  const derivedGetterName = sanitizeIdentifier(getter, 'camel');
+  const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  const resolved = isResolvedEffectStyle(s) ? s : undefined;
+  const raw = isResolvedEffectStyle(s) ? s.raw : s;
+  return {
+    id: s.id,
+    type: s.type,
+    groupName: 'Effect',
+    getterName,
+    isStable,
+    raw,
+    resolved,
+    valuesByMode: resolved?.valuesByMode,
+  };
+}
+
+function prepareText(
+  s: IRTextStyle | ResolvedTextStyle,
+  manifestSection?: ManifestTargetSection | null,
+): PreparedTextStyle {
+  const segments = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
+  const getter = segments.length === 0 ? 'unnamed' : segments.join(' ');
+  const derivedGetterName = sanitizeIdentifier(getter, 'camel');
+  const getterName = resolveStableCompositeName(manifestSection, s.id, derivedGetterName);
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
+  const resolved = isResolvedTextStyle(s) ? s : undefined;
+  const raw = isResolvedTextStyle(s) ? s.raw : s;
+  return {
+    id: s.id,
+    groupName: 'Text',
+    getterName,
+    isStable,
+    raw,
+    resolved,
+    valuesByMode: resolved?.valuesByMode,
+  };
 }
 
 function dartTypeOf(t: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN'): DartType {
@@ -392,4 +531,3 @@ function pascalToSnake(s: string): string {
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
     .toLowerCase();
 }
-

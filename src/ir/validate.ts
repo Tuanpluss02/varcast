@@ -17,7 +17,8 @@ export type ValidationWarning =
   | { type: 'IMAGE_ASSET_REQUIRED'; styleId: string; assetName: string };
 
 /**
- * Validates and mutates the IR in place (rounds floats, applies hidden flag, marks unresolved aliases).
+ * Validates the IR for cycles and warnings.
+ * Pure inspection — does not mutate the IR.
  * @returns Validation errors (blocks emit) and warnings (surfaced in UI).
  */
 export function validate(ir: IR): ValidationResult {
@@ -31,11 +32,11 @@ export function validate(ir: IR): ValidationResult {
     }
   }
 
+  const reported = new Set<string>();
+  const visited = new Set<string>();
   for (const col of ir.collections) {
-    detectCycles(col, allVars, errors);
-    resolveAliases(col, allVars, warnings);
-    roundFloats(col);
-    applyHidden(col);
+    detectCycles(col, allVars, errors, visited, reported);
+    findUnresolvedAliases(col, allVars, warnings);
   }
 
   for (const style of ir.composites.paintStyles) {
@@ -47,21 +48,17 @@ export function validate(ir: IR): ValidationResult {
   return { errors, warnings };
 }
 
-// ── Rule 1: cycle detection ─────────────────────────────────────────────────
-
 /**
  * Detects cyclic alias dependencies using iterative post-order DFS (O(V + E)).
  * Cycles are canonicalized to avoid duplicate reports from different entry points.
  */
-
 function detectCycles(
   col: IRCollection,
   allVars: Map<string, IRVariable>,
   errors: ValidationError[],
+  visited: Set<string>,
+  reported: Set<string>,
 ): void {
-  const reported = new Set<string>();
-  const visited = new Set<string>();
-
   for (const v of col.variables) {
     if (visited.has(v.id)) continue;
     findCyclesFrom(v.id, allVars, visited, reported, errors);
@@ -121,7 +118,6 @@ function findCyclesFrom(
 }
 
 function canonicalCycleKey(cycle: string[]): string {
-  // cycle is [a, b, c, a]; vertex set is [a, b, c]
   const verts = cycle.slice(0, -1);
   let minIdx = 0;
   for (let i = 1; i < verts.length; i++) {
@@ -131,9 +127,7 @@ function canonicalCycleKey(cycle: string[]): string {
   return rotated.join('→');
 }
 
-// ── Rule 2: unresolved alias ────────────────────────────────────────────────
-
-function resolveAliases(
+function findUnresolvedAliases(
   col: IRCollection,
   allVars: Map<string, IRVariable>,
   warnings: ValidationWarning[],
@@ -147,36 +141,7 @@ function resolveAliases(
           variableId: v.id,
           targetId: val.targetVariableId,
         });
-        v.emitToPublic = false;
       }
     }
-  }
-}
-
-// ── Rule 3: float noise rounding ────────────────────────────────────────────
-
-/**
- * Rounds all FLOAT literals to 6 decimals to clean up Figma's binary32 float noise.
- */
-
-function roundFloats(col: IRCollection): void {
-  for (const v of col.variables) {
-    if (v.type !== 'FLOAT') continue;
-    for (const [modeId, val] of Object.entries(v.valuesByMode)) {
-      if (val.kind === 'literal' && typeof val.value === 'number') {
-        v.valuesByMode[modeId] = {
-          kind: 'literal',
-          value: Math.round(val.value * 1e6) / 1e6,
-        };
-      }
-    }
-  }
-}
-
-// ── Rule 4: hidden flag → emitToPublic=false (no warning) ───────────────────
-
-function applyHidden(col: IRCollection): void {
-  for (const v of col.variables) {
-    if (v.hiddenFromPublishing) v.emitToPublic = false;
   }
 }

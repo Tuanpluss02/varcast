@@ -2,6 +2,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { register } from 'node:module';
+
+// Register hook to resolve extensionless relative imports produced by TypeScript ESNext build.
+const loaderCode = `
+export async function resolve(specifier, context, nextResolve) {
+  try {
+    return await nextResolve(specifier, context);
+  } catch (err) {
+    if (err.code === 'ERR_MODULE_NOT_FOUND' && specifier.startsWith('.')) {
+      try {
+        return await nextResolve(specifier + '.js', context);
+      } catch {}
+    }
+    throw err;
+  }
+}
+`;
+register(`data:text/javascript,${encodeURIComponent(loaderCode)}`);
 
 // This is a runtime smoke test for the *generated* RN package.
 // It avoids importing the package entrypoint because that depends on React at runtime.

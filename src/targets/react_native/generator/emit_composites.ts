@@ -5,11 +5,6 @@ import type {
   PreparedRNPaintStyle,
   PreparedRNTextStyle,
 } from './prepare';
-import {
-  resolveColorValueToHex,
-  resolveTextValue,
-  resolveTextValueWithUnit,
-} from './prepare';
 
 export function emitComposites(prepared: PreparedRN): EmittedFile[] {
   const colorStyles = emitColorStyles(prepared.paintStyles, prepared);
@@ -24,16 +19,16 @@ export function emitComposites(prepared: PreparedRN): EmittedFile[] {
 }
 
 function emitColorStyles(styles: PreparedRNPaintStyle[], prepared: PreparedRN): string {
-  // v1: only SOLID is fully supported; others emitted as unsupported objects.
-  const out: any = { solid: {}, unsupported: {} };
+  const out: { solid: Record<string, Record<string, string | null>>; unsupported: Record<string, { type: string }> } = {
+    solid: {},
+    unsupported: {},
+  };
   for (const s of styles) {
-    const r: any = s.raw as any;
     if (s.type === 'SOLID') {
-      // resolve per mode; if alias can't resolve, keep null.
       const byMode: Record<string, string | null> = {};
       for (const mode of prepared.modes) {
-        const hex = resolveColorValueToHex(mode.id, r.color, prepared.resolvedVarByMode);
-        byMode[mode.key] = hex;
+        const modeVal = s.valuesByMode[mode.id] ?? s.valuesByMode[mode.key];
+        byMode[mode.key] = modeVal?.hex ?? null;
       }
       out.solid[s.getterName] = byMode;
     } else {
@@ -50,22 +45,27 @@ function emitColorStyles(styles: PreparedRNPaintStyle[], prepared: PreparedRN): 
 }
 
 function emitShadows(styles: PreparedRNEffectStyle[], prepared: PreparedRN): string {
-  // v1: emit DROP_SHADOW only; INNER_SHADOW kept in unsupported.
-  const out: any = { drop: {}, unsupported: {} };
+  const out: { drop: Record<string, Record<string, unknown>>; unsupported: Record<string, { type: string }> } = {
+    drop: {},
+    unsupported: {},
+  };
 
   for (const s of styles) {
-    const r: any = s.raw as any;
-    if (s.type === 'DROP_SHADOW') {
-      const byMode: Record<string, any> = {};
+    if (s.raw.type === 'DROP_SHADOW') {
+      const r = s.raw;
+      const byMode: Record<string, unknown> = {};
       for (const mode of prepared.modes) {
-        const hex = resolveColorValueToHex(mode.id, r.color, prepared.resolvedVarByMode);
-        const opacity = hex ? alphaFromHex(hex) : 1;
+        const modeVal = s.valuesByMode[mode.id] ?? s.valuesByMode[mode.key];
+        const hex = modeVal?.shadowColor ?? null;
+        const opacity = modeVal ? modeVal.opacity : (hex ? alphaFromHex(hex) : 1);
         byMode[mode.key] = {
           shadowColor: hex ?? '#00000000',
-          shadowOffset: { width: r.offsetX, height: r.offsetY },
-          shadowRadius: r.blurRadius,
+          shadowOffset: {
+            width: modeVal?.offsetX ?? r.offsetX,
+            height: modeVal?.offsetY ?? r.offsetY,
+          },
+          shadowRadius: modeVal?.blurRadius ?? r.blurRadius,
           shadowOpacity: opacity,
-          // Android heuristic left as 0 for now.
           elevation: 0,
         };
       }
@@ -84,45 +84,45 @@ function emitShadows(styles: PreparedRNEffectStyle[], prepared: PreparedRN): str
 }
 
 function emitTextStyles(styles: PreparedRNTextStyle[], prepared: PreparedRN): string {
-  // v1: resolve each style into per-mode TextStyle-like objects.
-  const out: any = {};
+  const out: Record<string, Record<string, Record<string, Record<string, string | number>>>> = {};
 
   for (const s of styles) {
-    const r = s.raw as any;
-    const byMode: Record<string, any> = {};
+    const byMode: Record<string, Record<string, string | number>> = {};
     for (const mode of prepared.modes) {
-      const fontFamily = resolveTextValue<string>(mode.id, r.fontFamily, prepared.resolvedVarByMode);
-      const fontSize = resolveTextValue<number>(mode.id, r.fontSize, prepared.resolvedVarByMode);
-      const fontWeight = resolveTextValue<number>(mode.id, r.fontWeight, prepared.resolvedVarByMode);
-      const lh = resolveTextValueWithUnit(mode.id, r.lineHeight, prepared.resolvedVarByMode);
-      const ls = resolveTextValueWithUnit(mode.id, r.letterSpacing, prepared.resolvedVarByMode);
+      const modeVal = s.valuesByMode[mode.id] ?? s.valuesByMode[mode.key];
+      const style: Record<string, string | number> = {};
 
-      const style: any = {};
-      if (fontFamily != null) style.fontFamily = fontFamily;
-      if (fontSize != null) style.fontSize = fontSize;
-      if (fontWeight != null) style.fontWeight = String(Math.round(fontWeight));
-
-      // PERCENT units in Figma multiply against the resolved fontSize. When
-      // fontSize itself is an unresolved alias we fall back to 16 (the React
-      // Native default text size) so consumers see a usable value rather than
-      // a silently dropped field.
-      const fsForPercent = fontSize ?? 16;
-      if (lh) {
-        if (lh.unit === 'AUTO') {
-          // omit
-        } else if (lh.unit === 'PIXELS') {
-          style.lineHeight = lh.value;
-        } else if (lh.unit === 'PERCENT') {
-          style.lineHeight = (lh.value / 100) * fsForPercent;
+      if (modeVal) {
+        if (modeVal.fontFamily != null) {
+          style.fontFamily = modeVal.fontFamily;
         }
-      }
-      if (ls) {
-        if (ls.unit === 'AUTO') {
-          // omit
-        } else if (ls.unit === 'PIXELS') {
-          style.letterSpacing = ls.value;
-        } else if (ls.unit === 'PERCENT') {
-          style.letterSpacing = (ls.value / 100) * fsForPercent;
+        if (modeVal.fontSize != null) {
+          style.fontSize = modeVal.fontSize;
+        }
+        if (modeVal.fontWeight != null) {
+          const numWeight = parseFloat(modeVal.fontWeight);
+          style.fontWeight = Number.isFinite(numWeight)
+            ? String(Math.round(numWeight))
+            : modeVal.fontWeight;
+        }
+
+        const fsForPercent = modeVal.fontSize ?? 16;
+        const lh = modeVal.lineHeight;
+        if (lh) {
+          if (lh.unit === 'PIXELS') {
+            style.lineHeight = lh.value;
+          } else if (lh.unit === 'PERCENT') {
+            style.lineHeight = (lh.value / 100) * fsForPercent;
+          }
+        }
+
+        const ls = modeVal.letterSpacing;
+        if (ls) {
+          if (ls.unit === 'PIXELS') {
+            style.letterSpacing = ls.value;
+          } else if (ls.unit === 'PERCENT') {
+            style.letterSpacing = (ls.value / 100) * fsForPercent;
+          }
         }
       }
 
@@ -142,7 +142,6 @@ function emitTextStyles(styles: PreparedRNTextStyle[], prepared: PreparedRN): st
 }
 
 function alphaFromHex(hex: string): number {
-  // '#RRGGBBAA'
   if (!hex || hex[0] !== '#' || hex.length !== 9) return 1;
   const aa = parseInt(hex.slice(7, 9), 16);
   if (!Number.isFinite(aa)) return 1;

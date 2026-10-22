@@ -1,23 +1,44 @@
 import type {
   IR,
   IRCollection,
-  IRColorValue,
   IREffectStyle,
   IRPaintStyle,
   IRTextStyle,
-  IRTextValue,
-  IRTextValueWithUnit,
   IRValue,
   IRVariable,
-  RGBA,
 } from '../../../ir/types';
 import type { Manifest, ManifestTargetSection } from '../../../core/manifest';
 import {
+  assembleTargetSection,
+  getTargetSection,
   resolveStableCollectionName,
+  resolveStableCompositeName,
   resolveStableVariableName,
 } from '../../../core/manifest';
-import { processSegment, splitWords, toCamelCase, toKebabCase, toPascalCase } from '../../../core/sanitize_base';
-import { rgbaToRRGGBBAA } from '../type_mapping';
+import {
+  allocateStableCollectionIdentifiers,
+  dedupGetters,
+} from '../../../core/naming/dedup';
+import type { PreparedTarget, TargetWarning } from '../../../core/target';
+import type {
+  GraphCollection,
+  ResolvedEffectStyle,
+  ResolvedLiteral,
+  ResolvedPaintStyle,
+  ResolvedTextStyle,
+  SemanticTokenGraph,
+} from '../../../core/graph/types';
+import { buildSemanticGraph } from '../../../core/graph/build_graph';
+import {
+  processSegment,
+  splitWords,
+  stripOrderingPrefix,
+  toCamelCase,
+  toKebabCase,
+  toPascalCase,
+} from '../../../core/sanitize_base';
+import { isJsReservedWord } from '../reserved';
+import type { PartialReactNativeOptions } from '../options';
 
 export type RNPrimitiveType = 'string' | 'number' | 'boolean';
 
@@ -36,6 +57,7 @@ export interface PreparedRNVariable {
   stableLeafKey: string;
   type: IRVariable['type'];
   valuesByMode: Record<string, IRValue>;
+  resolvedValuesByMode?: Record<string, ResolvedLiteral>;
 }
 
 export interface PreparedRNCollection {
@@ -49,16 +71,16 @@ export interface PreparedRNCollection {
   variables: PreparedRNVariable[];
 }
 
-export interface PreparedRN {
+export interface PreparedRN extends PreparedTarget {
+  targetId?: string;
   /** All known modes across collections (used for composites). */
   modes: PreparedRNMode[];
   collections: PreparedRNCollection[];
   paintStyles: PreparedRNPaintStyle[];
   effectStyles: PreparedRNEffectStyle[];
   textStyles: PreparedRNTextStyle[];
-  /** Per-mode variable literal index (post alias-resolve). */
-  resolvedVarByMode: Record<string /*modeId*/, Record<string /*varId*/, string | number | boolean>>;
   nextManifestSection: ManifestTargetSection;
+  warnings: TargetWarning[];
 }
 
 export interface PreparedRNPaintStyle {
@@ -66,7 +88,10 @@ export interface PreparedRNPaintStyle {
   type: IRPaintStyle['type'];
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IRPaintStyle;
+  resolved: ResolvedPaintStyle;
+  valuesByMode: ResolvedPaintStyle['valuesByMode'];
 }
 
 export interface PreparedRNEffectStyle {
@@ -74,14 +99,20 @@ export interface PreparedRNEffectStyle {
   type: IREffectStyle['type'];
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IREffectStyle;
+  resolved: ResolvedEffectStyle;
+  valuesByMode: ResolvedEffectStyle['valuesByMode'];
 }
 
 export interface PreparedRNTextStyle {
   id: string;
   groupName: string;
   getterName: string;
+  isStable?: boolean;
   raw: IRTextStyle;
+  resolved: ResolvedTextStyle;
+  valuesByMode: ResolvedTextStyle['valuesByMode'];
 }
 
 function words(raw: string): string[] {
@@ -100,47 +131,100 @@ function kebab(raw: string): string {
   return toKebabCase(words(raw).join(' '));
 }
 
-export function prepareRN(ir: IR, manifest: Manifest | null): PreparedRN {
-  const modes = collectAllModes(ir);
-  const collections: PreparedRNCollection[] = ir.collections.map((c) =>
-    prepareCollection(c, manifest),
+export function prepareRN(
+  input: SemanticTokenGraph | IR,
+  manifest: Manifest | ManifestTargetSection | null = null,
+  _options: PartialReactNativeOptions = {},
+): PreparedRN {
+  const isRawIR = 'version' in input && !('variableIndex' in input);
+  const graph: SemanticTokenGraph = isRawIR
+    ? buildSemanticGraph(input as IR)
+    : (input as SemanticTokenGraph);
+
+  const modes: PreparedRNMode[] = graph.allModes.map((m) => ({
+    id: m.id,
+    name: m.name,
+    key: modeKey(m.name),
+  }));
+
+  const warnings: TargetWarning[] = [];
+
+  const manifestSection: ManifestTargetSection | null =
+    manifest && 'collections' in manifest
+      ? (manifest as ManifestTargetSection)
+      : getTargetSection(manifest as Manifest | null, 'react_native');
+
+  const collections: PreparedRNCollection[] = graph.collections.map((c) =>
+    prepareCollection(c, manifestSection, warnings),
   );
 
-  const resolvedVarByMode = resolveAllVariableLiterals(ir);
-
-  const paintStyles = dedupCompositeGetters(
-    ir.composites.paintStyles.map((s) => preparePaint(s)),
+  const paintStyles = dedupGetters(
+    graph.composites.paintStyles.map((s) => preparePaint(s, manifestSection)),
     (s) => s.groupName,
   );
-  const effectStyles = dedupCompositeGetters(
-    ir.composites.effectStyles.map((s) => prepareEffect(s)),
+  const effectStyles = dedupGetters(
+    graph.composites.effectStyles.map((s) => prepareEffect(s, manifestSection)),
     (s) => s.groupName,
   );
-  const textStyles = dedupCompositeGetters(
-    ir.composites.textStyles.map((s) => prepareText(s)),
+  const textStyles = dedupGetters(
+    graph.composites.textStyles.map((s) => prepareText(s, manifestSection)),
     (s) => s.groupName,
   );
 
-  const nextManifestSection = buildNextManifestSection(ir, collections);
-  return { modes, collections, paintStyles, effectStyles, textStyles, resolvedVarByMode, nextManifestSection };
-}
 
-function collectAllModes(ir: IR): PreparedRNMode[] {
-  const byId = new Map<string, PreparedRNMode>();
-  for (const c of ir.collections) {
-    for (const m of c.modes) {
-      if (byId.has(m.id)) continue;
-      byId.set(m.id, { id: m.id, name: m.name, key: modeKey(m.name) });
+  // Collect unsupported effects
+  for (const s of graph.composites.effectStyles) {
+    if (s.type !== 'DROP_SHADOW') {
+      warnings.push({
+        targetId: 'react_native',
+        code: 'UNSUPPORTED_EFFECT',
+        message: `Effect style "${s.figmaName}" of type "${s.type}" is not supported in React Native.`,
+        details: { styleId: s.id, type: s.type },
+      });
     }
   }
-  return [...byId.values()];
+
+  const nextManifestSection = buildNextManifestSection(collections, {
+    paintStyles,
+    effectStyles,
+    textStyles,
+  });
+
+  return {
+    targetId: 'react_native',
+    modes,
+    collections,
+    paintStyles,
+    effectStyles,
+    textStyles,
+    nextManifestSection,
+    warnings,
+  };
 }
 
-function prepareCollection(col: IRCollection, manifest: Manifest | null): PreparedRNCollection {
-  const derivedType = pascal(col.name);
-  const typeName = resolveStableCollectionName('react_native', col.id, derivedType, manifest);
-  const exportName = lowerFirst(typeName);
-  const fileBaseName = kebab(col.name);
+function prepareCollection(
+  col: GraphCollection,
+  manifestSection: ManifestTargetSection | null,
+  warnings: TargetWarning[],
+): PreparedRNCollection {
+  const cleanName = stripOrderingPrefix(col.name);
+  const derivedType = pascal(cleanName);
+  const typeName = resolveStableCollectionName(
+    manifestSection,
+    col.id,
+    derivedType,
+  );
+  let exportName = lowerFirst(typeName);
+  if (isJsReservedWord(exportName)) {
+    const escaped = `${exportName}Tokens`;
+    warnings.push({
+      targetId: 'react_native',
+      code: 'RESERVED_WORD_ESCAPED',
+      message: `Collection export name "${col.name}" is a JavaScript reserved word; escaped to "${escaped}".`,
+    });
+    exportName = escaped;
+  }
+  const fileBaseName = kebab(cleanName);
 
   const modes: PreparedRNMode[] = col.modes.map((m) => ({
     id: m.id,
@@ -148,24 +232,107 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
     key: modeKey(m.name),
   }));
 
+  // Collect all intermediate group paths in this collection to prevent prefix collisions
+  const intermediateGroups = new Set<string>();
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
+    const groupKeys = groupSegs.map(camel);
+    let prefix = '';
+    for (const seg of groupKeys) {
+      prefix = prefix ? `${prefix}/${seg}` : seg;
+      intermediateGroups.add(prefix);
+    }
+  }
+
+  const varInfoMap = new Map<
+    string,
+    {
+      figmaName: string;
+      groupSegs: string[];
+      leafSeg: string;
+      segs: string[];
+      groupPathKeys: string[];
+      groupKey: string;
+      derivedLeaf: string;
+      hasGroupConflict: boolean;
+    }
+  >();
+
+  for (const v of col.variables) {
+    if (!v.emitToPublic) continue;
+    const groupSegs = v.groupPath.map((s) => s.trim()).filter(Boolean);
+    const leafSeg = (v.leafName ?? 'unnamed').trim();
+    const segs = [...groupSegs, leafSeg];
+    const groupPathKeys = groupSegs.map(camel);
+    const groupKey = groupPathKeys.join('/');
+    const derivedLeaf = camel(leafSeg);
+    varInfoMap.set(v.id, {
+      figmaName: v.figmaName,
+      groupSegs,
+      leafSeg,
+      segs,
+      groupPathKeys,
+      groupKey,
+      derivedLeaf,
+      hasGroupConflict: false,
+    });
+  }
+
+  const allocatedMap = allocateStableCollectionIdentifiers(
+    col.variables,
+    manifestSection,
+    (_leaf, v) => varInfoMap.get(v.id)?.derivedLeaf ?? 'unnamed',
+    {
+      getGroupKey: (v) => varInfoMap.get(v.id)?.groupKey ?? '',
+      formatStableName: (varId, name) => {
+        if (manifestSection?.variables?.[varId]) {
+          return name;
+        }
+        const info = varInfoMap.get(varId);
+        if (!info) return name;
+        const fullLeafPath = info.groupKey ? `${info.groupKey}/${name}` : name;
+        if (intermediateGroups.has(fullLeafPath)) {
+          info.hasGroupConflict = true;
+          const fixed = `${name}Value`;
+          warnings.push({
+            targetId: 'react_native',
+            code: 'LEAF_GROUP_CONFLICT',
+            message: `Variable "${info.figmaName}" leaf "${name}" conflicts with an intermediate group path under collection "${col.name}"; renamed to "${fixed}".`,
+            details: { variableId: varId, original: name, fixed },
+          });
+          return fixed;
+        }
+        return name;
+      },
+    },
+  );
+
   const variables: PreparedRNVariable[] = [];
   for (const v of col.variables) {
     if (!v.emitToPublic) continue;
-    const segs = v.groupPath.map((s) => s.trim()).filter(Boolean);
-    const groupSegs = segs.slice(0, -1);
-    const leafSeg = segs[segs.length - 1] ?? 'unnamed';
-    const groupPathKeys = groupSegs.map(camel);
-    const derivedLeaf = camel(leafSeg);
-    const stableLeafKey = resolveStableVariableName('react_native', v.id, derivedLeaf, manifest);
+    const info = varInfoMap.get(v.id)!;
+    const allocated = allocatedMap.get(v.id)!;
+
+    if (allocated.wasDeduplicated && !info.hasGroupConflict) {
+      warnings.push({
+        targetId: 'react_native',
+        code: 'DUPLICATE_LEAF_NAME',
+        message: `Variable "${v.figmaName}" collided with sibling leaf name; deduplicated to "${allocated.stableLeafKey}".`,
+        details: { variableId: v.id, original: info.derivedLeaf, fixed: allocated.stableLeafKey },
+      });
+    }
+
     variables.push({
       id: v.id,
       figmaName: v.figmaName,
-      groupPath: segs,
-      groupPathKeys,
-      leafKey: derivedLeaf,
-      stableLeafKey,
+      groupPath: info.segs,
+      groupPathKeys: info.groupPathKeys,
+      leafKey: allocated.stableLeafKey,
+      stableLeafKey: allocated.stableLeafKey,
       type: v.type,
-      valuesByMode: v.valuesByMode,
+      valuesByMode: v.rawValuesByMode,
+      resolvedValuesByMode: v.resolvedValuesByMode,
     });
   }
 
@@ -183,57 +350,95 @@ function prepareCollection(col: IRCollection, manifest: Manifest | null): Prepar
 
 function modeKey(modeName: string): string {
   const base = camel(modeName);
-  // prefer explicit semantic keys like `darkMode`/`lightMode`
   return /mode$/i.test(base) ? base : `${base}Mode`;
 }
 
-function buildNextManifestSection(ir: IR, cols: PreparedRNCollection[]): ManifestTargetSection {
-  const variables: Record<string, string> = {};
-  const collections: Record<string, string> = {};
-  const figmaVar: Record<string, string> = {};
-  const figmaCol: Record<string, string> = {};
-
-  for (const c of cols) collections[c.id] = c.typeName;
-  for (const c of ir.collections) {
-    figmaCol[c.id] = c.name;
-    for (const v of c.variables) figmaVar[v.id] = v.figmaName;
-  }
-  for (const c of cols) {
-    for (const v of c.variables) variables[v.id] = v.stableLeafKey;
-  }
-
-  return {
-    variables,
-    collections,
-    figmaNames: { variables: figmaVar, collections: figmaCol },
-  };
+function buildNextManifestSection(
+  cols: PreparedRNCollection[],
+  composites: {
+    paintStyles: PreparedRNPaintStyle[];
+    effectStyles: PreparedRNEffectStyle[];
+    textStyles: PreparedRNTextStyle[];
+  },
+): ManifestTargetSection {
+  const allComposites = [
+    ...composites.paintStyles,
+    ...composites.effectStyles,
+    ...composites.textStyles,
+  ];
+  return assembleTargetSection({
+    collections: cols.map((c) => ({
+      id: c.id,
+      name: c.figmaName,
+      exportName: c.typeName,
+      variables: c.variables.map((v) => ({
+        id: v.id,
+        figmaName: v.figmaName,
+        stableLeafKey: v.stableLeafKey,
+      })),
+    })),
+    composites: allComposites.map((s) => ({
+      id: s.id,
+      figmaName: s.raw.figmaName,
+      getterName: s.getterName,
+    })),
+  });
 }
 
 function lowerFirst(s: string): string {
   return s ? s[0].toLowerCase() + s.slice(1) : s;
 }
 
-function preparePaint(s: IRPaintStyle): PreparedRNPaintStyle {
+function preparePaint(
+  s: ResolvedPaintStyle,
+  manifestSection?: ManifestTargetSection | null,
+): PreparedRNPaintStyle {
+  const derivedGetterName = camel(s.figmaName);
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+  );
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
   return {
     id: s.id,
     type: s.type,
     groupName: paintBucket(s.type),
-    getterName: camel(s.figmaName),
-    raw: s,
+    getterName,
+    isStable,
+    raw: s.raw,
+    resolved: s,
+    valuesByMode: s.valuesByMode,
   };
 }
 
-function prepareEffect(s: IREffectStyle): PreparedRNEffectStyle {
+function prepareEffect(
+  s: ResolvedEffectStyle,
+  manifestSection?: ManifestTargetSection | null,
+): PreparedRNEffectStyle {
+  const derivedGetterName = camel(s.figmaName);
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+  );
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
   return {
     id: s.id,
     type: s.type,
     groupName: effectBucket(s.type),
-    getterName: camel(s.figmaName),
-    raw: s,
+    getterName,
+    isStable,
+    raw: s.raw,
+    resolved: s,
+    valuesByMode: s.valuesByMode,
   };
 }
 
-function prepareText(s: IRTextStyle): PreparedRNTextStyle {
+function prepareText(
+  s: ResolvedTextStyle,
+  manifestSection?: ManifestTargetSection | null,
+): PreparedRNTextStyle {
   const segs = s.figmaName.split('/').map((x) => x.trim()).filter(Boolean);
   let groupName = 'Main';
   let getterParts: string[] = segs;
@@ -241,11 +446,21 @@ function prepareText(s: IRTextStyle): PreparedRNTextStyle {
     groupName = pascal(segs[0]);
     getterParts = segs.slice(1);
   }
+  const derivedGetterName = camel(getterParts.join(' '));
+  const getterName = resolveStableCompositeName(
+    manifestSection,
+    s.id,
+    derivedGetterName,
+  );
+  const isStable = Boolean(manifestSection?.composites?.[s.id]);
   return {
     id: s.id,
     groupName,
-    getterName: camel(getterParts.join(' ')),
-    raw: s,
+    getterName,
+    isStable,
+    raw: s.raw,
+    resolved: s,
+    valuesByMode: s.valuesByMode,
   };
 }
 
@@ -278,104 +493,3 @@ function effectBucket(t: IREffectStyle['type']): string {
       return 'BackgroundBlur';
   }
 }
-
-function dedupCompositeGetters<T extends { getterName: string }>(
-  items: T[],
-  bucketKey: (item: T) => string,
-): T[] {
-  const used = new Map<string, number>();
-  for (const it of items) {
-    const base = it.getterName;
-    const key = `${bucketKey(it)}::${base}`;
-    const n = used.get(key);
-    if (n === undefined) {
-      used.set(key, 1);
-      continue;
-    }
-    const next = n + 1;
-    used.set(key, next);
-    // JS/TS camelCase: keep digits attached (no underscore separator).
-    it.getterName = `${base}${next}`;
-  }
-  return items;
-}
-
-// ── Variable literal resolver (for composites) ─────────────────────────────
-
-type Primitive = string | number | boolean;
-
-function resolveAllVariableLiterals(ir: IR): Record<string, Record<string, Primitive>> {
-  const allVars = new Map<string, IRVariable>();
-  for (const c of ir.collections) for (const v of c.variables) allVars.set(v.id, v);
-
-  // Collect all modeIds from IR (across collections).
-  const modeIds = new Set<string>();
-  for (const c of ir.collections) for (const m of c.modes) modeIds.add(m.id);
-
-  const out: Record<string, Record<string, Primitive>> = {};
-  for (const modeId of modeIds) {
-    out[modeId] = {};
-    for (const [id] of allVars) {
-      const v = allVars.get(id)!;
-      const val = v.valuesByMode[modeId];
-      if (!val) continue;
-      const resolved = resolveValue(modeId, val, allVars, new Set());
-      if (resolved !== undefined) out[modeId][id] = resolved;
-    }
-  }
-  return out;
-}
-
-function resolveValue(
-  modeId: string,
-  v: IRValue,
-  allVars: Map<string, IRVariable>,
-  seen: Set<string>,
-): Primitive | undefined {
-  if (v.kind === 'literal') {
-    const x = v.value as any;
-    if (typeof x === 'number' || typeof x === 'string' || typeof x === 'boolean') return x;
-    return rgbaToRRGGBBAA(x as RGBA);
-  }
-  const targetId = v.targetVariableId;
-  if (seen.has(targetId)) return undefined;
-  seen.add(targetId);
-  const target = allVars.get(targetId);
-  if (!target) return undefined;
-  const next = target.valuesByMode[modeId];
-  if (!next) return undefined;
-  return resolveValue(modeId, next, allVars, seen);
-}
-
-export function resolveColorValueToHex(
-  modeId: string,
-  c: IRColorValue,
-  resolvedVarByMode: Record<string, Record<string, Primitive>>,
-): string | null {
-  if (c.kind === 'literal') return rgbaToRRGGBBAA(c.rgba as RGBA);
-  const v = resolvedVarByMode[modeId]?.[c.targetVariableId];
-  return typeof v === 'string' ? v : null;
-}
-
-export function resolveTextValue<T extends Primitive>(
-  modeId: string,
-  v: IRTextValue<T>,
-  resolvedVarByMode: Record<string, Record<string, Primitive>>,
-): T | null {
-  if ((v as any).kind === 'literal') return (v as any).value as T;
-  const id = (v as any).targetVariableId as string;
-  const got = resolvedVarByMode[modeId]?.[id];
-  return (got as T) ?? null;
-}
-
-export function resolveTextValueWithUnit(
-  modeId: string,
-  v: IRTextValueWithUnit<number>,
-  resolvedVarByMode: Record<string, Record<string, Primitive>>,
-): { value: number; unit: 'PIXELS' | 'PERCENT' | 'AUTO' } | null {
-  if ((v as any).kind === 'literal') return { value: (v as any).value, unit: (v as any).unit };
-  const id = (v as any).targetVariableId as string;
-  const got = resolvedVarByMode[modeId]?.[id];
-  return typeof got === 'number' ? { value: got, unit: 'PIXELS' } : null;
-}
-

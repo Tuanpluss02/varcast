@@ -1,5 +1,6 @@
-// Node-only manifest persistence. Keep separate so the Figma plugin bundle
-// never imports `fs`/`path`.
+/**
+ * Node.js filesystem persistence utilities for manifest data.
+ */
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,11 +16,19 @@ export function loadManifest(packagePath: string): Manifest | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
-    return null;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Failed to parse existing manifest at "${p}": ${message}. Refusing to proceed to prevent overwriting existing token IDs. Fix or remove the file.`,
+    );
   }
-  // normalizeManifest auto-migrates v1 → v2 transparently.
-  return normalizeManifest(parsed);
+  const manifest = normalizeManifest(parsed);
+  if (!manifest) {
+    throw new Error(
+      `Existing manifest at "${p}" is not a valid Varcast v2 manifest. Refusing to proceed to prevent overwriting existing token IDs. Fix or remove the file.`,
+    );
+  }
+  return manifest;
 }
 
 export function saveManifest(packagePath: string, manifest: Manifest): void {

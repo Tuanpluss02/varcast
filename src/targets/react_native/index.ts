@@ -1,39 +1,46 @@
-import type { Manifest, ManifestTargetSection } from '../../core/manifest';
-import type { EmittedFile, PreparedIR, Target } from '../../core/target';
-import type { IR } from '../../ir/types';
+import type { SemanticTokenGraph } from '../../core/graph/types';
+import type { ManifestTargetSection } from '../../core/manifest';
+import { hasTarget, registerTarget } from '../../core/registry/target_registry';
+import type { EmittedFile, Target } from '../../core/target';
 import { emitCollections } from './generator/emit_collections';
 import { emitComposites } from './generator/emit_composites';
 import { emitRuntime } from './generator/emit_runtime';
 import { prepareRN } from './generator/prepare';
-import { reactNativeIdentifierProfile } from './identifier';
-import type { ReactNativeOptions } from './options';
-import { DEFAULT_RN_OPTIONS } from './options';
-import { modesTs, packageJson, reactShimDts, readmeMd, runtimeIndexTs, themeProviderTsx, tsconfigJson } from './static_files';
-import { reactNativeTypeMapping } from './type_mapping';
+import type { PreparedRN } from './generator/prepare';
+import type { PartialReactNativeOptions } from './options';
+import { DEFAULT_RN_OPTIONS, mergeRnOptions, sanitizePackageName } from './options';
+import {
+  modesTs,
+  packageJson,
+  reactShimDts,
+  readmeMd,
+  runtimeIndexTs,
+  themeProviderTsx,
+  tsconfigJson,
+} from './static_files';
 
-export type PreparedReactNative = PreparedIR & {
-  nextManifestSection: ManifestTargetSection;
-  collections: ReturnType<typeof prepareRN>['collections'];
-};
+export type PreparedReactNative = PreparedRN;
+export type ReactNativeOptions = PartialReactNativeOptions;
+export type { PartialReactNativeOptions };
+export { DEFAULT_RN_OPTIONS, mergeRnOptions, sanitizePackageName };
 
-function emptySection(): ManifestTargetSection {
-  return { variables: {}, collections: {} };
-}
-
-export const reactNativeTarget: Target = {
+export const reactNativeTarget: Target<ReactNativeOptions, PreparedReactNative> = {
   id: 'react_native',
-  profile: reactNativeIdentifierProfile,
-  typeMapping: reactNativeTypeMapping,
+  displayName: 'React Native',
+  defaultPackageName: 'design-system',
+  defaultOptions: DEFAULT_RN_OPTIONS,
+  sanitizePackageName,
+  normalizeOptions: mergeRnOptions,
 
-  prepare(_ir: IR, manifest: Manifest | null, _options: unknown): PreparedReactNative {
-    const prepared = prepareRN(_ir, manifest);
-    return {
-      ...prepared,
-      nextManifestSection: prepared.nextManifestSection,
-    } as any;
+  prepare(
+    graph: SemanticTokenGraph,
+    section: ManifestTargetSection | null = null,
+    options?: ReactNativeOptions,
+  ): PreparedReactNative {
+    return prepareRN(graph, section, options);
   },
 
-  emit(prepared: PreparedIR, options: unknown): EmittedFile[] {
+  emit(prepared: PreparedReactNative, options?: ReactNativeOptions): EmittedFile[] {
     const o = mergeRnOptions(options);
     const base: EmittedFile[] = [
       { path: 'package.json', contents: packageJson(o) },
@@ -44,18 +51,15 @@ export const reactNativeTarget: Target = {
       { path: 'src/runtime/modes.ts', contents: modesTs() },
       { path: 'src/react-shim.d.ts', contents: reactShimDts() },
     ];
-    // Filter collections by kind so toggling primitives/tokens off in the UI
-    // actually drops the corresponding collection files (and their imports
-    // in the generated runtime).
-    const filteredCollections = (prepared as PreparedReactNative).collections.filter((c) => {
+    const filteredCollections = prepared.collections.filter((c) => {
       if (c.kind === 'primitive' && !o.include.primitives) return false;
       if (c.kind === 'token' && !o.include.tokens) return false;
       return true;
     });
-    const filtered = { ...prepared, collections: filteredCollections } as PreparedReactNative;
-    const colFiles = emitCollections(filtered as any);
-    const runtimeFiles = emitRuntime(filtered as any);
-    const compositeFiles = emitComposites(filtered as any).filter((f) => {
+    const filtered: PreparedReactNative = { ...prepared, collections: filteredCollections };
+    const colFiles = emitCollections(filtered);
+    const runtimeFiles = emitRuntime(filtered);
+    const compositeFiles = emitComposites(filtered).filter((f) => {
       if (f.path.endsWith('colorStyles.ts')) return o.include.composites.colorStyles;
       if (f.path.endsWith('shadows.ts')) return o.include.composites.shadows;
       if (f.path.endsWith('textStyles.ts')) return o.include.composites.textStyles;
@@ -65,41 +69,10 @@ export const reactNativeTarget: Target = {
   },
 };
 
-// Merge user-supplied RN options with defaults so partial inputs (e.g. just
-// `{ packageName }` from a test or older UI) still produce a fully-formed
-// options object.
-type RnIncludePartial = {
-  primitives?: boolean;
-  tokens?: boolean;
-  composites?: {
-    colorStyles?: boolean;
-    shadows?: boolean;
-    textStyles?: boolean;
-  };
-};
-
-type RnOptionsPartial = {
-  packageName?: string;
-  include?: RnIncludePartial;
-};
-
-function mergeRnOptions(options: unknown): ReactNativeOptions {
-  const partial: RnOptionsPartial = (options ?? {}) as RnOptionsPartial;
-  const includeIn: RnIncludePartial = partial.include ?? {};
-  const compositesIn = includeIn.composites ?? {};
-  return {
-    packageName: partial.packageName ?? DEFAULT_RN_OPTIONS.packageName,
-    include: {
-      primitives: includeIn.primitives ?? DEFAULT_RN_OPTIONS.include.primitives,
-      tokens: includeIn.tokens ?? DEFAULT_RN_OPTIONS.include.tokens,
-      composites: {
-        colorStyles:
-          compositesIn.colorStyles ?? DEFAULT_RN_OPTIONS.include.composites.colorStyles,
-        shadows: compositesIn.shadows ?? DEFAULT_RN_OPTIONS.include.composites.shadows,
-        textStyles:
-          compositesIn.textStyles ?? DEFAULT_RN_OPTIONS.include.composites.textStyles,
-      },
-    },
-  };
+export function registerReactNativeTarget(): void {
+  if (!hasTarget('react_native')) {
+    registerTarget(reactNativeTarget);
+  }
 }
 
+registerReactNativeTarget();

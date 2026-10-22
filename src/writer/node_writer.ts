@@ -1,9 +1,10 @@
-// Node-only filesystem writer for emitted packages.
-// Keep this module separate so the Figma plugin build never pulls in `fs`.
+/**
+ * Filesystem writer for emitted packages in Node.js environments.
+ */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { EmittedFile } from './emit';
+import type { EmittedFile } from '../core/target';
 
 export function writePackage(files: EmittedFile[], outDir: string): void {
   for (const f of files) {
@@ -12,4 +13,3 @@ export function writePackage(files: EmittedFile[], outDir: string): void {
     fs.writeFileSync(full, f.contents);
   }
 }
-

@@ -1,7 +1,6 @@
-// All Dart reserved words + built-in identifiers + contextual keywords.
-// Used by the sanitizer (Phase 4) and the keyword-conflict validation rule (Phase 3).
-//
-// Source: https://dart.dev/language/keywords
+/**
+ * Dart reserved words, built-in identifiers, and contextual keywords.
+ */
 export const DART_KEYWORDS: Set<string> = new Set([
   'abstract',
   'as',
