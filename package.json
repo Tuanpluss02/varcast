@@ -6,9 +6,13 @@
     "build": "node esbuild.config.js",
     "watch": "node esbuild.config.js --watch",
     "leakcheck": "node scripts/leak_check.js",
+    "smoke:cli": "pnpm build && node scripts/e2e_cli_matrix.mjs",
     "smoke:rn": "pnpm build && node scripts/rn_smoke_cli.mjs && node scripts/rn_smoke_runtime.mjs",
+    "smoke:flutter": "pnpm build && node scripts/runtime_flutter.mjs",
+    "smoke:matrix": "pnpm smoke:cli && pnpm smoke:rn && pnpm smoke:flutter",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:all": "pnpm typecheck && pnpm leakcheck && pnpm test && pnpm smoke:matrix",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

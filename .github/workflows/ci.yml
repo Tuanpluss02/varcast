@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'feat/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # -------------------------------------------------------------
+  # Job 1: Static Integrity, Unit & Conformance Test Suite
+  # -------------------------------------------------------------
+  quality:
+    name: Code Quality & Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript Check
+        run: pnpm typecheck
+
+      - name: CI Leak Check (Verify target-neutral Core)
+        run: pnpm leakcheck
+
+      - name: Run Vitest Suite (Unit, Conformance, Golden, Evolution, Bridge)
+        run: pnpm test
+
+      - name: Build Bundles (Plugin & CLI)
+        run: pnpm build
+
+  # -------------------------------------------------------------
+  # Job 2: CLI Generation Matrix (All Targets)
+  # -------------------------------------------------------------
+  e2e-cli:
+    name: E2E CLI Matrix
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies & build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Run CLI Generation Matrix
+        run: pnpm smoke:cli
+
+  # -------------------------------------------------------------
+  # Job 3: React Native Runtime Smoke & Mode Evaluation
+  # -------------------------------------------------------------
+  e2e-react-native:
+    name: E2E React Native Runtime
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies & build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Run RN Smoke CLI and Runtime Mode Evaluation
+        run: pnpm smoke:rn
+
+  # -------------------------------------------------------------
+  # Job 4: Flutter Compilation & Dart Analyze
+  # -------------------------------------------------------------
+  e2e-flutter:
+    name: E2E Flutter Compilation
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter & Dart SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies & build CLI
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Generate Flutter Package & Run Dart Analyze
+        run: pnpm smoke:flutter

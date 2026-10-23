@@ -103,6 +103,10 @@ figma.ui.onmessage = async (msg: unknown) => {
           path: '_meta/manifest.json',
           contents: JSON.stringify(nextManifest, null, 2) + '\n',
         },
+        {
+          path: '_meta/ir.json',
+          contents: JSON.stringify(ir, null, 2) + '\n',
+        },
         { path: 'CHANGELOG.md', contents: changelog + '\n' },
       ];
 

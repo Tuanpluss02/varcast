@@ -108,6 +108,11 @@ function main() {
   fs.mkdirSync(outDir, { recursive: true });
   writePackage(files, outDir);
   saveManifest(outDir, nextManifest);
+  fs.mkdirSync(path.join(outDir, '_meta'), { recursive: true });
+  fs.writeFileSync(
+    path.join(outDir, '_meta', 'ir.json'),
+    JSON.stringify(ir, null, 2) + '\n',
+  );
   fs.writeFileSync(
     path.join(outDir, 'CHANGELOG.md'),
     generateMultiTargetChangelog(diffsByTarget) + '\n',
