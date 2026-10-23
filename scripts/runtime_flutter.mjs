@@ -14,7 +14,7 @@ const OUT_DIR = path.join(ROOT, '.tmp_flutter_runtime');
 
 function hasCommand(cmd) {
   try {
-    execSync(`which ${cmd}`, { stdio: 'ignore' });
+    execSync(`${cmd} --version`, { stdio: 'ignore' });
     return true;
   } catch {
     return false;
