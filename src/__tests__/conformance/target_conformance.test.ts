@@ -92,7 +92,7 @@ describe.each(getAllTargets().map((t) => [t.id, t]))(
                   hiddenFromPublishing: false,
                   emitToPublic: true,
                   valuesByMode: {
-                    'm:1': { kind: 'alias', targetId: 'v:non_existent' },
+                    'm:1': { kind: 'alias', targetVariableId: 'v:non_existent' },
                   },
                 },
               ],
