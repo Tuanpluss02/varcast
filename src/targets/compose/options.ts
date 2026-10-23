@@ -11,6 +11,7 @@ export interface ComposeOptions {
       shadows: boolean;
       textStyles: boolean;
     };
+    collections?: string[];
   };
 }
 
@@ -24,6 +25,7 @@ export type PartialComposeOptions = {
       shadows?: boolean;
       textStyles?: boolean;
     };
+    collections?: string[];
   };
 };
 
@@ -84,6 +86,10 @@ export function normalizeComposeOptions(input?: unknown): ComposeOptions {
   const rawPkg = partial.packageName;
   const packageName = rawPkg ? sanitizePackageName(rawPkg) : DEFAULT_COMPOSE_OPTIONS.packageName;
 
+  const collections = Array.isArray(includeIn.collections)
+    ? includeIn.collections.filter((c): c is string => typeof c === 'string')
+    : undefined;
+
   return {
     packageName,
     include: {
@@ -109,6 +115,7 @@ export function normalizeComposeOptions(input?: unknown): ComposeOptions {
             ? compositesIn.textStyles
             : DEFAULT_COMPOSE_OPTIONS.include.composites.textStyles,
       },
+      collections,
     },
   };
 }

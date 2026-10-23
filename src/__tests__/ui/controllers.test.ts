@@ -105,9 +105,10 @@ describe('TargetController', () => {
     });
 
     expect(ctrl.getAllTargets()).toEqual(FALLBACK_TARGETS);
-    expect(targetSelect.children.length).toBe(2);
+    expect(targetSelect.children.length).toBe(3);
     expect(targetSelect.children[0].value).toBe('flutter');
     expect(targetSelect.children[1].value).toBe('react_native');
+    expect(targetSelect.children[2].value).toBe('compose');
   });
 
   it('populates available targets dynamically from TargetMetadataItem[]', () => {

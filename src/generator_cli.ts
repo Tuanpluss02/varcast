@@ -15,6 +15,7 @@ import { writePackage } from './writer/node_writer';
 // Ensure default targets are registered:
 import './targets/flutter';
 import './targets/react_native';
+import './targets/compose';
 
 interface Args {
   ir: string;

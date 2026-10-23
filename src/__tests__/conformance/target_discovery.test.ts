@@ -5,6 +5,7 @@ import { hasTarget, getAllTargets } from '../../core/registry';
 // Ensure default targets are registered
 import '../../targets/flutter';
 import '../../targets/react_native';
+import '../../targets/compose';
 
 describe('Target Discovery Guard', () => {
   const targetsDir = path.resolve(__dirname, '../../targets');
