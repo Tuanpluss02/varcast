@@ -7,6 +7,7 @@ import { generateMultiTargetChangelog } from '../../core/manifest/changelog';
 import type { IR } from '../../ir/types';
 import '../../targets/flutter';
 import '../../targets/react_native';
+import '../../targets/compose';
 
 const V1_IR: IR = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, '../../../test_fixtures/evolution_v1.json'), 'utf-8'),

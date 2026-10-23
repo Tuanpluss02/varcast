@@ -2,6 +2,7 @@
 .superpowers/
 docs/superpowers/
 superpowers/
+.worktrees/
 
 # Dependencies
 node_modules/

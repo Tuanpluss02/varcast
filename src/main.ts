@@ -9,6 +9,7 @@ import { getAllTargets, getTarget } from './core/registry';
 // Ensure default targets are registered:
 import './targets/flutter';
 import './targets/react_native';
+import './targets/compose';
 import {
   extractVariablePreview,
   extractPaintPreview,

@@ -3,6 +3,7 @@ import type { TargetMetadataItem } from '../lib/messages';
 export const FALLBACK_TARGETS: TargetMetadataItem[] = [
   { id: 'flutter', displayName: 'Flutter', defaultPackageName: 'design_system' },
   { id: 'react_native', displayName: 'React Native', defaultPackageName: 'design-system' },
+  { id: 'compose', displayName: 'Jetpack Compose', defaultPackageName: 'com.example.designsystem' },
 ];
 
 export interface TargetControllerElements {
