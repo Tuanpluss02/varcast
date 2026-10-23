@@ -6,6 +6,7 @@ import { runEngine } from '../../core/emit_engine';
 import type { IR } from '../../ir/types';
 import '../../targets/flutter';
 import '../../targets/react_native';
+import '../../targets/compose';
 
 const GOLDEN_IR: IR = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, '../../../test_fixtures/golden_tokens.json'), 'utf-8'),

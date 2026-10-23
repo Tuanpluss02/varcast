@@ -28,6 +28,7 @@ fs.mkdirSync(TMP_DIR, { recursive: true });
 const TARGETS = [
   { id: 'flutter', expectedEntry: 'pubspec.yaml' },
   { id: 'react_native', expectedEntry: 'package.json' },
+  { id: 'compose', expectedEntry: 'build.gradle.kts' },
 ];
 
 console.log('[cli-matrix] Running CLI generation across all targets...');
